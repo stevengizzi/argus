@@ -244,8 +244,10 @@ async def test_promotion_evaluator_filters_by_fingerprint(
         assert all(r["scoring_fingerprint"] == fp_a for r in rows_a)
         assert all(r["scoring_fingerprint"] == fp_b for r in rows_b)
 
-        # Evaluator-side assertion: _build_result_from_shadow returns different
-        # MultiObjectiveResults under each fingerprint (expectancy sign flips).
+        # Evaluator-side assertion: shadow-derived MultiObjectiveResults
+        # differ under each fingerprint (expectancy sign flips). FIX-08
+        # P1-D2-L02 collapsed _build_result_from_shadow into a fetch +
+        # pure-aggregation pair; the underlying behaviour is preserved.
         exp_store = MagicMock(spec=ExperimentStore)
         trade_logger = MagicMock()
         trade_logger.query_trades = AsyncMock(return_value=[])
@@ -257,13 +259,16 @@ async def test_promotion_evaluator_filters_by_fingerprint(
             config={"promotion_min_shadow_trades": 1},
         )
 
-        result_a = await evaluator._build_result_from_shadow(
+        positions_a = await evaluator._fetch_shadow_positions(
             variant_id, scoring_fingerprint=fp_a
         )
-        result_b = await evaluator._build_result_from_shadow(
+        positions_b = await evaluator._fetch_shadow_positions(
             variant_id, scoring_fingerprint=fp_b
         )
-        result_all = await evaluator._build_result_from_shadow(variant_id)
+        positions_all = await evaluator._fetch_shadow_positions(variant_id)
+        result_a = evaluator._build_result_from_positions(variant_id, positions_a)
+        result_b = evaluator._build_result_from_positions(variant_id, positions_b)
+        result_all = evaluator._build_result_from_positions(variant_id, positions_all)
 
         assert result_a is not None
         assert result_b is not None

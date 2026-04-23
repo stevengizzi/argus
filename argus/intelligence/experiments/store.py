@@ -147,14 +147,19 @@ class ExperimentStore:
             await conn.execute(_CREATE_IDX_PROMO_TS)
             await conn.commit()
 
-            # Migration: add exit_overrides column to variants (Sprint 32.5 S1)
+            # Migration: add exit_overrides column to variants (Sprint 32.5 S1).
+            # P1-D2-C06 (FIX-08): narrow the catch from bare Exception to the
+            # specific aiosqlite error and message we expect when the column
+            # already exists. Pre-FIX-08 the bare except hid permissions /
+            # disk-full / locked-DB failures behind a "column exists" no-op.
             try:
                 await conn.execute(
                     "ALTER TABLE variants ADD COLUMN exit_overrides TEXT"
                 )
                 await conn.commit()
-            except Exception:
-                pass  # Column already exists
+            except aiosqlite.OperationalError as exc:
+                if "duplicate column name" not in str(exc).lower():
+                    raise
 
         logger.info("ExperimentStore initialized: %s", self._db_path)
 

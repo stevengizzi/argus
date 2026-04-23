@@ -489,6 +489,14 @@ class LearningService:
             if abs(rec.delta) < 1e-6:
                 continue
 
+            # P1-D2-L07 (FIX-08): when both source correlations are None
+            # the rationale used to render literal "correlation=None"; fall
+            # back to 0.0 so the operator-facing string is always numeric.
+            correlation = (
+                rec.correlation_trade_source
+                or rec.correlation_counterfactual_source
+                or 0.0
+            )
             proposals.append(ConfigProposal(
                 proposal_id=str(ULID()),
                 report_id=report.report_id,
@@ -496,7 +504,7 @@ class LearningService:
                 current_value=rec.current_weight,
                 proposed_value=rec.recommended_weight,
                 rationale=(
-                    f"{rec.dimension}: correlation={rec.correlation_trade_source or rec.correlation_counterfactual_source}, "
+                    f"{rec.dimension}: correlation={correlation:+.4f}, "
                     f"confidence={rec.confidence.value}, "
                     f"delta={rec.delta:+.4f}"
                 ),

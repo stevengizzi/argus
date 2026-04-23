@@ -16,6 +16,7 @@ Sprint 32, Session 7.
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import math
 from datetime import UTC, date, datetime
@@ -127,17 +128,11 @@ class PromotionEvaluator:
                     events.append(event)
                     # Append the newly-promoted variant to live_variants so
                     # subsequent shadow variants for this pattern compare against
-                    # the updated set.
+                    # the updated set. P1-D2-C04 (FIX-08): use dataclasses.replace
+                    # rather than hand-copying every field — silently drops new
+                    # fields that future schema changes add to VariantDefinition.
                     live_variants = live_variants + [
-                        VariantDefinition(
-                            variant_id=shadow_variant.variant_id,
-                            base_pattern=shadow_variant.base_pattern,
-                            parameter_fingerprint=shadow_variant.parameter_fingerprint,
-                            parameters=shadow_variant.parameters,
-                            mode="live",
-                            source=shadow_variant.source,
-                            created_at=shadow_variant.created_at,
-                        )
+                        dataclasses.replace(shadow_variant, mode="live")
                     ]
 
             for live_variant in live_variants:
@@ -181,9 +176,17 @@ class PromotionEvaluator:
         if shadow_variant.mode == "live":
             return None
 
-        shadow_result = await self._build_result_from_shadow(
+        # P1-D2-L02 (FIX-08): single counterfactual query for both the
+        # R-multiple-driven MultiObjectiveResult and the unique-day count.
+        # Pre-FIX-08, this path issued two independent queries (each
+        # ``limit=self._query_limit``) which (a) wasted DB I/O and (b) would
+        # silently diverge if the limits were ever set differently.
+        shadow_positions = await self._fetch_shadow_positions(
             shadow_variant.variant_id,
             scoring_fingerprint=scoring_fingerprint,
+        )
+        shadow_result = self._build_result_from_positions(
+            shadow_variant.variant_id, shadow_positions
         )
         if shadow_result is None:
             return None
@@ -198,10 +201,7 @@ class PromotionEvaluator:
             )
             return None
 
-        shadow_days = await self._count_shadow_trading_days(
-            shadow_variant.variant_id,
-            scoring_fingerprint=scoring_fingerprint,
-        )
+        shadow_days = self._count_unique_days(shadow_positions)
         if shadow_days < self._min_shadow_days:
             logger.debug(
                 "Shadow variant %s below min days threshold (%d < %d)",
@@ -384,66 +384,68 @@ class PromotionEvaluator:
         ]
         return self._compute_result(strategy_id, r_multiples)
 
-    async def _build_result_from_shadow(
+    async def _fetch_shadow_positions(
         self,
         strategy_id: str,
         scoring_fingerprint: str | None = None,
-    ) -> MultiObjectiveResult | None:
-        """Build a MultiObjectiveResult from shadow (counterfactual) data.
+    ) -> list[dict[str, object]]:
+        """Single counterfactual-store fetch reused for R-multiples + day count.
+
+        P1-D2-L02 (FIX-08): the R-multiple list and unique-day count are
+        derived from the same row set, so the legacy two-query pattern is
+        replaced by a single fetch + two pure aggregations.
 
         Args:
             strategy_id: Strategy ID to query shadow positions for.
             scoring_fingerprint: Optional QualityEngineConfig fingerprint to
-                scope the query (FIX-01 audit 2026-04-21). When set, only
-                shadow positions tagged with this fingerprint contribute;
-                when None, the default, all shadow positions for the strategy
-                are considered (legacy behavior).
+                scope the query (FIX-01 audit 2026-04-21).
 
         Returns:
-            MultiObjectiveResult, or None if counterfactual store is unavailable
-            or fewer than 2 closed positions exist.
+            List of position dicts (empty if the counterfactual store is
+            unavailable).
         """
         if self._counterfactual_store is None:
-            return None
+            return []
         positions = await self._counterfactual_store.query(
             strategy_id=strategy_id,
             scoring_fingerprint=scoring_fingerprint,
             limit=self._query_limit,
         )
+        return list(positions) if positions is not None else []
+
+    def _build_result_from_positions(
+        self,
+        strategy_id: str,
+        positions: list[dict[str, object]],
+    ) -> MultiObjectiveResult | None:
+        """Compute a MultiObjectiveResult from already-fetched shadow positions.
+
+        Args:
+            strategy_id: Strategy ID for the result.
+            positions: Position dicts as returned by ``_fetch_shadow_positions``.
+
+        Returns:
+            MultiObjectiveResult, or None if fewer than 2 closed positions.
+        """
         closed = [
             p for p in positions
             if p.get("theoretical_r_multiple") is not None
         ]
         if not closed:
             return None
-
         r_multiples = [float(p["theoretical_r_multiple"]) for p in closed]
         return self._compute_result(strategy_id, r_multiples)
 
-    async def _count_shadow_trading_days(
-        self,
-        strategy_id: str,
-        scoring_fingerprint: str | None = None,
-    ) -> int:
-        """Count unique trading days with shadow positions for a strategy.
+    @staticmethod
+    def _count_unique_days(positions: list[dict[str, object]]) -> int:
+        """Count unique trading days (by ``opened_at`` date prefix).
 
         Args:
-            strategy_id: Strategy ID to count trading days for.
-            scoring_fingerprint: Optional QualityEngineConfig fingerprint filter
-                (FIX-01 audit 2026-04-21). When set, only positions tagged with
-                the given fingerprint are counted.
+            positions: Position dicts as returned by ``_fetch_shadow_positions``.
 
         Returns:
-            Number of unique calendar dates with at least one shadow position,
-            or 0 if the counterfactual store is unavailable.
+            Number of unique calendar dates with at least one position.
         """
-        if self._counterfactual_store is None:
-            return 0
-        positions = await self._counterfactual_store.query(
-            strategy_id=strategy_id,
-            scoring_fingerprint=scoring_fingerprint,
-            limit=self._query_limit,
-        )
         unique_days: set[str] = set()
         for pos in positions:
             opened_at = pos.get("opened_at")

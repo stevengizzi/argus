@@ -77,6 +77,13 @@ def _run_single_backtest(args: dict[str, Any]) -> dict[str, Any]:
     Never raises — all exceptions are caught and returned as error dicts.
     Does NOT import or use ExperimentStore or any SQLite connection.
 
+    All imports the worker needs are already loaded at module scope;
+    re-importing them locally inside the worker is unnecessary because
+    ProcessPoolExecutor pickles + re-imports the module on the subprocess
+    side, which executes the module-level imports anyway. Prior to FIX-08
+    this function carried six ``noqa: PLC0415`` local re-imports — removed
+    as cosmetic noise (P1-D2-C01).
+
     Args:
         args: Dict with keys: strategy_type_value, strategy_id, symbols,
               start_date, end_date, cache_dir, detection_params, params,
@@ -88,31 +95,20 @@ def _run_single_backtest(args: dict[str, Any]) -> dict[str, Any]:
         backtest_result (dict | None), error (str | None),
         experiment_id, created_at, params, pattern_name.
     """
-    import asyncio as _asyncio  # noqa: PLC0415
-
     fingerprint: str = args["fingerprint"]
 
     async def _execute() -> dict[str, Any]:
-        from datetime import date as _date  # noqa: PLC0415
-        from pathlib import Path as _Path  # noqa: PLC0415
-
-        from argus.backtest.config import (  # noqa: PLC0415
-            BacktestEngineConfig as _BEConfig,
-            StrategyType as _StrategyType,
-        )
-        from argus.backtest.engine import BacktestEngine as _BacktestEngine  # noqa: PLC0415
-
-        engine_config = _BEConfig(
-            strategy_type=_StrategyType(args["strategy_type_value"]),
+        engine_config = BacktestEngineConfig(
+            strategy_type=StrategyType(args["strategy_type_value"]),
             strategy_id=args["strategy_id"],
             symbols=args.get("symbols"),
-            start_date=_date.fromisoformat(args["start_date"]),
-            end_date=_date.fromisoformat(args["end_date"]),
-            cache_dir=_Path(args["cache_dir"]),
+            start_date=date.fromisoformat(args["start_date"]),
+            end_date=date.fromisoformat(args["end_date"]),
+            cache_dir=Path(args["cache_dir"]),
             config_overrides=args["detection_params"],
             config_fingerprint=fingerprint,
         )
-        engine = _BacktestEngine(engine_config)
+        engine = BacktestEngine(engine_config)
         result = await engine.run()
 
         passes_filter = (
@@ -126,11 +122,6 @@ def _run_single_backtest(args: dict[str, Any]) -> dict[str, Any]:
             )
             backtest_result: dict[str, Any] = mor.to_dict()
         except Exception:
-            # _backtest_result_to_dict is a pure helper in this module — no
-            # side effects, no heavy imports.  Calling it directly (rather than
-            # via local import) is intentional: local imports are used only for
-            # heavy dependencies (BacktestEngine, etc.) that benefit from
-            # deferred loading in subprocess context.
             backtest_result = _backtest_result_to_dict(result)
 
         return {
@@ -145,7 +136,7 @@ def _run_single_backtest(args: dict[str, Any]) -> dict[str, Any]:
         }
 
     try:
-        return _asyncio.run(_execute())
+        return asyncio.run(_execute())
     except Exception as exc:
         return {
             "fingerprint": fingerprint,
@@ -240,8 +231,12 @@ class ExperimentRunner:
         }
 
         keys = list(param_ranges.keys())
-        combos = list(itertools.product(*[param_ranges[k] for k in keys]))
-        detection_grid: list[dict[str, Any]] = [dict(zip(keys, combo)) for combo in combos]
+        # P1-D2-C05 (FIX-08): single materialisation; previous pass built
+        # the cartesian product into ``combos`` then re-iterated to dict form.
+        detection_grid: list[dict[str, Any]] = [
+            dict(zip(keys, combo))
+            for combo in itertools.product(*(param_ranges[k] for k in keys))
+        ]
 
         if not exit_sweep_params:
             if len(detection_grid) > _GRID_CAP:
@@ -264,9 +259,9 @@ class ExperimentRunner:
             p.path: _generate_exit_values(p) for p in exit_sweep_params
         }
         exit_keys = list(exit_ranges.keys())
-        exit_combos = list(itertools.product(*[exit_ranges[k] for k in exit_keys]))
         exit_grid: list[dict[str, Any]] = [
-            dict(zip(exit_keys, combo)) for combo in exit_combos
+            dict(zip(exit_keys, combo))
+            for combo in itertools.product(*(exit_ranges[k] for k in exit_keys))
         ]
 
         # Cross-product: detection × exit
@@ -414,23 +409,11 @@ class ExperimentRunner:
 
                 now = datetime.now(UTC)
                 if strategy_type is None:
-                    record = ExperimentRecord(
-                        experiment_id=generate_id(),
+                    record = self._make_unsupported_record(
                         pattern_name=pattern_name,
-                        parameter_fingerprint=fingerprint,
-                        parameters=params,
-                        status=ExperimentStatus.FAILED,
-                        backtest_result={
-                            "error": (
-                                f"Pattern '{pattern_name}' is not yet supported by "
-                                "BacktestEngine. See DEF-121."
-                            )
-                        },
-                        shadow_trades=0,
-                        shadow_expectancy=None,
-                        is_baseline=False,
-                        created_at=now,
-                        updated_at=now,
+                        fingerprint=fingerprint,
+                        params=params,
+                        now=now,
                     )
                     await self._store.save_experiment(record)
                     records.append(record)
@@ -466,56 +449,63 @@ class ExperimentRunner:
             total_pending = len(pending_args)
             completed_count = 0
             executor = ProcessPoolExecutor(max_workers=workers)
+            interrupted = False
             try:
                 loop = asyncio.get_running_loop()
                 pending_futures = [
                     loop.run_in_executor(executor, _run_single_backtest, args_dict)
                     for args_dict in pending_args
                 ]
-                for coro in asyncio.as_completed(pending_futures):
-                    result_dict: dict[str, Any] = await coro
-                    completed_count += 1
+                try:
+                    for coro in asyncio.as_completed(pending_futures):
+                        result_dict: dict[str, Any] = await coro
+                        completed_count += 1
 
-                    result_now = datetime.now(UTC)
-                    record = ExperimentRecord(
-                        experiment_id=result_dict["experiment_id"],
-                        pattern_name=result_dict["pattern_name"],
-                        parameter_fingerprint=result_dict["fingerprint"],
-                        parameters=result_dict["params"],
-                        status=(
-                            ExperimentStatus.COMPLETED
-                            if result_dict["status"] == "completed"
-                            else ExperimentStatus.FAILED
-                        ),
-                        backtest_result=result_dict["backtest_result"],
-                        shadow_trades=0,
-                        shadow_expectancy=None,
-                        is_baseline=False,
-                        created_at=datetime.fromisoformat(result_dict["created_at"]),
-                        updated_at=result_now,
-                    )
-                    await self._store.save_experiment(record)
-                    records.append(record)
-                    logger.info(
-                        "[%d/%d] pattern=%s fingerprint=%s status=%s (%d workers)",
+                        result_now = datetime.now(UTC)
+                        record = self._make_result_record(
+                            experiment_id=result_dict["experiment_id"],
+                            pattern_name=result_dict["pattern_name"],
+                            fingerprint=result_dict["fingerprint"],
+                            params=result_dict["params"],
+                            status=(
+                                ExperimentStatus.COMPLETED
+                                if result_dict["status"] == "completed"
+                                else ExperimentStatus.FAILED
+                            ),
+                            backtest_result=result_dict["backtest_result"],
+                            created_at=datetime.fromisoformat(
+                                result_dict["created_at"]
+                            ),
+                            updated_at=result_now,
+                        )
+                        await self._store.save_experiment(record)
+                        records.append(record)
+                        logger.info(
+                            "[%d/%d] pattern=%s fingerprint=%s status=%s (%d workers)",
+                            completed_count,
+                            total_pending,
+                            pattern_name,
+                            result_dict["fingerprint"],
+                            record.status,
+                            workers,
+                        )
+                except KeyboardInterrupt:
+                    interrupted = True
+                    logger.warning(
+                        "Parallel sweep interrupted after %d/%d grid points — "
+                        "partial results saved.",
                         completed_count,
                         total_pending,
-                        pattern_name,
-                        result_dict["fingerprint"],
-                        record.status,
-                        workers,
                     )
-            except KeyboardInterrupt:
-                logger.warning(
-                    "Parallel sweep interrupted after %d/%d grid points — "
-                    "partial results saved.",
-                    completed_count,
-                    total_pending,
+            finally:
+                # P1-D2-L03 (FIX-08): always shut down the executor — both on
+                # KeyboardInterrupt (cancel pending) and on any exception
+                # raised inside as_completed / save_experiment (e.g.
+                # aiosqlite.OperationalError on the write path), which
+                # previously bypassed shutdown and orphaned worker subprocesses.
+                executor.shutdown(
+                    wait=not interrupted, cancel_futures=interrupted
                 )
-                executor.shutdown(wait=False, cancel_futures=True)
-                return records
-            else:
-                executor.shutdown(wait=True)
 
             return records
 
@@ -543,29 +533,13 @@ class ExperimentRunner:
                 continue
 
             now = datetime.now(UTC)
-            record = ExperimentRecord(
-                experiment_id=generate_id(),
-                pattern_name=pattern_name,
-                parameter_fingerprint=fingerprint,
-                parameters=params,
-                status=ExperimentStatus.RUNNING,
-                backtest_result=None,
-                shadow_trades=0,
-                shadow_expectancy=None,
-                is_baseline=False,
-                created_at=now,
-                updated_at=now,
-            )
-
             if strategy_type is None:
-                record.status = ExperimentStatus.FAILED
-                record.backtest_result = {
-                    "error": (
-                        f"Pattern '{pattern_name}' is not yet supported by "
-                        "BacktestEngine. See DEF-121."
-                    )
-                }
-                record.updated_at = datetime.now(UTC)
+                record = self._make_unsupported_record(
+                    pattern_name=pattern_name,
+                    fingerprint=fingerprint,
+                    params=params,
+                    now=now,
+                )
                 await self._store.save_experiment(record)
                 records.append(record)
                 logger.info(
@@ -576,6 +550,17 @@ class ExperimentRunner:
                     fingerprint,
                 )
                 continue
+
+            record = self._make_result_record(
+                experiment_id=generate_id(),
+                pattern_name=pattern_name,
+                fingerprint=fingerprint,
+                params=params,
+                status=ExperimentStatus.RUNNING,
+                backtest_result=None,
+                created_at=now,
+                updated_at=now,
+            )
 
             try:
                 engine_config = BacktestEngineConfig(
@@ -661,6 +646,73 @@ class ExperimentRunner:
     # ---------------------------------------------------------------------------
     # Private helpers
     # ---------------------------------------------------------------------------
+
+    @staticmethod
+    def _make_unsupported_record(
+        pattern_name: str,
+        fingerprint: str,
+        params: dict[str, Any],
+        now: datetime,
+    ) -> ExperimentRecord:
+        """Build a FAILED ExperimentRecord for an unsupported pattern.
+
+        P1-D2-L06 (FIX-08): single source for the unsupported-pattern record
+        consumed by both parallel and sequential sweep paths. Without this
+        helper, both paths inlined the same construction (DEF-121 message +
+        FAILED status + zero shadow_trades), risking drift if the record
+        shape evolves.
+        """
+        return ExperimentRecord(
+            experiment_id=generate_id(),
+            pattern_name=pattern_name,
+            parameter_fingerprint=fingerprint,
+            parameters=params,
+            status=ExperimentStatus.FAILED,
+            backtest_result={
+                "error": (
+                    f"Pattern '{pattern_name}' is not yet supported by "
+                    "BacktestEngine. See DEF-121."
+                )
+            },
+            shadow_trades=0,
+            shadow_expectancy=None,
+            is_baseline=False,
+            created_at=now,
+            updated_at=now,
+        )
+
+    @staticmethod
+    def _make_result_record(
+        experiment_id: str,
+        pattern_name: str,
+        fingerprint: str,
+        params: dict[str, Any],
+        status: ExperimentStatus,
+        backtest_result: dict[str, Any] | None,
+        created_at: datetime,
+        updated_at: datetime,
+    ) -> ExperimentRecord:
+        """Build an ExperimentRecord from sweep result fields.
+
+        P1-D2-L06 (FIX-08): shared between (a) the sequential path's
+        RUNNING record and its post-backtest mutation to COMPLETED/FAILED,
+        and (b) the parallel path's worker-result record. Always sets
+        ``shadow_trades=0`` and ``is_baseline=False`` — those columns are
+        populated by downstream pipeline stages, not by the runner.
+        """
+        return ExperimentRecord(
+            experiment_id=experiment_id,
+            pattern_name=pattern_name,
+            parameter_fingerprint=fingerprint,
+            parameters=params,
+            status=status,
+            backtest_result=backtest_result,
+            shadow_trades=0,
+            shadow_expectancy=None,
+            is_baseline=False,
+            created_at=created_at,
+            updated_at=updated_at,
+        )
 
     def _resolve_universe_symbols(
         self,
@@ -829,6 +881,13 @@ def _generate_exit_values(param: ExitSweepParam) -> list[float]:
 
     Step-spaced floats from *min_value* to *max_value* (inclusive).
 
+    Float accumulation safety (DEF-123, FIX-08): values are computed as
+    ``min + i * step`` (not by repeated addition) and rounded to 6 dp,
+    eliminating drift across the range. ``numpy.arange`` would be marginally
+    more idiomatic but would add a numpy import to a hot grid path for no
+    behavioural gain — the integer-multiplied form matches what numpy.arange
+    would produce.
+
     Args:
         param: ExitSweepParam descriptor.
 
@@ -867,6 +926,10 @@ def _generate_param_values(
                 range(int(param.min_value), int(param.max_value) + 1, int(param.step))
             )
         if param.param_type is float:
+            # DEF-123 (FIX-08): integer-multiplied form (``min + i * step``)
+            # avoids cumulative round-off; the round(_, 6) collapses any
+            # residual representation drift. See _generate_exit_values for
+            # the same pattern with ExitSweepParam.
             n_steps = round((param.max_value - param.min_value) / param.step)
             return [
                 round(param.min_value + i * param.step, 6) for i in range(n_steps + 1)
@@ -878,19 +941,38 @@ def _generate_param_values(
 def _compute_fingerprint(params: dict[str, Any]) -> str:
     """Compute a 16-character SHA-256 hex fingerprint of a param dict.
 
-    Deterministic: identical param dicts always produce the same fingerprint.
-    Uses canonical JSON (sorted keys, compact separators) to avoid ordering
-    artefacts.
+    Detection-only params (flat dict) hash directly. Structured params with
+    ``detection_params`` + ``exit_overrides`` keys are reshaped into factory's
+    canonical ``{"detection": ..., "exit": ...}`` form so a runner-side
+    fingerprint matches ``factory.compute_parameter_fingerprint`` for the
+    equivalent variant. Without this reshape, the runner's exit-sweep grid
+    points and the spawner-produced variants for the same semantic config
+    receive different SHA-256 outputs, breaking ``get_by_fingerprint`` dedup
+    across the two surfaces (P1-D2-M02 / FIX-08).
+
+    Detection-only is byte-identical to the prior implementation: the
+    ``default=str`` fallback is retained on that path so any non-JSON-native
+    PatternParam default still serialises rather than raising.
 
     Args:
-        params: Detection parameter dict.
+        params: Detection parameter dict, OR structured dict with keys
+            ``"detection_params"`` and ``"exit_overrides"``.
 
     Returns:
         First 16 hex characters of the SHA-256 hash.
     """
-    canonical = json.dumps(
-        params, sort_keys=True, separators=(",", ":"), default=str
-    )
+    if "detection_params" in params and "exit_overrides" in params:
+        canonical_payload: dict[str, Any] = {
+            "detection": params["detection_params"],
+            "exit": params["exit_overrides"],
+        }
+        canonical = json.dumps(
+            canonical_payload, sort_keys=True, separators=(",", ":")
+        )
+    else:
+        canonical = json.dumps(
+            params, sort_keys=True, separators=(",", ":"), default=str
+        )
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 
 

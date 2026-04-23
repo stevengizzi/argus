@@ -1189,14 +1189,175 @@ def test_run_single_backtest_passes_fingerprint() -> None:
         "created_at": "2025-01-01T00:00:00+00:00",
     }
 
+    # FIX-08 P1-D2-C01: worker now resolves BacktestEngine at module scope
+    # rather than via local re-import, so the patch must target the runner
+    # module's reference (matches the other parallel-path tests in this file).
     with patch(
-        "argus.backtest.engine.BacktestEngine",
+        "argus.intelligence.experiments.runner.BacktestEngine",
         side_effect=_capture_engine,
     ):
         _run_single_backtest(args)
 
     assert len(captured_configs) == 1
     assert captured_configs[0].config_fingerprint == expected_fingerprint
+
+
+# ---------------------------------------------------------------------------
+# FIX-08 P1-D2-M02 — fingerprint unification (runner ↔ factory)
+# ---------------------------------------------------------------------------
+
+
+def test_compute_fingerprint_detection_only_pinned() -> None:
+    """Detection-only fingerprint must NOT change after FIX-08 (backward-compat).
+
+    Pinned to the exact hash produced by the pre-FIX-08 implementation. Any
+    drift here would break ``ExperimentStore.get_by_fingerprint`` lookups
+    against existing rows in ``data/experiments.db``.
+    """
+    detection_params = {"pole_min_move_pct": 0.03, "flag_max_bars": 20}
+    assert _compute_fingerprint(detection_params) == "ddec1b2a09ee2263"
+
+
+def test_compute_fingerprint_with_exit_overrides_matches_factory() -> None:
+    """Runner fingerprint with exit_overrides MUST match factory output.
+
+    P1-D2-M02 (FIX-08): pre-fix the runner hashed
+    ``{"detection_params": ..., "exit_overrides": ...}`` while the factory
+    hashed ``{"detection": ..., "exit": ...}``. Same semantic content,
+    different SHA-256 outputs — breaking dedup between sweep results and
+    spawner-produced variants once any variant uses ``exit_overrides``.
+    """
+    from argus.strategies.patterns.factory import (  # noqa: PLC0415
+        compute_parameter_fingerprint,
+        get_pattern_class,
+    )
+
+    detection = {"pole_min_move_pct": 0.03, "flag_max_bars": 20}
+    exit_over = {"trailing_stop.atr_multiplier": 2.5}
+
+    runner_fp = _compute_fingerprint(
+        {"detection_params": detection, "exit_overrides": exit_over}
+    )
+
+    # Build a StrategyConfig that yields the same detection params via factory.
+    from argus.core.config import StrategyConfig  # noqa: PLC0415
+
+    base = StrategyConfig(
+        strategy_id="strat_bull_flag",
+        name="bull_flag",
+        enabled=True,
+        scope="default",
+        family="pattern",
+        pipeline_stage="entry",
+    )
+    config = base.model_copy(update={
+        "pole_min_move_pct": 0.03,
+        "flag_max_bars": 20,
+    })
+    factory_fp = compute_parameter_fingerprint(
+        config, get_pattern_class("bull_flag"), exit_overrides=exit_over
+    )
+
+    assert runner_fp == factory_fp, (
+        f"runner={runner_fp} != factory={factory_fp}"
+    )
+
+
+def test_compute_fingerprint_detection_only_factory_parity() -> None:
+    """Detection-only path also matches factory (no regression on existing parity)."""
+    from argus.core.config import StrategyConfig  # noqa: PLC0415
+    from argus.strategies.patterns.factory import (  # noqa: PLC0415
+        compute_parameter_fingerprint,
+        get_pattern_class,
+    )
+
+    detection = {"pole_min_move_pct": 0.03, "flag_max_bars": 20}
+    runner_fp = _compute_fingerprint(detection)
+
+    base = StrategyConfig(
+        strategy_id="strat_bull_flag",
+        name="bull_flag",
+        enabled=True,
+        scope="default",
+        family="pattern",
+        pipeline_stage="entry",
+    )
+    config = base.model_copy(update={
+        "pole_min_move_pct": 0.03,
+        "flag_max_bars": 20,
+    })
+    factory_fp = compute_parameter_fingerprint(
+        config, get_pattern_class("bull_flag")
+    )
+
+    assert runner_fp == factory_fp
+
+
+# ---------------------------------------------------------------------------
+# FIX-08 P1-D2-L03 — ProcessPoolExecutor cleanup on save_experiment failure
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_parallel_executor_shutdown_on_save_exception() -> None:
+    """Executor must shut down cleanly even when save_experiment raises.
+
+    Pre-FIX-08 the parallel sweep wrapped only KeyboardInterrupt, so any
+    other exception (e.g. aiosqlite.OperationalError) raised inside
+    asyncio.as_completed propagated past the try/else without calling
+    executor.shutdown — orphaning worker subprocesses.
+    """
+    store = _make_store_mock()
+    # Make save_experiment raise on first call.
+    store.save_experiment = AsyncMock(side_effect=RuntimeError("boom"))
+
+    runner = ExperimentRunner(
+        store=store,
+        config={
+            "backtest_min_expectancy": 0.0,
+            "backtest_min_trades": 1,
+        },
+    )
+
+    shutdown_calls: list[dict[str, Any]] = []
+
+    class _RecordingExecutor(ThreadPoolExecutor):
+        def shutdown(  # type: ignore[override]
+            self, wait: bool = True, *, cancel_futures: bool = False
+        ) -> None:
+            shutdown_calls.append(
+                {"wait": wait, "cancel_futures": cancel_futures}
+            )
+            super().shutdown(wait=wait, cancel_futures=cancel_futures)
+
+    with (
+        patch(
+            "argus.intelligence.experiments.runner.get_pattern_class",
+            return_value=_TwoParamPattern,
+        ),
+        patch(
+            "argus.intelligence.experiments.runner._run_single_backtest",
+            side_effect=_mock_worker_result,
+        ),
+        patch(
+            "argus.intelligence.experiments.runner.ProcessPoolExecutor",
+            _RecordingExecutor,
+        ),
+        pytest.raises(RuntimeError, match="boom"),
+    ):
+        await runner.run_sweep(
+            pattern_name="bull_flag",
+            cache_dir="/tmp/cache",
+            param_subset=["int_param"],
+            date_range=("2025-01-01", "2025-12-31"),
+            workers=2,
+        )
+
+    # The finally clause must have shut down the executor exactly once.
+    assert len(shutdown_calls) == 1
+    # Non-interrupt exit path → wait=True, cancel_futures=False.
+    assert shutdown_calls[0]["wait"] is True
+    assert shutdown_calls[0]["cancel_futures"] is False
 
 
 # ---------------------------------------------------------------------------

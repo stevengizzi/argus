@@ -8,9 +8,40 @@ Sprint 32, Session 8. Exit sweep params added Sprint 32.5, Session 1.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+
+class VariantConfig(BaseModel):
+    """A single variant definition under ``ExperimentConfig.variants[pattern_name]``.
+
+    P1-D2-C02 (FIX-08): Replaces an untyped ``dict[str, Any]`` so that a typo
+    inside a variant entry (e.g. ``moed:`` → entry silently ignored) is
+    rejected by Pydantic at parse time. Production currently reads
+    ``experiments.yaml`` as a raw dict via ``VariantSpawner`` rather than via
+    ``ExperimentConfig`` instantiation, so this enforcement applies whenever a
+    consumer (tests, future startup wiring) builds ``ExperimentConfig`` from a
+    dict. The shape mirrors what ``VariantSpawner`` reads in
+    ``argus/intelligence/experiments/spawner.py``.
+
+    Attributes:
+        variant_id: Unique identifier for this variant (e.g.
+            ``"strat_bull_flag__v2_strong_pole"``).
+        mode: Routing mode — ``"shadow"`` (default) routes through
+            CounterfactualTracker, ``"live"`` enters the live order pipeline.
+        params: Detection parameter overrides applied on top of the base
+            pattern config.
+        exit_overrides: Optional flat dot-path overrides for exit management
+            (e.g. ``{"trailing_stop.atr_multiplier": 2.5}``).
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    variant_id: str
+    mode: Literal["live", "shadow"] = "shadow"
+    params: dict[str, Any] = Field(default_factory=dict)
+    exit_overrides: dict[str, float] | None = None
 
 
 class ExitSweepParam(BaseModel):
@@ -77,5 +108,5 @@ class ExperimentConfig(BaseModel):
     backtest_start_date: str | None = None
     backtest_end_date: str | None = None
     max_workers: int = Field(default=4, ge=1, le=32)
-    variants: dict[str, list[dict[str, Any]]] = Field(default_factory=dict)
+    variants: dict[str, list[VariantConfig]] = Field(default_factory=dict)
     exit_sweep_params: list[ExitSweepParam] | None = None

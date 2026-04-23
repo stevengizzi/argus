@@ -212,6 +212,40 @@ class TestLearningReportSerialization:
         assert isinstance(matrix, dict)
         assert "orb_breakout|vwap_reclaim" in matrix
 
+    def test_convert_datetimes_handles_date(self) -> None:
+        """_convert_datetimes coerces bare ``date`` to ISO string.
+
+        P1-D2-L01 (FIX-08): pre-fix only ``datetime`` was widened, so a
+        bare ``date`` would survive ``to_dict()`` and crash the
+        downstream ``json.dumps`` in ``learning_store.save_report``
+        (no ``default=str``). This test exercises the helper directly
+        with a payload containing both ``date`` and ``datetime`` fields
+        — both must serialise to ISO strings.
+        """
+        from datetime import date as _date  # noqa: PLC0415
+        from datetime import datetime as _dt  # noqa: PLC0415
+
+        from argus.intelligence.learning.models import (  # noqa: PLC0415
+            _convert_datetimes,
+        )
+
+        payload: dict[str, object] = {
+            "as_of": _date(2026, 4, 21),
+            "ts": _dt(2026, 4, 21, 13, 30, tzinfo=timezone.utc),
+            "nested": {"opened_on": _date(2026, 4, 1)},
+            "items": [
+                {"d": _date(2026, 1, 1)},
+                {"dt": _dt(2026, 2, 2, tzinfo=timezone.utc)},
+            ],
+        }
+        _convert_datetimes(payload)
+
+        assert payload["as_of"] == "2026-04-21"
+        assert payload["ts"] == "2026-04-21T13:30:00+00:00"
+        assert payload["nested"]["opened_on"] == "2026-04-01"  # type: ignore[index]
+        assert payload["items"][0]["d"] == "2026-01-01"  # type: ignore[index]
+        assert payload["items"][1]["dt"] == "2026-02-02T00:00:00+00:00"  # type: ignore[index]
+
 
 # --- ConfigProposal ---
 

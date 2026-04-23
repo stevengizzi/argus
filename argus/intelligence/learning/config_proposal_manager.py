@@ -147,6 +147,19 @@ class ConfigProposalManager:
         Amendment 2: Cumulative drift guard stops application if next
         proposal would exceed max_cumulative_drift for any dimension.
 
+        P1-D2-M05 (FIX-08): When a weight proposal is applied,
+        ``_redistribute_weights`` proportionally adjusts the other weight
+        dimensions to maintain sum-to-1.0. Pre-FIX-08 those redistribution
+        deltas were never recorded in ``config_change_history``, so
+        ``get_cumulative_drift(dim)`` undercounted drift on every
+        redistributed dimension. Repeated promotions of dim A could
+        silently push dims B/C/D/E far below their initial anchors with
+        the guard never tripping. This method now snapshots weight values
+        pre-redistribution and emits a separate ``record_change`` entry
+        per redistributed dimension with
+        ``source="learning_loop_redistribution"`` so the drift-guard query
+        sees the full picture.
+
         Returns:
             List of proposal IDs that were applied.
         """
@@ -156,6 +169,10 @@ class ConfigProposalManager:
 
         current_yaml = self._read_yaml()
         applied_ids: list[str] = []
+        # P1-D2-M05 (FIX-08): per-proposal map of {dim_name: (old_weight,
+        # new_weight)} for weight dims that the redistribution step
+        # modified. Used by the recording loop below.
+        redistribution_deltas: dict[str, dict[str, tuple[float, float]]] = {}
 
         for proposal in approved:
             # Check cumulative drift guard before applying
@@ -183,12 +200,20 @@ class ConfigProposalManager:
                     continue
 
             # Apply the change to the in-memory YAML dict
-            old_value = self._get_nested(current_yaml, proposal.field_path)
             self._set_nested(current_yaml, proposal.field_path, proposal.proposed_value)
 
             # If this is a weight change, redistribute other weights
+            # and capture the per-dim deltas so they can be recorded below.
             if proposal.field_path.startswith("weights."):
+                pre_weights = self._snapshot_weights(current_yaml)
                 self._redistribute_weights(current_yaml, proposal.field_path)
+                post_weights = self._snapshot_weights(current_yaml)
+                changed_dim = proposal.field_path.split(".", 1)[1]
+                redistribution_deltas[proposal.proposal_id] = {
+                    dim: (pre_weights[dim], post_weights[dim])
+                    for dim in pre_weights
+                    if dim != changed_dim and pre_weights[dim] != post_weights[dim]
+                }
 
             applied_ids.append(proposal.proposal_id)
 
@@ -226,8 +251,36 @@ class ConfigProposalManager:
                 report_id=proposal.report_id,
             )
 
+            # P1-D2-M05 (FIX-08): emit drift records for each redistributed
+            # dim. Distinct source tag so a future drift-guard refinement
+            # could weight these differently if needed; the sum-of-deltas
+            # is what matters for ``get_cumulative_drift``.
+            for dim, (pre, post) in redistribution_deltas.get(pid, {}).items():
+                await self._store.record_change(
+                    field_path=f"weights.{dim}",
+                    old_value=pre,
+                    new_value=post,
+                    source="learning_loop_redistribution",
+                    proposal_id=pid,
+                    report_id=proposal.report_id,
+                )
+
         logger.info("Applied %d config proposals at startup", len(applied_ids))
         return applied_ids
+
+    @staticmethod
+    def _snapshot_weights(yaml_data: dict[str, object]) -> dict[str, float]:
+        """Snapshot current weight values from the in-memory YAML dict.
+
+        Used by ``apply_pending`` to capture pre- and post-redistribution
+        weight values for drift-record emission (P1-D2-M05).
+        """
+        weights = yaml_data.get("weights")
+        if not isinstance(weights, dict):
+            return {}
+        return {
+            str(dim): float(weights.get(dim, 0.0)) for dim in _WEIGHT_DIMENSIONS
+        }
 
     def validate_proposal(
         self, proposal: ConfigProposal

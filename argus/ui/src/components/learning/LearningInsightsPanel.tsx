@@ -385,7 +385,7 @@ export function LearningInsightsPanel({
 
             {/* Conflicting (same-grade, both directions) combined cards */}
             {conflictingThresholds.map(
-              ({ grade, lower, raise: raiseRec, lowerProposal, raiseProposal }) => (
+              ({ grade, lower, lowerProposal, raiseProposal }) => (
                 <div
                   key={`conflict-${grade}`}
                   className="rounded-lg border border-amber-500/30 bg-argus-surface-1 p-4 space-y-3"

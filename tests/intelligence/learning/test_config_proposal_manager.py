@@ -480,7 +480,15 @@ async def test_apply_pending_records_change_history(
     manager: ConfigProposalManager,
     store: LearningStore,
 ) -> None:
-    """apply_pending records changes in config_change_history."""
+    """apply_pending records changes in config_change_history.
+
+    P1-D2-M05 (FIX-08): every applied weight proposal now emits 1
+    explicit ``learning_loop`` record PLUS one
+    ``learning_loop_redistribution`` record per other weight dim that the
+    sum-to-1.0 redistribution moved. With 5 weight dims and a single
+    proposal touching one dim, the legacy 1-record assertion becomes 5
+    (1 explicit + 4 redistributed).
+    """
     proposal = _make_proposal()
     await store.save_proposal(proposal)
     await store.update_proposal_status("prop-001", "APPROVED")
@@ -488,10 +496,97 @@ async def test_apply_pending_records_change_history(
     await manager.apply_pending()
 
     changes = await store.get_change_history()
-    assert len(changes) == 1
-    assert changes[0]["field_path"] == "weights.pattern_strength"
-    assert changes[0]["source"] == "learning_loop"
-    assert changes[0]["proposal_id"] == "prop-001"
+    explicit = [c for c in changes if c["source"] == "learning_loop"]
+    redistributed = [
+        c for c in changes if c["source"] == "learning_loop_redistribution"
+    ]
+    assert len(explicit) == 1, f"expected 1 explicit record, got {len(explicit)}"
+    assert explicit[0]["field_path"] == "weights.pattern_strength"
+    assert explicit[0]["proposal_id"] == "prop-001"
+    assert len(redistributed) == 4, (
+        f"expected 4 redistribution records (one per non-changed weight dim), "
+        f"got {len(redistributed)}"
+    )
+    # Each redistribution record must reference the same proposal that
+    # caused it, so a future drift-guard refinement can scope by proposal.
+    assert all(c["proposal_id"] == "prop-001" for c in redistributed)
+    redistributed_dims = {c["field_path"] for c in redistributed}
+    assert redistributed_dims == {
+        "weights.catalyst_quality",
+        "weights.volume_profile",
+        "weights.historical_match",
+        "weights.regime_alignment",
+    }
+
+
+@pytest.mark.asyncio
+async def test_redistribution_drift_visible_to_cumulative_drift_guard(
+    manager: ConfigProposalManager,
+    store: LearningStore,
+) -> None:
+    """get_cumulative_drift sees the full redistribution history.
+
+    P1-D2-M05 (FIX-08): apply 3 sequential proposals each promoting a
+    different weight dim upward. Pre-FIX-08 the cumulative drift on a
+    redistributed (non-target) dim would stay at 0.0 because the
+    redistribution deltas were never recorded. This test exercises the
+    full pipeline and asserts that cumulative drift on each
+    non-explicitly-changed dim equals the sum of the redistribution
+    deltas accumulated across the three proposals.
+    """
+    # Three proposals: each promotes a different dim upward by +0.02.
+    promoted_dims = ["pattern_strength", "catalyst_quality", "volume_profile"]
+    base_value = 0.30
+    new_value = 0.32  # +0.02
+    # Raise the cumulative-drift guard ceiling to the Pydantic maximum
+    # (0.50) so the three small +0.02 promotions cannot trip it; this
+    # keeps observed drift attributable to the redistribution recording
+    # fix rather than to guard skips.
+    manager._config = LearningLoopConfig(max_cumulative_drift=0.50)
+
+    for i, dim in enumerate(promoted_dims):
+        # Re-read current value of the target dim so we don't double-count
+        # already-applied redistribution shrinkage from prior iterations.
+        current_yaml = manager._read_yaml()
+        current_dim_value = float(
+            (current_yaml.get("weights") or {}).get(dim, base_value)  # type: ignore[union-attr]
+        )
+        # Promote by 0.02 each time (clamped via redistribution).
+        proposed = round(current_dim_value + 0.02, 6)
+        proposal = _make_proposal(
+            proposal_id=f"prop-redist-{i}",
+            field_path=f"weights.{dim}",
+            current_value=current_dim_value,
+            proposed_value=proposed,
+            report_id=f"rpt-redist-{i}",
+        )
+        await store.save_proposal(proposal)
+        await store.update_proposal_status(proposal.proposal_id, "APPROVED")
+        await manager.apply_pending()
+
+    # historical_match was never the explicit target, so all of its drift
+    # comes from redistribution. Pre-FIX-08 this would be 0.0; now it
+    # matches the sum of redistribution deltas the change-history
+    # actually recorded for that dim.
+    changes = await store.get_change_history()
+    redistributed_for_hm = [
+        c for c in changes
+        if c["field_path"] == "weights.historical_match"
+        and c["source"] == "learning_loop_redistribution"
+    ]
+    expected_hm_drift = sum(
+        abs(c["new_value"] - c["old_value"]) for c in redistributed_for_hm
+    )
+    actual_hm_drift = await manager.get_cumulative_drift(
+        "historical_match", window_days=30
+    )
+    assert expected_hm_drift > 0, (
+        "redistribution should have moved historical_match across 3 proposals"
+    )
+    assert actual_hm_drift == pytest.approx(expected_hm_drift), (
+        f"cumulative drift on redistributed dim should equal recorded sum; "
+        f"actual={actual_hm_drift}, expected={expected_hm_drift}"
+    )
 
 
 @pytest.mark.asyncio

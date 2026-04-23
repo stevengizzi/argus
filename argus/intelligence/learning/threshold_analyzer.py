@@ -10,6 +10,7 @@ Sprint 28, Session 2a.
 from __future__ import annotations
 
 import logging
+from typing import Literal
 
 from argus.intelligence.learning.models import (
     ConfidenceLevel,
@@ -84,10 +85,21 @@ class ThresholdAnalyzer:
     ) -> list[ThresholdRecommendation]:
         """Analyze a single grade level for threshold recommendations.
 
-        Amendment 12 decision criteria:
-        - missed_opportunity_rate > 0.40 -> "lower" (too aggressive)
-        - correct_rejection_rate < 0.50 -> "raise" (too lenient)
-        Both conditions can be true simultaneously.
+        Amendment 12 decision criteria, **revised by FIX-08 P1-D2-M04**:
+        because ``missed_opportunity_rate + correct_rejection_rate == 1.0``
+        always, the original ``if`` / ``if`` form emitted BOTH a "lower"
+        and a "raise" recommendation whenever ``missed > 0.50``. Two
+        contradictory ``ConfigProposal`` rows with the same
+        ``field_path = thresholds.<grade>`` then reached the operator UI;
+        approving both meant ``apply_pending`` overwrote the first with
+        the second and the cumulative drift guard saw twice the delta.
+
+        New semantics — emit at most one recommendation per grade with
+        "raise" taking precedence when both legacy triggers fired:
+
+        - ``correct_rejection_rate < 0.50`` → "raise" (too lenient)
+        - elif ``missed_opportunity_rate > 0.40`` → "lower" (too aggressive)
+        - else: no recommendation
 
         Args:
             grade: Quality grade string (e.g., "B+").
@@ -96,7 +108,7 @@ class ThresholdAnalyzer:
             current_threshold: Current score threshold for this grade.
 
         Returns:
-            List of recommendations (0, 1, or 2 per grade).
+            List of 0 or 1 ``ThresholdRecommendation`` per grade.
         """
         grade_records = [r for r in cf_records if r.quality_grade == grade]
         sample_size = len(grade_records)
@@ -110,44 +122,27 @@ class ThresholdAnalyzer:
         missed_opportunity_rate = profitable / sample_size
         correct_rejection_rate = unprofitable / sample_size
 
-        results: list[ThresholdRecommendation] = []
+        confidence = (
+            ConfidenceLevel.HIGH
+            if sample_size >= config.min_sample_count * 2
+            else ConfidenceLevel.MODERATE
+        )
 
-        # Amendment 12: missed > 0.40 -> "lower" (too aggressive filtering)
-        if missed_opportunity_rate > _MISSED_OPPORTUNITY_THRESHOLD:
-            confidence = (
-                ConfidenceLevel.HIGH
-                if sample_size >= config.min_sample_count * 2
-                else ConfidenceLevel.MODERATE
-            )
-            results.append(
-                ThresholdRecommendation(
-                    grade=grade,
-                    current_threshold=float(current_threshold),
-                    recommended_direction="lower",
-                    missed_opportunity_rate=missed_opportunity_rate,
-                    correct_rejection_rate=correct_rejection_rate,
-                    sample_size=sample_size,
-                    confidence=confidence,
-                )
-            )
-
-        # Amendment 12: correct < 0.50 -> "raise" (too lenient)
         if correct_rejection_rate < _CORRECT_REJECTION_THRESHOLD:
-            confidence = (
-                ConfidenceLevel.HIGH
-                if sample_size >= config.min_sample_count * 2
-                else ConfidenceLevel.MODERATE
-            )
-            results.append(
-                ThresholdRecommendation(
-                    grade=grade,
-                    current_threshold=float(current_threshold),
-                    recommended_direction="raise",
-                    missed_opportunity_rate=missed_opportunity_rate,
-                    correct_rejection_rate=correct_rejection_rate,
-                    sample_size=sample_size,
-                    confidence=confidence,
-                )
-            )
+            direction: Literal["raise", "lower"] = "raise"
+        elif missed_opportunity_rate > _MISSED_OPPORTUNITY_THRESHOLD:
+            direction = "lower"
+        else:
+            return []
 
-        return results
+        return [
+            ThresholdRecommendation(
+                grade=grade,
+                current_threshold=float(current_threshold),
+                recommended_direction=direction,
+                missed_opportunity_rate=missed_opportunity_rate,
+                correct_rejection_rate=correct_rejection_rate,
+                sample_size=sample_size,
+                confidence=confidence,
+            )
+        ]

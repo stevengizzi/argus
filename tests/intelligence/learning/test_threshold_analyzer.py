@@ -78,24 +78,26 @@ class TestThresholdAnalyzerRates:
     """Test per-grade rate computation from counterfactual records."""
 
     def test_high_missed_opportunity_recommends_lower(self) -> None:
-        """Missed opportunity rate > 0.40 should recommend 'lower'."""
-        analyzer = ThresholdAnalyzer()
-        config = _make_config(min_sample_count=5)
+        """missed > 0.40 with correct >= 0.50 should recommend 'lower'.
 
-        # 4 profitable + 1 unprofitable = 80% missed opportunity rate
-        records = [
-            _make_cf_record(pnl=50.0),
-            _make_cf_record(pnl=30.0),
-            _make_cf_record(pnl=20.0),
-            _make_cf_record(pnl=10.0),
-            _make_cf_record(pnl=-5.0),
+        FIX-08 P1-D2-M04 narrowed semantics: "lower" only fires via the
+        elif branch when the "raise" branch (``correct < 0.50``) does
+        not. Picking 9 profitable + 11 unprofitable = missed 0.45,
+        correct 0.55 keeps "raise" off and exercises the "lower" path.
+        """
+        analyzer = ThresholdAnalyzer()
+        config = _make_config(min_sample_count=10)
+
+        records = [_make_cf_record(pnl=50.0) for _ in range(9)] + [
+            _make_cf_record(pnl=-5.0) for _ in range(11)
         ]
 
         recs = analyzer.analyze(records, config, _THRESHOLDS)
         lower_recs = [r for r in recs if r.recommended_direction == "lower"]
-        assert len(lower_recs) >= 1
+        assert len(lower_recs) == 1
         assert lower_recs[0].grade == "B+"
         assert lower_recs[0].missed_opportunity_rate > 0.40
+        assert lower_recs[0].correct_rejection_rate >= 0.50
 
     def test_low_correct_rejection_recommends_raise(self) -> None:
         """Correct rejection rate < 0.50 should recommend 'raise'."""
@@ -116,14 +118,21 @@ class TestThresholdAnalyzerRates:
         assert len(raise_recs) >= 1
         assert raise_recs[0].correct_rejection_rate < 0.50
 
-    def test_both_conditions_simultaneous(self) -> None:
-        """Both 'lower' and 'raise' can be generated for the same grade."""
+    def test_both_conditions_simultaneous_emit_only_raise(self) -> None:
+        """When both legacy triggers fire, 'raise' wins (FIX-08 P1-D2-M04).
+
+        Pre-FIX-08 the analyzer emitted BOTH a "lower" AND a "raise"
+        recommendation for the same grade whenever ``missed > 0.50``,
+        producing two contradictory ConfigProposals on the same
+        ``thresholds.<grade>`` field path. New semantics: emit at most
+        one recommendation per grade with "raise" taking precedence.
+        """
         analyzer = ThresholdAnalyzer()
         config = _make_config(min_sample_count=5)
 
         # 4 profitable + 1 unprofitable:
-        # missed_opp = 4/5 = 0.80 > 0.40 → lower
-        # correct_rej = 1/5 = 0.20 < 0.50 → raise
+        # missed_opp = 4/5 = 0.80 > 0.40 → would have triggered "lower" pre-fix
+        # correct_rej = 1/5 = 0.20 < 0.50 → triggers "raise" (wins)
         records = [
             _make_cf_record(pnl=50.0),
             _make_cf_record(pnl=30.0),
@@ -134,9 +143,28 @@ class TestThresholdAnalyzerRates:
 
         recs = analyzer.analyze(records, config, _THRESHOLDS)
         b_plus_recs = [r for r in recs if r.grade == "B+"]
-        directions = {r.recommended_direction for r in b_plus_recs}
-        assert "lower" in directions
-        assert "raise" in directions
+        assert len(b_plus_recs) == 1, (
+            f"FIX-08 P1-D2-M04: expected at most one rec per grade, "
+            f"got {len(b_plus_recs)}"
+        )
+        assert b_plus_recs[0].recommended_direction == "raise"
+
+    def test_no_recommendation_when_neither_threshold_breached(self) -> None:
+        """missed=0.30, correct=0.70 → neither branch fires (FIX-08).
+
+        Sanity check the new semantics: with both rates within bounds,
+        the if/elif/else exits with no recommendation.
+        """
+        analyzer = ThresholdAnalyzer()
+        config = _make_config(min_sample_count=10)
+
+        # 6 profitable + 14 unprofitable: missed=0.30, correct=0.70
+        records = [_make_cf_record(pnl=50.0) for _ in range(6)] + [
+            _make_cf_record(pnl=-5.0) for _ in range(14)
+        ]
+        recs = analyzer.analyze(records, config, _THRESHOLDS)
+        b_plus_recs = [r for r in recs if r.grade == "B+"]
+        assert len(b_plus_recs) == 0
 
     def test_no_recommendation_when_rates_normal(self) -> None:
         """No recommendations when rates are within normal bounds."""

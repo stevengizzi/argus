@@ -10,7 +10,7 @@ Sprint 28, Session 1.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
 from typing import Literal
 
@@ -438,17 +438,28 @@ class LearningLoopConfig(BaseModel):
 
 
 def _convert_datetimes(obj: object) -> None:
-    """Recursively convert datetime objects to ISO strings in-place."""
+    """Recursively convert datetime / date objects to ISO strings in-place.
+
+    P1-D2-L01 (FIX-08): widened from ``datetime`` only to ``(date, datetime)``.
+    A bare ``date`` field on any nested dataclass would previously slip
+    through this pass and reach ``json.dumps`` in
+    ``learning_store.save_report`` (which has no ``default=str``), raising
+    ``TypeError``. Same failure class as DEF-151. Order matters:
+    ``datetime`` is a subclass of ``date``, so the runtime ``isinstance``
+    check on ``date`` catches both, and ``datetime.isoformat()`` produces
+    the richer "YYYY-MM-DDTHH:MM:SS+HH:MM" string while ``date.isoformat()``
+    produces "YYYY-MM-DD".
+    """
     if isinstance(obj, dict):
         for key in list(obj.keys()):
             val = obj[key]
-            if isinstance(val, datetime):
+            if isinstance(val, date):  # also matches datetime (subclass)
                 obj[key] = val.isoformat()
             elif isinstance(val, (dict, list)):
                 _convert_datetimes(val)
     elif isinstance(obj, list):
         for i, item in enumerate(obj):
-            if isinstance(item, datetime):
+            if isinstance(item, date):
                 obj[i] = item.isoformat()
             elif isinstance(item, (dict, list)):
                 _convert_datetimes(item)
