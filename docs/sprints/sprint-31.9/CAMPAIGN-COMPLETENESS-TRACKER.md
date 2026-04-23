@@ -1,6 +1,6 @@
 # Sprint 31.9 + Post-31.9 Campaign — Completeness Tracker
 
-<!-- last-updated: 2026-04-22 (Stage 7 complete + IMPROMPTU-03 CI-unblock + Stage 8 FIX-13 split pre-update) -->
+<!-- last-updated: 2026-04-23 (Stage 8 Wave 1 / FIX-13a complete) -->
 <!-- canonical-source: true — this is the single master tracker; hydrate new conversations from here -->
 
 ## Purpose
@@ -35,7 +35,7 @@ and this document can be archived to `docs/sprints/archive/`.
 | **Stage 6** | **(complete)** | **✅ COMPLETE** | **2026-04-22** |
 | Stage 7 | FIX-09 (backtest-engine, solo) + IMPROMPTU-03 (CI tz flakes) | ✅ CLEAR / CLEAN | 2026-04-22 |
 | **Stage 7** | **(complete)** | **✅ COMPLETE** | **2026-04-22** |
-| Stage 8 Wave 1 | FIX-13a (test hygiene — tactical, solo) | ⏸ PENDING | TBD |
+| Stage 8 Wave 1 | FIX-13a (test hygiene — tactical, solo) | ✅ CLEAR | 2026-04-23 |
 | Stage 8 Wave 2 | FIX-13b (test hygiene — refactors, solo) | ⏸ PENDING | TBD |
 | Stage 8 Parallel | IMPROMPTU-01 (LIVE OK, parallel if scope-safe) | ⏸ PENDING | TBD |
 | **Stage 8** | **(complete when both waves close)** | ⏸ PENDING | TBD |
@@ -47,13 +47,13 @@ and this document can be archived to `docs/sprints/archive/`.
 ## CI infrastructure status
 
 First fully passing CI at commit `793d4fd` (2026-04-22).
-- pytest: ≈ 4,980 (local) / ≈ 4,967 (CI non-integration) post-IMPROMPTU-03 (up from 4,977 at `793d4fd`, rose through FIX-05 → FIX-08 to 5,035, then dropped −56 on FIX-09 sanctioned deletions and +1 on IMPROMPTU-03)
-- Vitest: 859 passed / 115 files
+- pytest: ≈ 4,987 (local) / CI non-integration count pending next run (post-FIX-13a; up from 4,980 at IMPROMPTU-03 via +7 tactical test additions — DEF-190 regression guard + DEF-171 fixture counter coverage + F19 narrowing + DEF-150 time-window guard + date-decay conversion assertions)
+- Vitest: 859 passed / 115 files (unchanged since Stage 5)
 - Workflow: `.github/workflows/ci.yml`, Python 3.11.15, Node 20 (deprecation warning active — see DEF-181)
-- Known flakes monitored in CI: DEF-150, DEF-167, DEF-171, DEF-190, DEF-192
+- Known flakes monitored in CI: DEF-150 ✅ closed, DEF-167 ✅ closed (scope-noted), DEF-171 ✅ closed, DEF-190 ✅ closed, DEF-192 PARTIAL (numpy cast closed; 5 categories remain)
 - CI-green milestone means zero-tolerance on flakes is enforceable going forward: any red CI run is a real bug until proven otherwise
 
-**Post-Stage-7 expected counts:** pytest ≈ 4,980 (local) / ≈ 4,967 (CI non-integration), Vitest 859.
+**Post-Stage-8a expected counts:** pytest ≈ 4,987 (local) / CI non-integration count pending, Vitest 859.
 
 ## Sessions remaining (Sprint 31.9)
 
@@ -71,11 +71,7 @@ First fully passing CI at commit `793d4fd` (2026-04-22).
 
 | DEF | Title | Owner Session |
 |---|---|---|
-| DEF-150 | Time-of-day arithmetic flake (minute 0-1 window, 3.3%/hr) | FIX-13a |
-| DEF-167 | Vitest hardcoded dates decay | FIX-13a (folded from original post-FIX-11 plan) |
-| DEF-171 | ULID xdist race | FIX-13a (folded post-CI) |
-| DEF-190 | pyarrow/xdist concurrent register_extension_type race | FIX-13a |
-| DEF-192 | Test runtime warning cleanup debt (~6 categories, 26-27 warnings) | FIX-13a |
+| DEF-192 | Test runtime warning cleanup (partial: numpy cast closed; 5 categories remain — TestBaseline blocked on workflow submodule per RULE-018) | FIX-13a (partial) → opportunistic cleanup |
 | DEF-177 | `RejectionStage.MARGIN_CIRCUIT` addition | FIX-06 or cross-domain session |
 
 ### FIX-13b refactor queue — audit findings deferred at Stage 8 pre-update (not opened as DEFs)
@@ -144,6 +140,7 @@ Closed by campaign sessions (grouped by closing session):
 - FIX-08: DEF-107 (deleted raiseRec), DEF-123 (RESOLVED-VERIFIED)
 - FIX-09: (no DEFs closed — retirements F23/F25/F26 don't close prior DEFs; F14/F17/F19 resolved inline; DEF-186, DEF-187 opened as new carries)
 - IMPROMPTU-03: DEF-163 (re-opened at Stage 6, now fully resolved with in-window CI regression evidence), DEF-188 (opened and closed same session)
+- FIX-13a: DEF-150 (time-of-day arithmetic), DEF-167 (Vitest hardcoded dates — 3 files; ~55 remaining files have no decay surface, closed-with-scope-note), DEF-171 (ULID xdist race — `itertools.count(1)`), DEF-190 (pyarrow/xdist prewarm with Period-dtype forcing function), DEF-192 PARTIAL (numpy cast closed; 5 categories remain per RULE-018 blocker on TestBaseline + pending DEF-176 for OrderManager kwarg migration)
 - Campaign hotfixes (xdist + CI 4-bug): no DEFs closed directly; enabled CI-green milestone
 
 ### Post-31.9 deferred items (opened this campaign)
@@ -189,6 +186,9 @@ Campaign-wide lessons to fold into `workflow/` metarepo protocols before closing
 | P14 | DEF strikethroughs should not be made until the regression test in question has been run across multiple time windows. DEF closures for time-sensitive or timezone-involved tests should require at least one regression run in the failing window OR an explicit argument why the window no longer exists. | DEF-163's FIX-05 strikethrough was premature because the Python-side fix didn't exercise the SQL-side comparator, and the test's failure mode is time-of-day-bounded (~4h daily window). |
 | P15 | ET-based implementation vs local-tz/UTC assertion is a recurring test-flake pattern. DEF-163 (FIX-05-era), DEF-188 (Stage-4-era), and DEF-190's family (xdist/timezone-adjacent) all share the shape: implementation correctly uses `datetime.now(tz=_ET)` but test compares against `datetime.date.today()` or creates synthetic data with `datetime.now(UTC)`. When Python's local timezone (or the CI runner's UTC) differs from ET, the comparison drifts during the ET/UTC date-divergence window. When writing new timezone-sensitive tests: (a) always derive "today" the same way the implementation does; (b) avoid using `datetime.now(...)` for synthetic test data — use fixed wall-clock anchors (e.g., 15:00 ET); (c) if a test must mock "now", mock it explicitly rather than letting wall-clock variation drive the test. |
 | P16 | Avoid `Test*`-prefixed class names in non-test code that pytest collects. `scripts/sprint_runner/state.py:158` defines a `TestBaseline` Pydantic model that triggers `PytestCollectionWarning: cannot collect test class 'TestBaseline' because it has a __init__ constructor`. Harmless but noisy. When naming internal classes, avoid the `Test*` prefix unless the class is an actual pytest test class. If historical refactoring means a non-test class must keep the `Test*` prefix, add `__test__ = False` as a class attribute to signal pytest to skip collection. |
+| P17 | Broad `except Exception: pass` in test blocks can silently swallow `pytest.fail()` calls, converting the test from a real regression guard into a tautology. F19 in FIX-13a exposed exactly this pattern at `tests/api/test_observatory_ws.py` — the route-disabled test had been passing since Sprint 25 not because the behavior under test was correct, but because any failure (including the explicit `pytest.fail()`) was being caught and discarded. When replacing broad catches, verify that no `pytest.fail(...)`, `assert`, or other test-framework signal was relying on propagation. Systematic audit opportunity: grep for `except Exception` in test files and narrow each to a specific expected exception type. |
+| P18 | Kickoff-suggested library-behavior fixes should be verified to actually trigger the behavior. FIX-13a's DEF-190 kickoff said "conftest.py-level eager pyarrow import" — but bare `import pyarrow` does NOT trigger `register_extension_type` because pyarrow's extension registration is lazy (runs on first DataFrame→Arrow conversion). Claude Code correctly identified the gap and strengthened the fix to an actual forcing function (`pd.DataFrame({...}) → pa.Table.from_pandas(df)`). When kickoffs propose "just import X," verify by observation (check the stack trace, run under `python -X tracemalloc`, or inspect the library source) that the import side-effect being relied on actually fires. |
+| P19 | Audit observations with specific counts ("9 @patch decorators", "unused import X") can go stale between audit-generation and session execution. F22 (audit said 9 @patch decorators) and F24 (audit said "unused AfternoonMomentumStrategy import") were both wrong at re-verification time. Claude Code correctly marked them RESOLVED-VERIFIED with stale-observation annotations rather than inventing fixes. When audit findings reference specific counts or "unused" claims, grep-verify the observation before applying the suggested fix — if the observation no longer holds, mark the finding RESOLVED-VERIFIED with the verification evidence recorded. |
 
 These become inputs to the campaign-close retrospective. They should be folded
 into the `workflow/` metarepo protocols in a separate commit BEFORE Sprint 31.9

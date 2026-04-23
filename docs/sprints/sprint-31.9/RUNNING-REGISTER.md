@@ -5,10 +5,10 @@
 > at every stage barrier. Survives compaction — read this file to hydrate
 > a fresh Claude.ai conversation.
 >
-> **Last updated:** 2026-04-22 — Stage 7 complete + Stage 8 FIX-13 split pre-update
-> **Campaign HEAD:** `354be7f` (post-IMPROMPTU-03)
+> **Last updated:** 2026-04-23 — Stage 8 Wave 1 (FIX-13a) complete
+> **Campaign HEAD:** `f06fd18` (FIX-13a docs commit)
 > **Workflow submodule:** `942c53a`
-> **Baseline tests:** 4,980 pytest + 859 Vitest (local) / 4,967 pytest + 859 Vitest (CI, -m "not integration")
+> **Baseline tests:** 4,987 pytest + 859 Vitest (local) / CI non-integration count pending
 
 ---
 
@@ -44,7 +44,7 @@
 | **Stage 6** | **(complete)** | **✅ COMPLETE** |
 | Stage 7 | FIX-09 (backtest-engine, solo) + IMPROMPTU-03 (CI tz flakes) | ✅ CLEAR / CLEAN |
 | **Stage 7** | **(complete)** | **✅ COMPLETE** |
-| Stage 8 Wave 1 | FIX-13a (test hygiene — tactical, solo) | ⏸ PENDING |
+| Stage 8 Wave 1 | FIX-13a (test hygiene — tactical, solo) | ✅ CLEAR |
 | Stage 8 Wave 2 | FIX-13b (test hygiene — refactors, solo) | ⏸ PENDING |
 | Stage 8 Parallel | IMPROMPTU-01 (LIVE OK, parallel with either wave if scope-safe) | ⏸ PENDING |
 | **Stage 8** | **(complete when both waves close)** | ⏸ PENDING |
@@ -83,8 +83,9 @@
 | FIX-08 (experiments + learning loop) | `33ad7da` + `daae0fd` | MINOR_DEVIATIONS | CLEAR | +7 | Stage 6 (solo). 18 findings (3 MEDIUM + 7 LOW + 8 COSMETIC, no CRITICAL). Finding 1 (fingerprint unification runner↔factory) landed with detection-only hash pinned to `ddec1b2a09ee2263` (backward-compat verified). Finding 15 (redistribution drift recording) closes the cumulative-drift-guard evasion loophole. Finding 17 (threshold raise/lower split) eliminates the contradictory-proposal bug. DEF-107 + DEF-123 closed. Spec path drift on Finding 18 documented (P12). Reviewer surfaced DEF-163 re-open — Python-side fix from FIX-05 was incomplete (SQL-side UTC/ET date mismatch in TradeLogger.get_todays_pnl). |
 | FIX-09 (backtest-engine) | `f639a98` + `caab644` | MINOR_DEVIATIONS | CLEAR | −56 | Stage 7 (solo). 27 findings — no CRITICAL; 3 MEDIUM + 9 LOW + 9 COSMETIC + 3 MEDIUM test findings + retirement cluster. 3 major file retirements landed cleanly: `report_generator.py` (operator-approved Option A, 1,232 LOC + 578 tests), `vectorbt_pattern.py` (1,057 LOC + ~50 tests), `vectorbt_red_to_green.py` (~1,025 LOC + ~60 tests, chained). F14 walk-forward R2G branch excised. F2 `itertuples` dispatch cleared 15% gate by 5.8× (+87.8%). F1 flat-key fallback dropped with added WARNING log. F9 NYSE holiday filter wired. DEF-186 + DEF-187 opened. Tier 2 reviewer surfaced pyarrow/xdist race (→ DEF-190 this barrier) and prior-session bug in `scripts/revalidate_strategy.py:383` (→ DEF-189 this barrier). Audit back-annotation used per-file summary headers rather than per-row strikethrough — reviewer confirmed format equivalence. |
 | IMPROMPTU-03 (CI tz flakes) | `354be7f` | CLEAN | (no Tier 2; micro-session) | +1 | Stage 7 closing. Resolved post-FIX-09 CI failures: DEF-163 (re-opened at Stage 6) and DEF-188 (new, discovered post-FIX-09). Both test-side bugs only — implementations correct (ET-based); tests had wrong timezone assumptions. DEF-163 fix: replaced `exit_time=now` with fixed 15:00 ET anchor (market hours — avoids SQL-side UTC-normalization window 20:00–24:00 ET; production trades never exit in that window). DEF-188 fix: compare against ET-derived today instead of local-tz `date.today()`. DEF-191 opened for latent `get_todays_pnl` SQL-side concern (post-31.9; matters only if ARGUS ever supports after-hours trading). CI verification at 22:59 ET on 2026-04-22 inside the failing window = P14 regression evidence satisfied. |
+| FIX-13a (test hygiene — tactical) | `c9c8891` + `f06fd18` | MINOR_DEVIATIONS | CLEAR | +7 | Stage 8 Wave 1 (solo). 25 findings total; 15 tactical RESOLVED, 4 RESOLVED-VERIFIED (F17/F20/F22/F24 — two were stale audit observations), 1 PARTIAL (F25), 8 DEFERRED to FIX-13b. Zero new DEFs opened per kickoff carve-out. DEFs closed: DEF-150 (time-of-day arithmetic fix), DEF-167 (3 named Vitest files converted to dynamic dates; remaining ~55 mock-fixture files have no decay surface per kickoff scope), DEF-171 (ULID xdist race — `id(order) % 10000` replaced with `itertools.count(1)` at `test_ibkr_broker.py:91`), DEF-190 (pyarrow/xdist race — conftest prewarm via Period-dtype DataFrame→Arrow conversion; regression guard test added). DEF-192 PARTIAL: numpy invalid-cast cleanly closed at 3 sites in `vectorbt_afternoon_momentum.py`; 5 other categories deferred (TestBaseline blocked on workflow submodule per RULE-018). F19 narrowing exposed latent Sprint 25 silent-failure in route-disabled test (broad `except Exception: pass` was swallowing `pytest.fail()`). F6 kickoff-error caught by Claude Code (SIMULATED → IBKR correction). Mid-session RULE-018 catch-and-revert preserved workflow submodule integrity. |
 
-Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → 4,985 (post-FIX-04, holds through Stage 4 Wave 1 + hotfixes) → 5,000 (post-FIX-05) → 5,017 (post-FIX-06) → 5,029 (post-FIX-07) → 5,035 (post-FIX-08) → 4,979 (post-FIX-09, −56 sanctioned deletion delta) → **4,980 (post-IMPROMPTU-03, +1 minor drift)**. Vitest: 846 → **859** (held steady since Stage 5).
+Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → 4,985 (post-FIX-04, holds through Stage 4 Wave 1 + hotfixes) → 5,000 (post-FIX-05) → 5,017 (post-FIX-06) → 5,029 (post-FIX-07) → 5,035 (post-FIX-08) → 4,979 (post-FIX-09, −56 sanctioned deletion delta) → 4,980 (post-IMPROMPTU-03, +1 minor drift) → **4,987 (post-FIX-13a, +7 tactical test additions)**. Vitest: 846 → **859** (held steady since Stage 5).
 
 ---
 
@@ -117,13 +118,17 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-123 | `build_parameter_grid()` float accumulation — RESOLVED-VERIFIED: existing `round(min + i*step, 6)` form is mathematically equivalent to `numpy.arange`; spec-suggested numpy migration would add a dependency for cosmetic gain; docstrings updated with rationale | FIX-08 | `33ad7da` |
 | DEF-163 | Timezone-boundary bug in `test_get_todays_pnl_excludes_unrecoverable` — SQLite `date()` UTC-normalization + synthetic `exit_time=now` during 20:00–24:00 ET window | IMPROMPTU-03 | `354be7f` |
 | DEF-188 | `test_market_calendar::test_defaults_to_today` compared ET-based implementation result to local-tz `date.today()` | IMPROMPTU-03 | `354be7f` |
+| DEF-150 | Time-of-day arithmetic bug in `test_check_reminder_sends_after_interval` — `(minute - 2) % 60` broke for minutes 0 and 1 | FIX-13a | `c9c8891` |
+| DEF-167 | Vitest hardcoded-date decay — 3 test files converted to `new Date().toISOString()` or dynamic `Date.now()` offsets (TradesPage, PerformancePage, ResearchDocCard). Remaining ~55 Vitest files have hardcoded date strings but all are non-assertion fixture data with no decay surface (closed-with-scope-note per FIX-13a deferred_observations). | FIX-13a | `c9c8891` |
+| DEF-171 | ULID xdist race — `id(order) % 10000` produced collisions on low 13 bits under xdist's worker forking. Replaced with fixture-scoped `itertools.count(1)` in `test_ibkr_broker.py:91`. | FIX-13a | `c9c8891` |
+| DEF-190 | pyarrow/xdist concurrent `register_extension_type` race — conftest prewarm via `pd.DataFrame({"_p": [Period('2024-01')]}) → pa.Table.from_pandas(df)` forces extension registration at module-import time before xdist forks workers. Regression guard at `tests/test_def190_pyarrow_eager_import.py`. | FIX-13a | `c9c8891` |
 
 ### Partially resolved
 
 | DEF # | Description | Status | Owner |
 |---|---|---|---|
-| DEF-167 | Vitest hardcoded-date decay | PARTIAL (FIX-11 addressed some; broader sweep pending) | FIX-13 (Stage 8) |
 | DEF-014 | SystemAlertEvent for dead data feed — PARTIAL: emitter side wired at `databento_data_service._run_with_reconnection()` with max-retries-exceeded emission; HealthMonitor subscription + Command Center alert-pane surface await P1-A1 M9 expansion. 3 additional TODO emitter sites at `ibkr_broker.py:453,531` and `alpaca_data_service.py:593` remain (execution/data layer, cross-domain). | PARTIAL (FIX-06 emitter side) | P1-A1 M9 (subscription) + execution-layer session (remaining emitters) |
+| DEF-192 | Test runtime warning cleanup debt. Baseline was 39 warnings across ~6 categories. **PARTIAL (FIX-13a, 2026-04-23):** numpy invalid-cast closed at 3 sites in `vectorbt_afternoon_momentum.py` (`np.nan_to_num(...)` wrap before `.astype(int)`). 5 categories remain: aiosqlite event-loop-closed (~3 sites), AsyncMock coroutine-never-awaited (~8 sites, intermittent under xdist), `websockets.legacy` deprecation (transitive dep), `OrderManager(auto_cleanup_orphans=...)` deprecation (3 test sites — intentionally preserved until DEF-176 migrates them), `scripts/sprint_runner/state.py::TestBaseline` pytest-collection (blocked on `workflow/` submodule per RULE-018). Post-FIX-13a count fluctuates 26–40 across runs due to async-mock emission order under xdist. | PARTIAL (FIX-13a numpy cast closed) | Opportunistic / next test-hygiene touch (TestBaseline blocked on metarepo; OrderManager kwarg awaits DEF-176) |
 
 ### Open with planned owner
 
@@ -131,7 +136,6 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 |---|---|---|---|
 | DEF-168 | `docs/architecture.md` API catalog drift | LOW | P1-H1a (not yet scheduled as FIX-NN) |
 | DEF-169 | `--dev` mode retired (informational only) | INFO | Ongoing (no owner needed) |
-| DEF-171 | `test_all_ulids_mapped_bidirectionally` xdist flake | LOW | **FIX-13 (Stage 8)** |
 | DEF-174 | Tauri desktop wrapper never integrated; `platform.ts` deleted as misleading dead code | LOW / opportunistic | Deferred (only if desktop packaging becomes a requirement) |
 | DEF-175 | Component ownership consolidation — `CatalystStorage`, `SetupQualityEngine`, `DynamicPositionSizer`, `ExperimentStore`, `LearningStore` constructed in both `main.py` and `api/server.py` lifespan phases; broader pattern behind DEF-172/173 | MEDIUM | **Dedicated post-Sprint-31.9 sprint** (~2–3 sessions). Pre-sprint discovery at `docs/sprints/post-31.9-component-ownership/DISCOVERY.md`. Blocked on Sprint 31.9 closure. |
 | DEF-176 | Full removal of deprecated `OrderManager(auto_cleanup_orphans=...)` kwarg — FIX-04 added DeprecationWarning; 3 reconciliation test files still pass the kwarg and were outside FIX-04 scope | LOW | Opportunistic / next execution-layer cleanup sprint |
@@ -147,9 +151,7 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-186 | BacktestEngine private-attribute reach-in consolidation (SimulatedBroker._pending_brackets + PatternBasedStrategy._pattern + RiskManager/OrderManager event_bus type-ignore sites) | LOW | post-31.9 (next execution/backtest cleanup) |
 | DEF-187 | Migrate walk-forward IS path from VectorBT to BacktestEngine (retire walk_forward.py + 4 vectorbt_*.py files, ~6,713 LOC + ~4,108 test LOC) | MEDIUM | Sprint 33+ (validation-tooling sprint) |
 | DEF-189 | `scripts/revalidate_strategy.py:383` config_overrides param-name mismatch — operational bug, revalidation runs have used default params rather than intended overrides | MEDIUM | post-31.9 (standalone micro-fix) |
-| DEF-190 | pyarrow/xdist concurrent `register_extension_type` race — first-run failures in `test_integration_sprint3`, clean on re-run | LOW | **FIX-13** |
 | DEF-191 | Latent `TradeLogger.get_todays_pnl()` SQL-side UTC normalization — would bite after-hours trading support | LOW | post-31.9 |
-| DEF-192 | Test runtime warning cleanup debt (aiosqlite event-loop-closed, AsyncMock coroutines-never-awaited, `TestBaseline` class collection, deprecated APIs) | LOW | **FIX-13** |
 
 ---
 
