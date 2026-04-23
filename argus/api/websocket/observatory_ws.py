@@ -49,6 +49,7 @@ async def observatory_websocket(websocket: WebSocket) -> None:
     await websocket.accept()
     _active_connections.add(websocket)
 
+    _watcher_task: asyncio.Task[None] | None = None
     try:
         app_state: AppState = websocket.app.state.app_state
 
@@ -113,9 +114,38 @@ async def observatory_websocket(websocket: WebSocket) -> None:
         previous_eval_count = previous_summary.get("total_evaluations", 0)
         previous_signal_count = previous_summary.get("total_signals", 0)
 
+        # Disconnect watcher (DEF-193 / DEF-200). The push loop below never
+        # calls websocket.receive(), so without a watcher the server task is
+        # parked in asyncio.sleep(interval_s) past client disconnect. On
+        # Linux under xdist that leaks the task across starlette's TestClient
+        # portal teardown; the observatory_service's aiosqlite
+        # _connection_worker_thread then calls call_soon_threadsafe() on a
+        # closed event loop and crashes the xdist worker process. The
+        # watcher sets _disconnect_event as soon as the peer closes, and the
+        # push loop's wait_for races that event against each interval.
+        _disconnect_event = asyncio.Event()
+
+        async def _watch_disconnect() -> None:
+            try:
+                await websocket.receive()
+            except WebSocketDisconnect:
+                pass
+            except Exception:
+                pass
+            finally:
+                _disconnect_event.set()
+
+        _watcher_task = asyncio.create_task(_watch_disconnect())
+
         # Push loop
-        while True:
-            await asyncio.sleep(interval_s)
+        while not _disconnect_event.is_set():
+            try:
+                await asyncio.wait_for(
+                    _disconnect_event.wait(), timeout=interval_s
+                )
+                break
+            except asyncio.TimeoutError:
+                pass
 
             push_start = time.monotonic()
 
@@ -215,6 +245,15 @@ async def observatory_websocket(websocket: WebSocket) -> None:
         except Exception:
             pass
     finally:
+        # Cancel disconnect watcher (no-op when auth failed before it was
+        # created). Awaiting the cancelled task drains its CancelledError
+        # so the task never leaks past request teardown.
+        if _watcher_task is not None:
+            _watcher_task.cancel()
+            try:
+                await _watcher_task
+            except (asyncio.CancelledError, Exception):
+                pass
         _active_connections.discard(websocket)
 
 

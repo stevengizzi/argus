@@ -522,6 +522,145 @@ async def test_observatory_ws_graceful_disconnect(
 
 
 # ---------------------------------------------------------------------------
+# DEF-200 regression: disconnect watcher cancels push loop promptly
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_observatory_ws_disconnect_cancels_push_loop_promptly(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """DEF-200 regression: server task exits promptly when the client
+    disconnects before the push interval elapses.
+
+    Pre-fix, the push loop used ``await asyncio.sleep(interval_s)`` with
+    no disconnect awareness; on Linux under xdist that leaked the server
+    task across TestClient teardown and crashed the worker via
+    aiosqlite's ``_connection_worker_thread`` posting back to a closed
+    event loop.
+
+    Post-fix, a disconnect-watcher task sets an ``asyncio.Event`` when
+    the peer closes, and the push loop races the interval sleep against
+    that event via ``asyncio.wait_for``. Measured elapsed from
+    disconnect to ``_active_connections`` cleanup must be well under the
+    5s push interval — otherwise the watcher is missing.
+    """
+    from argus.api.websocket.observatory_ws import (
+        get_active_observatory_connections,
+    )
+
+    monkeypatch.setenv("ARGUS_JWT_SECRET", TEST_JWT_SECRET)
+    set_jwt_secret(TEST_JWT_SECRET)
+
+    # 5000ms push interval: well beyond the <2s cleanup budget asserted
+    # below. Without the disconnect watcher, the server parks in
+    # ``asyncio.sleep(5.0)`` and ``_active_connections`` stays populated
+    # for the full 5s (or, on Linux xdist, the worker crashes).
+    app, obs_conn, temp_db = await _build_observatory_app(
+        tmp_path, ws_update_interval_ms=5000,
+    )
+
+    client = TestClient(app)
+    with client.websocket_connect("/ws/v1/observatory") as ws:
+        ws.send_json({"type": "auth", "token": _make_auth_token()})
+        auth_resp = ws.receive_json()
+        assert auth_resp["type"] == "auth_success"
+        initial = ws.receive_json()
+        assert initial["type"] == "pipeline_update"
+        # Do NOT receive any push-loop message. The server is now parked
+        # in the push loop's disconnect-aware wait; exiting the ``with``
+        # block closes the peer socket and should fire the watcher.
+
+    # Poll briefly for server-side cleanup. With the watcher this happens
+    # within milliseconds; without it, ``_active_connections`` stays
+    # populated until the 5s sleep elapses (if it doesn't crash first).
+    start = time.monotonic()
+    deadline = start + 2.0
+    while time.monotonic() < deadline:
+        if len(get_active_observatory_connections()) == 0:
+            break
+        await asyncio.sleep(0.02)
+    elapsed = time.monotonic() - start
+
+    assert len(get_active_observatory_connections()) == 0, (
+        f"_active_connections still populated {elapsed:.2f}s after "
+        "client disconnect — disconnect watcher may be missing from "
+        "observatory_ws.py push loop (DEF-200 regression)."
+    )
+    assert elapsed < 2.0, (
+        f"Server task did not exit within 2s of client disconnect "
+        f"(elapsed={elapsed:.2f}s). Expected prompt cleanup via "
+        "disconnect-watcher sentinel; 5s push interval should not "
+        "block teardown."
+    )
+
+    await obs_conn.close()
+    await temp_db.close()
+
+
+def test_observatory_ws_has_disconnect_watcher_sentinel() -> None:
+    """DEF-200 grep-guard: the push loop must use a disconnect-watcher
+    sentinel instead of a plain ``asyncio.sleep(interval_s)``.
+
+    The timing test above exercises behavior, but on macOS starlette's
+    TestClient cancels the server task cleanly during teardown even
+    without the watcher — the bug only reliably manifests on Linux
+    under xdist. This grep-guard is the revert-proof layer: it reads
+    the production source and asserts the three fix markers are
+    present. Any future edit that reverts the fix (whether whole-file
+    or surgical) will fail this check on every platform.
+    """
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[2]
+        / "argus"
+        / "api"
+        / "websocket"
+        / "observatory_ws.py"
+    ).read_text()
+
+    # Marker 1 — the disconnect sentinel is wired.
+    assert "_disconnect_event = asyncio.Event()" in source, (
+        "DEF-200 regression: observatory_ws.py push loop is missing "
+        "the disconnect-event sentinel. Expected "
+        "`_disconnect_event = asyncio.Event()` inside the handler."
+    )
+
+    # Marker 2 — a watcher task races websocket.receive() against the
+    # sentinel. We check the helper name + receive() call to allow for
+    # cosmetic reformatting.
+    assert "_watch_disconnect" in source, (
+        "DEF-200 regression: observatory_ws.py is missing the "
+        "`_watch_disconnect` helper that sets the sentinel on peer "
+        "close. The push loop cannot exit promptly without it."
+    )
+    assert "await websocket.receive()" in source, (
+        "DEF-200 regression: observatory_ws.py push loop no longer "
+        "issues `await websocket.receive()` — the disconnect watcher "
+        "is the only receive() site and is load-bearing for prompt "
+        "teardown on Linux under xdist."
+    )
+
+    # Marker 3 — the loop races the sentinel against the interval via
+    # asyncio.wait_for. Any edit that restores a bare
+    # `await asyncio.sleep(interval_s)` in the push loop body
+    # reintroduces the bug.
+    assert "asyncio.wait_for(" in source, (
+        "DEF-200 regression: observatory_ws.py push loop is missing "
+        "the `asyncio.wait_for(_disconnect_event.wait(), ...)` race "
+        "against the push interval. A bare `asyncio.sleep(interval_s)` "
+        "leaks the server task across TestClient teardown."
+    )
+    assert "_disconnect_event.wait()" in source, (
+        "DEF-200 regression: observatory_ws.py push loop does not "
+        "wait on _disconnect_event — even if the sentinel is set, "
+        "the loop won't notice."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Independent from AI WebSocket
 # ---------------------------------------------------------------------------
 

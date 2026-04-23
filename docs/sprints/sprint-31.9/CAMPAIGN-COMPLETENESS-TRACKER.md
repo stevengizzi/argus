@@ -47,6 +47,7 @@ and this document can be archived to `docs/sprints/archive/`.
 | Stage 8 Wave 3 | FIX-13c (ai-copilot-coverage, solo, F13 carry-over) | ✅ CLEAR | 2026-04-23 |
 | **Stage 8** | **(complete — Waves 1/2/3 all CLEAR; IMPROMPTU-01/02 placeholders re-homed into Stage 9 campaign-close sessions)** | ✅ COMPLETE | 2026-04-23 |
 | Stage 9A | IMPROMPTU-04 (safety: A1 + C1 + startup invariant) | ✅ CODE LANDED — commit `0623801`; Tier 2 pending | 2026-04-23 |
+| Stage 8.5 | IMPROMPTU-CI (observatory_ws disconnect watcher — DEF-200 + DEF-193) | ✅ CLEAR | 2026-04-23 |
 | Stage 9B | IMPROMPTU-05 (deps & infra: DEF-180/181/179) | ⏸ PENDING | TBD |
 | Stage 9B | IMPROMPTU-06 (test-debt: DEF-176/185/192/166/048/049) | ⏸ PENDING | TBD |
 | Stage 9B | IMPROMPTU-07 (doc-hygiene + UI fixes; + Apr 21 F-05/F-06/F-08) | ⏸ PENDING | TBD |
@@ -55,7 +56,7 @@ and this document can be archived to `docs/sprints/archive/`.
 | Stage 9C | RETRO-FOLD (P1-P25 into workflow/) | ⏸ PENDING | TBD |
 | Stage 10 | SPRINT-CLOSE (summary + seal + archive + 3 DISCOVERY.md) | ⏸ PENDING | TBD |
 | **Sprint 31.9** | | ⏸ IN PROGRESS | |
-| Post-31.9 | Component Ownership Consolidation (DEF-175 + DEF-182 + DEF-193 + DEF-197 + DEF-014 HealthMonitor + C7) | ⏸ PLANNED | After 31.9 closes |
+| Post-31.9 | Component Ownership Consolidation (DEF-175 + DEF-182 + ~~DEF-193~~ [closed IMPROMPTU-CI] + DEF-197 + DEF-014 HealthMonitor + C7) | ⏸ PLANNED | After 31.9 closes |
 | Post-31.9 | Reconnect-Recovery + RejectionStage (DEF-177 + DEF-184 + DEF-194 + DEF-195 + DEF-196 + DEF-014 IBKR TODOs + Apr 21 F-04) | ⏸ PLANNED (DISCOVERY.md drafted in SPRINT-CLOSE) | After 31.9 closes |
 | Post-31.9 | Alpaca Retirement (DEF-178 + DEF-183 + DEF-014 Alpaca TODO) | ⏸ PLANNED (DISCOVERY.md drafted in SPRINT-CLOSE) | After 31.9 closes |
 | **Campaign** | | ⏸ IN PROGRESS | |
@@ -82,6 +83,7 @@ This table is the operational summary.
 | ~~FIX-13b~~ | ~~Test hygiene — refactors (7 findings)~~ | ~~Stage 8 Wave 2~~ ✅ CONCERNS_RESOLVED |  |  |
 | ~~FIX-13c~~ | ~~Test hygiene — AI Copilot coverage (Finding 13)~~ | ~~Stage 8 Wave 3~~ ✅ CLEAR |  |  |
 | IMPROMPTU-04 | Safety: DEF-199 A1 fix + Apr 22 C1 log hygiene + startup invariant | Stage 9A | Yes (code changes don't hot-reload; restart controls cutover) | **Adversarial** |
+| ~~IMPROMPTU-CI~~ | ~~Observatory WS disconnect watcher — DEF-200 + DEF-193 (same root cause)~~ | ~~Stage 8.5~~ ✅ CLEAR | | |
 | IMPROMPTU-05 | Deps & infra: DEF-180 lockfile, DEF-181 Node 20 bump, DEF-179 PyJWT migration | Stage 9B | Yes | Standard |
 | IMPROMPTU-06 | Test-debt: DEF-176/185/192/166/048/049 | Stage 9B | Yes | Standard |
 | IMPROMPTU-07 | Doc-hygiene + UI fixes: DEF-198/189/164/191/169 + Apr 21 F-05/F-06/F-08 + cosmetics + shadow-variant badge + 22-vs-15 reconcile | Stage 9B | Yes | Standard |
@@ -127,6 +129,8 @@ cut.
 | DEF | Title | Session | Commit |
 |---|---|---|---|
 | ~~DEF-199~~ | ~~`_flatten_unknown_position()` doubles shorts [SAFETY CRITICAL]~~ | IMPROMPTU-04 | `0623801` |
+| ~~DEF-200~~ | ~~`test_observatory_ws_sends_initial_state` crashes xdist worker on Linux CI~~ | IMPROMPTU-CI | TBD (commit) |
+| ~~DEF-193~~ | ~~Observatory WS push-only disconnect detection~~ (same root cause as DEF-200; closed together) | IMPROMPTU-CI | TBD (commit) |
 
 ### Named-horizon deferred — post-31.9 Component Ownership sprint
 
@@ -134,7 +138,7 @@ cut.
 |---|---|
 | DEF-175 | Component ownership consolidation (core) |
 | DEF-182 | Weekly reconciliation stub |
-| DEF-193 | Observatory WS push-only disconnect detection |
+| ~~DEF-193~~ | ~~Observatory WS push-only disconnect detection~~ ✅ CLOSED IMPROMPTU-CI (same root cause as DEF-200) |
 | DEF-197 | evaluation.db 4.78 GB retention not executing |
 | DEF-014 PARTIAL | HealthMonitor subscription (remaining emitter TODOs split across post-31.9 sprints) |
 | debrief §C7 | Post-shutdown IBKR reconnect + 16 asyncio Task-destroyed warnings |
