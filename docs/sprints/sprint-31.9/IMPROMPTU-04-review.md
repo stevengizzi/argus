@@ -258,7 +258,7 @@ The two CONCERNS items in this review have both been resolved:
     {"id": "grep_audit_line_numbers_stale", "severity": "LOW", "note": "Close-out's grep-audit table cites line numbers 1-5 lines off post-fix. Sites correctly identified by context; cosmetic only."}
   ],
   "escalation_items": [],
-  "paper_trading_readiness": "CONDITIONAL_GO_PENDING_PUSH_AND_CI",
+  "paper_trading_readiness": "GO",
   "notes": "Fix correctness is SOUND. Three-branch side filter is adversarially robust; 4 canaries are genuinely revert-proof; diff is tight; scope discipline is clean. Verdict is CONCERNS (not CLEAR) solely on the unpushed-commits + unverified-CI operational item. Operator action: push commits, observe CI, disposition any DEF-193 flake. After those steps, paper trading resume is CLEARED pending ARGUS restart per kickoff's post-session timing table.",
   "recommended_next_action": "Operator: `git push origin main`, then observe CI run for 0623801. If green (or DEF-193 flake dispositioned), upgrade verdict to CLEAR and resume paper trading per kickoff's ARGUS restart window guidance. If any other test fails on CI, escalate to diagnostic mode per Universal RULE-030."
 }

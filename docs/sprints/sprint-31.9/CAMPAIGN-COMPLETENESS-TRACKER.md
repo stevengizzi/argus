@@ -56,7 +56,7 @@ and this document can be archived to `docs/sprints/archive/`.
 | Stage 9C | RETRO-FOLD (P1-P25 into workflow/) | ⏸ PENDING | TBD |
 | Stage 10 | SPRINT-CLOSE (summary + seal + archive + 3 DISCOVERY.md) | ⏸ PENDING | TBD |
 | **Sprint 31.9** | | ⏸ IN PROGRESS | |
-| Post-31.9 | Component Ownership Consolidation (DEF-175 + DEF-182 + ~~DEF-193~~ [closed IMPROMPTU-CI] + DEF-197 + DEF-014 HealthMonitor + C7) | ⏸ PLANNED | After 31.9 closes |
+| Post-31.9 | Component Ownership Consolidation (DEF-175 + DEF-182 + ~~DEF-193~~ [closed IMPROMPTU-CI] + DEF-197 + DEF-201 [residual observatory_service aiosqlite cross-loop; test-side band-aid in place] + DEF-014 HealthMonitor + C7) | ⏸ PLANNED | After 31.9 closes |
 | Post-31.9 | Reconnect-Recovery + RejectionStage (DEF-177 + DEF-184 + DEF-194 + DEF-195 + DEF-196 + DEF-014 IBKR TODOs + Apr 21 F-04) | ⏸ PLANNED (DISCOVERY.md drafted in SPRINT-CLOSE) | After 31.9 closes |
 | Post-31.9 | Alpaca Retirement (DEF-178 + DEF-183 + DEF-014 Alpaca TODO) | ⏸ PLANNED (DISCOVERY.md drafted in SPRINT-CLOSE) | After 31.9 closes |
 | **Campaign** | | ⏸ IN PROGRESS | |
