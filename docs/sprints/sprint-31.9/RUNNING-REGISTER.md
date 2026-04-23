@@ -5,10 +5,10 @@
 > at every stage barrier. Survives compaction — read this file to hydrate
 > a fresh Claude.ai conversation.
 >
-> **Last updated:** 2026-04-22 — Stage 6 complete
-> **Campaign HEAD:** `daae0fd` (post-FIX-08 docs commit)
+> **Last updated:** 2026-04-22 — Stage 7 complete + IMPROMPTU-03 CI-unblock
+> **Campaign HEAD:** `354be7f` (post-IMPROMPTU-03)
 > **Workflow submodule:** `942c53a`
-> **Baseline tests:** 5,035 pytest + 859 Vitest (local) / 5,035 pytest + 859 Vitest (CI, -m "not integration")
+> **Baseline tests:** 4,980 pytest + 859 Vitest (local) / 4,967 pytest + 859 Vitest (CI, -m "not integration")
 
 ---
 
@@ -42,7 +42,8 @@
 | **Stage 5** | **(complete)** | **✅ COMPLETE** |
 | Stage 6 | FIX-08 (experiments + learning loop, solo) | ✅ CLEAR |
 | **Stage 6** | **(complete)** | **✅ COMPLETE** |
-| Stage 7 | FIX-09 solo | ⏸ PENDING |
+| Stage 7 | FIX-09 (backtest-engine, solo) + IMPROMPTU-03 (CI tz flakes) | ✅ CLEAR / CLEAN |
+| **Stage 7** | **(complete)** | **✅ COMPLETE** |
 | Stage 8 | FIX-13 + IMPROMPTU-01 (LIVE OK parallel) | ⏸ PENDING |
 | Stage 9A | IMPROMPTU-02 scoping (read-only) | ⏸ PENDING |
 | Stage 9B | IMPROMPTU-02 fix (weekend-only) | ⏸ PENDING |
@@ -77,8 +78,10 @@
 | FIX-06 (data layer) | `4ea09a7` + `49fef3b` | MINOR_DEVIATIONS | CLEAR | +17 | Stage 5 Wave 1. 26 findings (1 CRITICAL + 8 MEDIUM + rest LOW/COSMETIC). F25 CRITICAL resolved via FIX-16-compatible overlay path (spec option (b) moot post-FIX-16); three-layer revert-proof regression defense. SystemAlertEvent added to core/events.py as documented scope expansion. DEF-037/165 closed; DEF-014 PARTIAL (emitter side landed; HealthMonitor subscription awaits P1-A1 M9); DEF-032 re-verified; DEF-183 opened (Alpaca retirement). |
 | FIX-07 (intelligence/catalyst/quality) | `7b70390` | MINOR_DEVIATIONS | CLEAR | +12 | Stage 5 Wave 2 (serial). 23 findings (7 MEDIUM + rest LOW, no CRITICAL). Finding 5 (RejectionStage split) deferred to DEF-184, coordinated with DEF-177. Two scope expansions ratified: `argus/core/protocols.py` (new file, FIX-06 precedent) + `argus/intelligence/learning/models.py` (actual DEF-106 location; spec cited wrong file). DEC-311 received Amendment 1 (kept[-1] dedup anchor pinned via option (c) — preserves in-flight paper-trading counts). DEF-096 + DEF-106 closed; DEF-184 opened. |
 | FIX-08 (experiments + learning loop) | `33ad7da` + `daae0fd` | MINOR_DEVIATIONS | CLEAR | +7 | Stage 6 (solo). 18 findings (3 MEDIUM + 7 LOW + 8 COSMETIC, no CRITICAL). Finding 1 (fingerprint unification runner↔factory) landed with detection-only hash pinned to `ddec1b2a09ee2263` (backward-compat verified). Finding 15 (redistribution drift recording) closes the cumulative-drift-guard evasion loophole. Finding 17 (threshold raise/lower split) eliminates the contradictory-proposal bug. DEF-107 + DEF-123 closed. Spec path drift on Finding 18 documented (P12). Reviewer surfaced DEF-163 re-open — Python-side fix from FIX-05 was incomplete (SQL-side UTC/ET date mismatch in TradeLogger.get_todays_pnl). |
+| FIX-09 (backtest-engine) | `f639a98` + `caab644` | MINOR_DEVIATIONS | CLEAR | −56 | Stage 7 (solo). 27 findings — no CRITICAL; 3 MEDIUM + 9 LOW + 9 COSMETIC + 3 MEDIUM test findings + retirement cluster. 3 major file retirements landed cleanly: `report_generator.py` (operator-approved Option A, 1,232 LOC + 578 tests), `vectorbt_pattern.py` (1,057 LOC + ~50 tests), `vectorbt_red_to_green.py` (~1,025 LOC + ~60 tests, chained). F14 walk-forward R2G branch excised. F2 `itertuples` dispatch cleared 15% gate by 5.8× (+87.8%). F1 flat-key fallback dropped with added WARNING log. F9 NYSE holiday filter wired. DEF-186 + DEF-187 opened. Tier 2 reviewer surfaced pyarrow/xdist race (→ DEF-190 this barrier) and prior-session bug in `scripts/revalidate_strategy.py:383` (→ DEF-189 this barrier). Audit back-annotation used per-file summary headers rather than per-row strikethrough — reviewer confirmed format equivalence. |
+| IMPROMPTU-03 (CI tz flakes) | `354be7f` | CLEAN | (no Tier 2; micro-session) | +1 | Stage 7 closing. Resolved post-FIX-09 CI failures: DEF-163 (re-opened at Stage 6) and DEF-188 (new, discovered post-FIX-09). Both test-side bugs only — implementations correct (ET-based); tests had wrong timezone assumptions. DEF-163 fix: replaced `exit_time=now` with fixed 15:00 ET anchor (market hours — avoids SQL-side UTC-normalization window 20:00–24:00 ET; production trades never exit in that window). DEF-188 fix: compare against ET-derived today instead of local-tz `date.today()`. DEF-191 opened for latent `get_todays_pnl` SQL-side concern (post-31.9; matters only if ARGUS ever supports after-hours trading). CI verification at 22:59 ET on 2026-04-22 inside the failing window = P14 regression evidence satisfied. |
 
-Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → 4,985 (post-FIX-04, holds through Stage 4 Wave 1 + hotfixes) → 5,000 (post-FIX-05) → 5,017 (post-FIX-06) → 5,029 (post-FIX-07) → **5,035 (post-FIX-08)**. Vitest: 846 → **859**.
+Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → 4,985 (post-FIX-04, holds through Stage 4 Wave 1 + hotfixes) → 5,000 (post-FIX-05) → 5,017 (post-FIX-06) → 5,029 (post-FIX-07) → 5,035 (post-FIX-08) → 4,979 (post-FIX-09, −56 sanctioned deletion delta) → **4,980 (post-IMPROMPTU-03, +1 minor drift)**. Vitest: 846 → **859** (held steady since Stage 5).
 
 ---
 
@@ -109,6 +112,8 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-106 | `models.py from_dict()` assert isinstance batch — 8 sites in `intelligence/learning/models.py` + 1 in `routes/counterfactual.py` converted to `if not isinstance: raise TypeError` | FIX-07 | `7b70390` |
 | DEF-107 | Unused `raiseRec` destructured variable in LearningInsightsPanel.tsx L388 — deleted | FIX-08 | `33ad7da` |
 | DEF-123 | `build_parameter_grid()` float accumulation — RESOLVED-VERIFIED: existing `round(min + i*step, 6)` form is mathematically equivalent to `numpy.arange`; spec-suggested numpy migration would add a dependency for cosmetic gain; docstrings updated with rationale | FIX-08 | `33ad7da` |
+| DEF-163 | Timezone-boundary bug in `test_get_todays_pnl_excludes_unrecoverable` — SQLite `date()` UTC-normalization + synthetic `exit_time=now` during 20:00–24:00 ET window | IMPROMPTU-03 | `354be7f` |
+| DEF-188 | `test_market_calendar::test_defaults_to_today` compared ET-based implementation result to local-tz `date.today()` | IMPROMPTU-03 | `354be7f` |
 
 ### Partially resolved
 
@@ -123,7 +128,6 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 |---|---|---|---|
 | DEF-168 | `docs/architecture.md` API catalog drift | LOW | P1-H1a (not yet scheduled as FIX-NN) |
 | DEF-169 | `--dev` mode retired (informational only) | INFO | Ongoing (no owner needed) |
-| DEF-163 | Timezone-boundary bug in `test_get_todays_pnl_excludes_unrecoverable` (FIX-05 fix was Python-side only; SQL-side `date()` UTC/ET mismatch in `TradeLogger.get_todays_pnl` remains). Re-opened post-FIX-08 after reviewer observed ongoing ~4h-per-day failure window. | LOW | **FIX-13** |
 | DEF-171 | `test_all_ulids_mapped_bidirectionally` xdist flake | LOW | **FIX-13 (Stage 8)** |
 | DEF-174 | Tauri desktop wrapper never integrated; `platform.ts` deleted as misleading dead code | LOW / opportunistic | Deferred (only if desktop packaging becomes a requirement) |
 | DEF-175 | Component ownership consolidation — `CatalystStorage`, `SetupQualityEngine`, `DynamicPositionSizer`, `ExperimentStore`, `LearningStore` constructed in both `main.py` and `api/server.py` lifespan phases; broader pattern behind DEF-172/173 | MEDIUM | **Dedicated post-Sprint-31.9 sprint** (~2–3 sessions). Pre-sprint discovery at `docs/sprints/post-31.9-component-ownership/DISCOVERY.md`. Blocked on Sprint 31.9 closure. |
@@ -137,6 +141,12 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-183 | Full Alpaca code+test retirement — delete `alpaca_data_service.py`, `alpaca_scanner.py`, associated tests, and config branches; simplify `main.py:301-317` / `:339-346` to a single live path. Pairs with DEF-178 (dependency-removal half). | LOW | Opportunistic / execution-layer cleanup sprint |
 | DEF-184 | `RejectionStage` → `RejectionStage` + `TrackingReason` split — shadow-mode and overflow routing aren't really "rejections." Current `RejectionStage.SHADOW` appears in `FilterAccuracy.by_stage` breakdowns as a rejection category, which is semantically wrong. Touches the enum, FilterAccuracy cut logic, REST serialization on `/counterfactual/accuracy`, `counterfactual_positions.rejection_stage` SQLite schema, and every `SignalRejectedEvent(stage=SHADOW)` emission site. | MEDIUM | **Dedicated cross-domain session, must coordinate with DEF-177** (both want to modify RejectionStage in orthogonal directions) |
 | DEF-185 | Analytics-layer `assert isinstance` anti-pattern (DEF-106 follow-on) — 5 remaining sites in `analytics/ensemble_evaluation.py` × 3 + `intelligence/learning/outcome_collector.py` × 2. | LOW | Opportunistic / next analytics-layer cleanup sprint |
+| DEF-186 | BacktestEngine private-attribute reach-in consolidation (SimulatedBroker._pending_brackets + PatternBasedStrategy._pattern + RiskManager/OrderManager event_bus type-ignore sites) | LOW | post-31.9 (next execution/backtest cleanup) |
+| DEF-187 | Migrate walk-forward IS path from VectorBT to BacktestEngine (retire walk_forward.py + 4 vectorbt_*.py files, ~6,713 LOC + ~4,108 test LOC) | MEDIUM | Sprint 33+ (validation-tooling sprint) |
+| DEF-189 | `scripts/revalidate_strategy.py:383` config_overrides param-name mismatch — operational bug, revalidation runs have used default params rather than intended overrides | MEDIUM | post-31.9 (standalone micro-fix) |
+| DEF-190 | pyarrow/xdist concurrent `register_extension_type` race — first-run failures in `test_integration_sprint3`, clean on re-run | LOW | **FIX-13** |
+| DEF-191 | Latent `TradeLogger.get_todays_pnl()` SQL-side UTC normalization — would bite after-hours trading support | LOW | post-31.9 |
+| DEF-192 | Test runtime warning cleanup debt (aiosqlite event-loop-closed, AsyncMock coroutines-never-awaited, `TestBaseline` class collection, deprecated APIs) | LOW | **FIX-13** |
 
 ---
 
