@@ -157,10 +157,11 @@ QualitySignalEvent(symbol, score, grade, risk_tier, components, rationale)
 `LearningInsightEvent`, omitted `ShutdownRequestedEvent` /
 `DataStaleEvent` / `DataResumedEvent` / `AccountUpdateEvent` /
 `SessionEndEvent`, and mis-described `UniverseUpdateEvent`
-(actually two fields: `viable_count`, `total_fetched`). DEF-168 still
-tracks the broader API-catalog drift; this block was regenerated from
-`argus/core/events.py` but a full FastAPI-introspection rebuild remains
-open. -->
+(actually two fields: `viable_count`, `total_fetched`). This block was
+regenerated from `argus/core/events.py`; the broader API-catalog drift
+was closed by IMPROMPTU-08 (2026-04-23, DEF-168) via
+`scripts/generate_api_catalog.py` + the freshness gate at
+`tests/docs/test_architecture_api_catalog_freshness.py`. -->
 
 
 ### 3.2 Data Service (`data/service.py`)
@@ -1692,6 +1693,17 @@ Handles chat messages with context injection. Manages conversation history. Rout
 
 Tier 1 exposes a REST + WebSocket API for the Command Center. In-process with the trading engine (Phase 11 of startup). Also runnable standalone in dev mode.
 
+> **Catalog freshness (DEF-168, IMPROMPTU-08 — 2026-04-23).** The endpoint
+> listings in §4, §7.8–7.9, §13.5.1, §14.2, and §15.8 are regenerated from
+> the FastAPI `app.openapi()` schema via
+> [`scripts/generate_api_catalog.py`](../scripts/generate_api_catalog.py).
+> The WebSocket sub-section falls back to scanning
+> `argus/api/websocket/*.py` for `@<router>.websocket(...)` decorators
+> (FastAPI does not expose WebSocket routes in the OpenAPI schema).
+> Run `python scripts/generate_api_catalog.py --verify` before editing to
+> confirm docs are still in sync; `tests/docs/test_architecture_api_catalog_freshness.py`
+> is the CI gate.
+
 ### Implementation Status (Sprint 14)
 
 **Implemented:**
@@ -1706,120 +1718,273 @@ Tier 1 exposes a REST + WebSocket API for the Command Center. In-process with th
 - Dev mode with mock data
 
 ### REST Endpoints (Implemented)
-```
-POST   /api/v1/auth/login              — Password login, returns JWT
-POST   /api/v1/auth/refresh            — Refresh valid token
-GET    /api/v1/auth/me                 — Verify token, return user info
-GET    /api/v1/account                 — Account info, P&L, market status
-GET    /api/v1/positions               — Open positions with computed fields
-GET    /api/v1/trades                  — Trade history (filterable, paginated)
-GET    /api/v1/performance/{period}    — Metrics for today/week/month/all
-GET    /api/v1/strategies              — Strategy list with status
-GET    /api/v1/health                  — System health + component status
-GET    /api/v1/orchestrator/status     — Regime, allocations, throttle state, per-strategy deployment (DEC-135)
-GET    /api/v1/orchestrator/decisions  — Decision history (paginated)
-POST   /api/v1/orchestrator/rebalance  — Trigger manual rebalance
-GET    /api/v1/session-summary         — Session recap (P&L, wins/losses, best/worst trade, regime, strategies). Query: ?date=YYYY-MM-DD
-GET    /api/v1/dashboard/summary       — Aggregate endpoint returning all Dashboard card data (account, today_stats, goals, market, regime, deployment, orchestrator) in single response. Sprint 21d (DEC-222).
 
-# ⚠️  CATALOG IS DRIFTED (audit 2026-04-21 P1-F1-8, DEF-168).
-#    Several paths below are wrong or missing. Known drift:
-#      - /api/v1/catalysts* is actually mounted at /api/v1/intelligence/catalysts*
-#      - /api/v1/catalysts/refresh does NOT exist
-#      - /api/v1/intelligence/briefings paths differ from code
-#      - /api/v1/ai/briefing|report|analyze POSTs do NOT exist in ai.py
-#      - /api/v1/performance/replay/{id} is actually /api/v1/trades/{id}/replay
-#        (and now returns 501 until DEF-029 lands)
-#      - /api/v1/market/{symbol}/bars serves REAL data first, synthetic only
-#        as a last-resort fallback with source="synthetic" flag (FIX-11)
-#      - /api/v1/arena/positions DOES require JWT (doc says otherwise)
-#      - Experiments (7), Watchlist, Controls (5), Trades stats/batch/export/csv,
-#        and /historical/{symbols,coverage,bars,validate-coverage} are undocumented
-#    Regeneration backlog item: DEF-168 — mechanically dump from FastAPI app.
-#    Treat `argus/api/routes/` as the source of truth, not this catalog.
-#
-# Intelligence endpoints — Sprint 23.5 ✅ (Catalyst), Sprint 24+ (remaining)
-GET  /api/v1/catalysts                   # List all catalysts (with filters: symbol, category, since) — Sprint 23.5 ✅
-GET  /api/v1/catalysts/{symbol}          # Catalysts for a symbol — Sprint 23.5 ✅
-POST /api/v1/catalysts/refresh           # Trigger catalyst pipeline refresh — Sprint 23.5 ✅
-GET  /api/v1/intelligence/briefings      # List intelligence briefings — Sprint 23.5 ✅
-GET  /api/v1/intelligence/briefings/{id} # Get specific briefing — Sprint 23.5 ✅
-POST /api/v1/intelligence/briefings/generate  # Generate new briefing — Sprint 23.5 ✅
-GET  /api/v1/premarket/briefing          # Current pre-market briefing (planned Sprint 24+)
-GET  /api/v1/premarket/watchlist         # Ranked pre-market watchlist (planned Sprint 24+)
-GET  /api/v1/orderflow/{symbol}          # Current order flow state + 1-min history (post-revenue)
-GET  /api/v1/quality/{symbol}            # Current quality score (Sprint 24)
-GET  /api/v1/quality/history             # Quality score history (Sprint 24)
-GET  /api/v1/quality/distribution        # Today's grade distribution (Sprint 24)
-GET  /api/v1/counterfactual/accuracy     # Filter accuracy breakdowns by stage/reason/grade/regime/strategy (Sprint 27.7)
-GET  /api/v1/vix/current                 # Latest VIX data + classifications + staleness (Sprint 27.9)
-GET  /api/v1/vix/history                 # Historical VIX data with date range filter (Sprint 27.9)
-POST /api/v1/learning/trigger             # Trigger learning analysis (Sprint 28)
-GET  /api/v1/learning/reports            # List learning reports, paginated (Sprint 28)
-GET  /api/v1/learning/reports/{id}       # Get specific learning report (Sprint 28)
-GET  /api/v1/learning/proposals          # List config proposals, filterable by status (Sprint 28)
-POST /api/v1/learning/proposals/{id}/approve  # Approve config proposal (Sprint 28)
-POST /api/v1/learning/proposals/{id}/dismiss  # Dismiss config proposal (Sprint 28)
-POST /api/v1/learning/proposals/{id}/revert   # Revert applied config proposal (Sprint 28)
-GET  /api/v1/learning/config-history     # Config change audit trail (Sprint 28)
+_Auto-generated from `app.openapi()` via `scripts/generate_api_catalog.py`.
+All routes mount under the `/api/v1` prefix (see [argus/api/server.py](../argus/api/server.py))._
 
-# AI Copilot endpoints (Sprint 22)
-WS   /api/v1/ai/chat                    # Copilot chat (WebSocket)
-POST /api/v1/ai/briefing/generate       # Generate pre-market briefing
-POST /api/v1/ai/report/generate         # Generate analysis report
-POST /api/v1/ai/analyze/trade/{id}      # Analyze specific trade
+**account**
 
-# Universe Manager endpoints (Sprint 23)
-GET  /api/v1/universe/status              # Viable count, routing table size, per-strategy counts, data age
-GET  /api/v1/universe/symbols             # Paginated symbol list with strategy filter
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/account` | Get account overview with equity, P&L, and market status. |
 
-# Debrief endpoints (Sprint 21c)
-GET/POST         /api/v1/debrief/briefings           # List / create briefings
-GET/PUT/DELETE   /api/v1/debrief/briefings/{id}      # Get / update / delete briefing
-GET/POST         /api/v1/debrief/documents           # List / create documents (DB + filesystem)
-GET/PUT/DELETE   /api/v1/debrief/documents/{id}      # Get / update / delete document
-GET              /api/v1/debrief/documents/tags      # List all document tags
-GET/POST         /api/v1/debrief/journal             # List / create journal entries
-GET/PUT/DELETE   /api/v1/debrief/journal/{id}        # Get / update / delete entry
-GET              /api/v1/debrief/journal/tags        # List all journal tags
-GET              /api/v1/debrief/search              # Unified search across all 3 types
+**ai**
 
-# Trade batch + stats endpoints (Sprint 21c, DEC-203; Sprint 28.75)
-GET  /api/v1/trades/batch?ids=<ULIDs>           # Batch fetch trades by ID (max 50)
-GET  /api/v1/trades/stats                        # Server-side aggregate trade stats (Sprint 28.75, DEF-117 — replaces client-side computation)
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/ai/actions/pending` | Get all pending action proposals. |
+| `POST   /api/v1/ai/actions/{proposal_id}/approve` | Approve a pending action proposal. |
+| `POST   /api/v1/ai/actions/{proposal_id}/reject` | Reject a pending action proposal. |
+| `POST   /api/v1/ai/chat` | Non-streaming chat endpoint. |
+| `GET    /api/v1/ai/context/{page}` | Debug endpoint: inspect the context payload for a given page. |
+| `GET    /api/v1/ai/conversations` | List conversations with optional filters. |
+| `GET    /api/v1/ai/conversations/{conversation_id}` | Get a conversation with its messages. |
+| `GET    /api/v1/ai/insight` | Get a brief AI-generated insight for the Dashboard. |
+| `GET    /api/v1/ai/status` | Get AI service status and usage summary. |
+| `GET    /api/v1/ai/usage` | Get detailed usage statistics. |
 
-# Performance analytics endpoints (Sprint 21d)
-GET  /api/v1/performance/heatmap                # Trade activity heatmap data (hour×DOW grid)
-GET  /api/v1/performance/distribution           # R-multiple histogram + risk waterfall data
-GET  /api/v1/performance/correlation            # Strategy pairwise correlation matrix
-GET  /api/v1/performance/replay/{trade_id}      # Trade replay bar data for Lightweight Charts
-GET  /api/v1/goals                              # GoalsConfig (monthly target, read/update)
+**arena**
 
-# Market data endpoint (Sprint 21a)
-GET  /api/v1/market/{symbol}/bars               # Synthetic OHLCV for dev mode symbol charts
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/arena/candles/{symbol}` | Get recent 1-minute candles for a symbol. |
+| `GET    /api/v1/arena/positions` | Get all open managed positions for the Arena page. |
 
-# Arena endpoints (Sprint 32.75)
-GET  /api/v1/arena/positions                    # All open managed positions (no JWT required for polling)
-GET  /api/v1/arena/candles/{symbol}             # Historical OHLCV bars from IntradayCandleStore (JWT-protected)
+**auth**
 
-# Market status endpoint (Apr 3 hotfix)
-GET  /api/v1/market/status                      # NYSE open/closed/holiday status + next trading day (no JWT required)
+| Endpoint | Summary |
+|----------|---------|
+| `POST   /api/v1/auth/login` | Authenticate with password and receive a JWT token. |
+| `GET    /api/v1/auth/me` | Get current authenticated user info. |
+| `POST   /api/v1/auth/refresh` | Refresh an existing valid token with a new one. |
 
-```
+**config**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/config/goals` | Get goal tracking configuration. |
+
+**controls**
+
+| Endpoint | Summary |
+|----------|---------|
+| `POST   /api/v1/controls/emergency/flatten` | Emergency flatten all positions across all strategies. |
+| `POST   /api/v1/controls/emergency/pause` | Emergency pause all strategies. |
+| `POST   /api/v1/controls/positions/{position_id}/close` | Emergency close a specific position at market. |
+| `POST   /api/v1/controls/strategies/{strategy_id}/pause` | Pause a strategy — stops generating new signals. |
+| `POST   /api/v1/controls/strategies/{strategy_id}/resume` | Resume a paused strategy. |
+
+**counterfactual**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/counterfactual/accuracy` | Get filter accuracy report for counterfactual positions. |
+| `GET    /api/v1/counterfactual/positions` | Get shadow (counterfactual) positions with optional filters and pagination. |
+
+**dashboard**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/dashboard/summary` | Get aggregated dashboard data in a single response. |
+
+**debrief**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/debrief/briefings` | List briefings with optional filtering and pagination. |
+| `POST   /api/v1/debrief/briefings` | Create a new briefing. |
+| `DELETE /api/v1/debrief/briefings/{briefing_id}` | Delete a briefing. |
+| `GET    /api/v1/debrief/briefings/{briefing_id}` | Get a single briefing by ID. |
+| `PUT    /api/v1/debrief/briefings/{briefing_id}` | Update a briefing. |
+| `GET    /api/v1/debrief/documents` | List all documents, merging filesystem and database sources. |
+| `POST   /api/v1/debrief/documents` | Create a new document in the database. |
+| `GET    /api/v1/debrief/documents/tags` | Get all unique tags from database documents. |
+| `DELETE /api/v1/debrief/documents/{document_id}` | Delete a document. |
+| `GET    /api/v1/debrief/documents/{document_id}` | Get a single document by ID. |
+| `PUT    /api/v1/debrief/documents/{document_id}` | Update a document. |
+| `GET    /api/v1/debrief/journal` | List journal entries with optional filtering and pagination. |
+| `POST   /api/v1/debrief/journal` | Create a new journal entry. |
+| `GET    /api/v1/debrief/journal/tags` | Get all unique tags from journal entries. |
+| `DELETE /api/v1/debrief/journal/{entry_id}` | Delete a journal entry. |
+| `GET    /api/v1/debrief/journal/{entry_id}` | Get a single journal entry by ID. |
+| `PUT    /api/v1/debrief/journal/{entry_id}` | Update a journal entry. |
+| `GET    /api/v1/debrief/search` | Search across all debrief content types. |
+
+**experiments**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/experiments` | List experiments, optionally filtered by pattern name. |
+| `GET    /api/v1/experiments/baseline/{pattern_name}` | Return the baseline experiment for a pattern. |
+| `GET    /api/v1/experiments/promotions` | List promotion and demotion events with pagination. |
+| `POST   /api/v1/experiments/run` | Trigger a parameter sweep for a pattern. |
+| `GET    /api/v1/experiments/variants` | List all variants with experiment metrics where available. |
+| `GET    /api/v1/experiments/{experiment_id}` | Return a single experiment by ID. |
+
+**health**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/health` | Get system health status and diagnostics. |
+
+**historical**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/historical/bars/{symbol}` | Return OHLCV bars for a symbol within a date range. |
+| `GET    /api/v1/historical/coverage` | Return date coverage and bar count for the entire cache or one symbol. |
+| `GET    /api/v1/historical/symbols` | Return all symbols present in the Parquet cache. |
+| `POST   /api/v1/historical/validate-coverage` | Check whether each symbol has enough bars in the date range. |
+
+**intelligence**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/catalysts/recent` | Get recent catalysts across all symbols. |
+| `GET    /api/v1/catalysts/{symbol}` | Get catalysts for a specific symbol. |
+| `GET    /api/v1/premarket/briefing` | Get the most recent pre-market briefing for a date. |
+| `POST   /api/v1/premarket/briefing/generate` | Generate a new pre-market briefing. |
+| `GET    /api/v1/premarket/briefing/history` | Get historical pre-market briefings. |
+
+**learning**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/learning/config-history` | Get config change audit trail. |
+| `GET    /api/v1/learning/proposals` | List config proposals with optional filters. |
+| `POST   /api/v1/learning/proposals/{proposal_id}/approve` | Approve a PENDING proposal. 400 for illegal transitions. |
+| `POST   /api/v1/learning/proposals/{proposal_id}/dismiss` | Dismiss a PENDING proposal. |
+| `POST   /api/v1/learning/proposals/{proposal_id}/revert` | Revert an APPLIED proposal. 400 if not APPLIED or already REVERTED. |
+| `GET    /api/v1/learning/reports` | List learning reports with optional date filters. |
+| `GET    /api/v1/learning/reports/{report_id}` | Get a single learning report by ID. |
+| `POST   /api/v1/learning/trigger` | Run the learning loop analysis pipeline. |
+
+**market**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/market/status` | Get current market status including holiday information. |
+| `GET    /api/v1/market/{symbol}/bars` | Get intraday bars for a symbol. |
+
+**observatory**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/observatory/closest-misses` | Get symbols sorted by conditions passed (descending). |
+| `GET    /api/v1/observatory/pipeline` | Get pipeline stage counts for all tiers with per-tier symbol lists. |
+| `GET    /api/v1/observatory/session-summary` | Get aggregated session metrics. |
+| `GET    /api/v1/observatory/symbol/{symbol}/journey` | Get chronological evaluation events for a symbol. |
+
+**orchestrator**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/orchestrator/decisions` | Get paginated orchestrator decision history. |
+| `POST   /api/v1/orchestrator/rebalance` | Trigger manual rebalance of strategy allocations. |
+| `GET    /api/v1/orchestrator/status` | Get current orchestrator status including regime, indicators, and allocations. |
+| `POST   /api/v1/orchestrator/strategies/{strategy_id}/override-throttle` | Temporarily override throttle for a strategy. |
+
+**performance**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/performance/correlation` | Get strategy return correlation matrix. |
+| `GET    /api/v1/performance/distribution` | Get R-multiple distribution histogram. |
+| `GET    /api/v1/performance/heatmap` | Get trade activity heatmap by hour of day and day of week. |
+| `GET    /api/v1/performance/{period}` | Get performance metrics for a time period. |
+
+**positions**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/positions` | Get all open positions with computed unrealized P&L. |
+| `GET    /api/v1/positions/reconciliation` | Get the latest position reconciliation result. |
+
+**quality**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/quality/distribution` | Get today's quality grade distribution. |
+| `GET    /api/v1/quality/history` | Get paginated quality history with optional filters. |
+| `GET    /api/v1/quality/{symbol}` | Get the most recent quality score for a symbol. |
+
+**session**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/session-summary` | Get session summary for a trading day. |
+
+**strategies**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/strategies` | List all registered strategies with their status. |
+| `GET    /api/v1/strategies/{strategy_id}/decisions` | Get recent evaluation events from a strategy's decision buffer. |
+| `GET    /api/v1/strategies/{strategy_id}/spec` | Get strategy documents with metadata. |
+
+**trades**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/trades` | Get trade history with filtering and pagination. |
+| `GET    /api/v1/trades/batch` | Get multiple trades by their IDs in a single request. |
+| `GET    /api/v1/trades/export/csv` | Export trades as a CSV file. |
+| `GET    /api/v1/trades/stats` | Get aggregate statistics for filtered trades. |
+| `GET    /api/v1/trades/{trade_id}/replay` | Get historical bars for replaying a trade. |
+
+**universe**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/universe/status` | Get universe manager status and statistics. |
+| `GET    /api/v1/universe/symbols` | Get paginated list of universe symbols with reference data. |
+
+**vix**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/vix/current` | Get the latest VIX landscape data with regime classifications. |
+| `GET    /api/v1/vix/history` | Get historical VIX data with derived metrics. |
+
+**watchlist**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/watchlist` | Get the current scanner watchlist with strategy status. |
 
 ### WebSocket
-```
-ws://host/ws/v1/live?token={jwt}
-  → Streams: position.opened/closed/updated, order.submitted/filled/cancelled/approved/rejected,
-    price.update (throttled, positions only), system.heartbeat, system.circuit_breaker,
-    scanner.watchlist, strategy.signal
 
-ws://host/ws/v1/arena?token={jwt}                          # Sprint 32.75
-  → arena_tick (live price/pnl/r_multiple/trail_stop per open position, 1/sec/symbol)
-  → arena_candle (live + forming 1-min OHLCV bars)
-  → arena_position_opened (new position snapshot)
-  → arena_position_closed (symbol, exit_price, exit_reason, final_pnl)
-  → arena_stats (aggregate stats: open_count, total_unrealized_pnl, win/loss counts)
+_Scanned from `@<router>.websocket(...)` decorators in
+[argus/api/websocket/](../argus/api/websocket/) — FastAPI does not include
+WebSocket routes in the OpenAPI schema._
+
+| Endpoint | Module | Description |
+|----------|--------|-------------|
+| `WS /ws/v1/ai/chat` | `ai_chat` | AI Copilot chat streaming (token auth in first message) — detailed schema in §7.8 |
+| `WS /ws/v1/arena` | `arena_ws` | Real-time Arena position/candle stream — detailed schema in §13.5.2 |
+| `WS /ws/v1/live` | `live` | Event Bus bridge (positions, orders, prices, system, scanner, signals) |
+| `WS /ws/v1/observatory` | `observatory_ws` | Pipeline stage counts + tier transitions (config-gated) |
+
+Stream payloads for `/ws/v1/live`:
+
+```
+position.opened / position.closed / position.updated
+order.submitted / order.filled / order.cancelled / order.approved / order.rejected
+price.update       (throttled 1 Hz per symbol for generic clients)
+system.heartbeat / system.circuit_breaker
+scanner.watchlist
+strategy.signal
+```
+
+Stream payloads for `/ws/v1/arena` (authentication via `?token={jwt}`):
+
+```
+arena_tick_price   (raw TickEvent, bypasses 1 Hz throttle — Sprint 32.8)
+arena_tick         (price / pnl / r_multiple / trail_stop per open position, 1/sec/symbol)
+arena_candle       (live + forming 1-min OHLCV bars)
+arena_position_opened    (new position snapshot)
+arena_position_closed    (symbol, exit_price, exit_reason, final_pnl)
+arena_stats              (aggregate: open_count, total_unrealized_pnl, win/loss counts)
 ```
 
 ### Authentication
@@ -1909,22 +2074,30 @@ See `docs/ui/ux-feature-backlog.md` for the complete prioritized inventory (35 f
 
 ### Control Endpoints (Sprint 16, DEC-111)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/controls/strategies/{id}/pause` | POST | Pause strategy signal generation |
-| `/controls/strategies/{id}/resume` | POST | Resume paused strategy |
-| `/controls/positions/{id}/close` | POST | Close specific position via `OrderManager.close_position(symbol)` (DEC-352) |
-| `/controls/emergency/flatten` | POST | Emergency close all positions |
-| `/controls/emergency/pause` | POST | Emergency pause all strategies |
-| `/trades/export/csv` | GET | Export trades as CSV (with filters) |
+_Auto-regenerated (DEF-168). `close_position` routes through
+`OrderManager.close_position(symbol)` (DEC-352). `/trades/export/csv` is
+owned by the trades router and appears in §4 above._
+
+| Endpoint | Summary |
+|----------|---------|
+| `POST   /api/v1/controls/emergency/flatten` | Emergency flatten all positions across all strategies. |
+| `POST   /api/v1/controls/emergency/pause` | Emergency pause all strategies. |
+| `POST   /api/v1/controls/positions/{position_id}/close` | Emergency close a specific position at market. |
+| `POST   /api/v1/controls/strategies/{strategy_id}/pause` | Pause a strategy — stops generating new signals. |
+| `POST   /api/v1/controls/strategies/{strategy_id}/resume` | Resume a paused strategy. |
 
 ### Orchestrator Endpoints (Sprint 17)
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/orchestrator/status` | GET | Current regime, indicators, allocations, next regime check time |
-| `/orchestrator/decisions` | GET | Paginated decision history (allocation, regime, throttle, suspension) |
-| `/orchestrator/rebalance` | POST | Trigger manual allocation rebalance |
+_Auto-regenerated (DEF-168). Regime, indicators, allocations, throttle
+state and per-strategy deployment are all served by `/orchestrator/status`
+(DEC-135). `override-throttle` was added Sprint 29.5 S3._
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/orchestrator/decisions` | Get paginated orchestrator decision history. |
+| `POST   /api/v1/orchestrator/rebalance` | Trigger manual rebalance of strategy allocations. |
+| `GET    /api/v1/orchestrator/status` | Get current orchestrator status including regime, indicators, and allocations. |
+| `POST   /api/v1/orchestrator/strategies/{strategy_id}/override-throttle` | Temporarily override throttle for a strategy. |
 
 ## 5. Backtesting Toolkit
 
@@ -2327,17 +2500,22 @@ Each executor validates inputs against schema bounds (e.g., allocation 0–100%,
 
 ### 7.9 REST Endpoints
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/v1/ai/conversations` | GET | List conversations (date/tag filter) |
-| `/api/v1/ai/conversations` | POST | Create conversation |
-| `/api/v1/ai/conversations/{id}/messages` | GET | Get messages for conversation |
-| `/api/v1/ai/actions/{id}/approve` | POST | Approve pending proposal |
-| `/api/v1/ai/actions/{id}/reject` | POST | Reject pending proposal |
-| `/api/v1/ai/actions/pending` | GET | List pending proposals |
-| `/api/v1/ai/insight` | GET | Get dashboard AI insight (cached) |
-| `/api/v1/ai/usage` | GET | Get usage/cost summary |
-| `/api/v1/ai/status` | GET | AI service status + monthly spend |
+_Auto-regenerated (DEF-168). All endpoints live under `/api/v1/ai` and
+require JWT auth. `POST /ai/chat` is the non-streaming fallback; live
+streaming uses the `/ws/v1/ai/chat` WebSocket in §7.8._
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/ai/actions/pending` | Get all pending action proposals. |
+| `POST   /api/v1/ai/actions/{proposal_id}/approve` | Approve a pending action proposal. |
+| `POST   /api/v1/ai/actions/{proposal_id}/reject` | Reject a pending action proposal. |
+| `POST   /api/v1/ai/chat` | Non-streaming chat endpoint. |
+| `GET    /api/v1/ai/context/{page}` | Debug endpoint: inspect the context payload for a given page. |
+| `GET    /api/v1/ai/conversations` | List conversations with optional filters. |
+| `GET    /api/v1/ai/conversations/{conversation_id}` | Get a conversation with its messages. |
+| `GET    /api/v1/ai/insight` | Get a brief AI-generated insight for the Dashboard. |
+| `GET    /api/v1/ai/status` | Get AI service status and usage summary. |
+| `GET    /api/v1/ai/usage` | Get detailed usage statistics. |
 
 ### 7.10 Frontend Components
 
@@ -2506,9 +2684,17 @@ Real-time multi-position visualization — 10th Command Center page. Shows all o
 
 ### 13.5.1 Arena REST API (`api/routes/arena.py`)
 
-**Endpoints:**
-- `GET /api/v1/arena/positions` — Returns all open managed positions from `OrderManager.get_managed_positions()`. No pagination — maximum is `overflow.broker_capacity` (50 as of Sprint 32.9, aligned with `max_concurrent_positions`). Includes entry_price, current_price, unrealized_pnl, r_multiple, trail_stop_price (if active), strategy_id, symbol, share_count.
-- `GET /api/v1/arena/candles/{symbol}` — Returns historical OHLCV bars from `IntradayCandleStore` for the given symbol (up to 390 bars = full trading day). Used to seed MiniChart on card load. JWT-protected.
+_Verified against `app.openapi()` on 2026-04-23 (DEF-168, IMPROMPTU-08).
+Both endpoints are JWT-protected._
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/arena/candles/{symbol}` | Get recent 1-minute candles for a symbol. |
+| `GET    /api/v1/arena/positions` | Get all open managed positions for the Arena page. |
+
+**Implementation notes:**
+- `GET /api/v1/arena/positions` sources from `OrderManager.get_managed_positions()`. No pagination — the cap is `overflow.broker_capacity` (50 as of Sprint 32.9, aligned with `max_concurrent_positions`). Payload per position: entry_price, current_price, unrealized_pnl, r_multiple, trail_stop_price (if active), strategy_id, symbol, share_count.
+- `GET /api/v1/arena/candles/{symbol}` returns OHLCV bars from `IntradayCandleStore` (up to 720 bars post-Sprint 32.8 — full trading day including pre-market from 4:00 AM ET). Used to seed `MiniChart` on card mount.
 
 ### 13.5.2 Arena WebSocket (`/ws/v1/arena`)
 
@@ -2562,14 +2748,20 @@ Core evaluation dataclass capturing:
 - `from_backtest_result()` factory: bridges `BacktestResult` → `MultiObjectiveResult`
 - JSON serialization roundtrip (`to_dict()`/`from_dict()`) with infinity and None handling
 
-### 14.2 Comparison API (`analytics/comparison.py`)
+### 14.2 Comparison Module API (`analytics/comparison.py`)
+
+_This section documents a **Python module**, not an HTTP API — `comparison.py`
+is not route-exposed. Regeneration from `app.openapi()` is not applicable
+(DEF-168, IMPROMPTU-08 ambiguous-section decision). Function signatures
+introspected via `inspect.signature()`._
 
 Pairwise and set-level comparison using Pareto dominance:
 - **5 comparison metrics:** Sharpe↑, max_drawdown_pct↑, profit_factor↑, win_rate↑, expectancy↑
-- `compare(a, b)` → `ComparisonVerdict` via Pareto dominance (all metrics must be ≥, at least one >)
-- `pareto_frontier(results)` → O(n²) pairwise filtering, excludes LOW/ENSEMBLE_ONLY confidence
-- `soft_dominance(a, b, tolerance)` → configurable per-metric tolerance dict
-- `is_regime_robust(result, min_regimes)` → positive expectancy across minimum regime count
+- `compare(a: MultiObjectiveResult, b: MultiObjectiveResult) -> ComparisonVerdict` — Pareto dominance (all metrics must be ≥, at least one >)
+- `pareto_frontier(results: list[MultiObjectiveResult]) -> list[MultiObjectiveResult]` — O(n²) pairwise filtering, excludes LOW/ENSEMBLE_ONLY confidence
+- `soft_dominance(a, b, tolerance: dict[str, float] | None = None) -> bool` — configurable per-metric tolerance bands
+- `is_regime_robust(result, min_regimes: int = 3) -> bool` — positive expectancy across the minimum regime count
+- `format_comparison_report(a, b) -> str` — human-readable diff of two MultiObjectiveResults
 - NaN → INSUFFICIENT_DATA, `float('inf')` handled natively
 
 ### 14.3 Ensemble Evaluation (`analytics/ensemble_evaluation.py`)
@@ -2687,16 +2879,25 @@ Variants are never deleted from ExperimentStore — only status transitions occu
 
 ### 15.8 REST API
 
-JWT-protected endpoints under `/api/v1/experiments` (Sprint 32) and `/api/v1/counterfactual` (Sprint 32.5):
-- `GET /api/v1/experiments` — list all experiments with optional `?status=` filter
-- `GET /api/v1/experiments/{id}` — get specific experiment details including backtest result and promotion history
-- `GET /api/v1/experiments/baseline/{pattern}` — get baseline MultiObjectiveResult for a live pattern (for comparison)
-- `POST /api/v1/experiments/run` — trigger a sweep for a pattern via BackgroundTasks (non-blocking)
-- `GET /api/v1/experiments/variants` — all variant definitions with mode, fingerprint, metrics; 503 when experiments disabled *(Sprint 32.5)*
-- `GET /api/v1/experiments/promotions` — promotion/demotion event history with pagination; 503 when experiments disabled *(Sprint 32.5)*
-- `GET /api/v1/counterfactual/positions` — shadow positions with strategy/date/rejection-stage filters + pagination *(Sprint 32.5)*
+_Auto-regenerated (DEF-168, IMPROMPTU-08). JWT-protected endpoints under
+`/api/v1/experiments` (Sprint 32) and `/api/v1/counterfactual` (Sprint 32.5)._
 
-All experiment endpoints return 503 when `experiments.enabled: false`.
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/experiments` | List experiments, optionally filtered by pattern name. |
+| `GET    /api/v1/experiments/baseline/{pattern_name}` | Return the baseline experiment for a pattern. |
+| `GET    /api/v1/experiments/promotions` | List promotion and demotion events with pagination. |
+| `POST   /api/v1/experiments/run` | Trigger a parameter sweep for a pattern. |
+| `GET    /api/v1/experiments/variants` | List all variants with experiment metrics where available. |
+| `GET    /api/v1/experiments/{experiment_id}` | Return a single experiment by ID. |
+| `GET    /api/v1/counterfactual/accuracy` | Get filter accuracy report for counterfactual positions. |
+| `GET    /api/v1/counterfactual/positions` | Get shadow (counterfactual) positions with optional filters and pagination. |
+
+**Behaviour notes:**
+- `GET /api/v1/experiments` accepts a `?status=` filter; all `/experiments/*` routes return **503** when `experiments.enabled: false`.
+- `POST /api/v1/experiments/run` dispatches a sweep via FastAPI `BackgroundTasks` and returns immediately (non-blocking).
+- `GET /api/v1/counterfactual/positions` supports strategy / date / rejection-stage filters + pagination; R-multiple fields (`mfe_r`, `mae_r`) are serialized alongside preserved dollar excursions (IMPROMPTU-07, 2026-04-23).
+- `GET /api/v1/counterfactual/accuracy` returns the `FilterAccuracyReport` breakdown (per-stage / per-reason / per-grade / per-regime / per-strategy).
 
 ### 15.9 UI (Sprint 32.5)
 
