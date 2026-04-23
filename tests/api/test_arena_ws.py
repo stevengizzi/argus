@@ -41,6 +41,13 @@ from argus.core.events import (
     PositionUpdatedEvent,
 )
 
+# FIX-13a CI regression defense: cap every test in this file at 30s. The
+# arena WS auth-rejection tests now call ws.receive_json() inside the
+# connect context (FIX-13a P1-G2-M08). On Linux under xdist that receive
+# has been observed to stall teardown in neighbouring tests; 30s fails
+# fast. Every test here should complete in <5s.
+pytestmark = pytest.mark.timeout(30)
+
 TEST_JWT_SECRET = "test-jwt-secret-for-argus-api-testing-minimum-32-chars"
 
 

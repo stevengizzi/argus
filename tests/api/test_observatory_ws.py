@@ -25,6 +25,15 @@ from argus.api.dependencies import AppState
 from argus.api.server import create_app
 from argus.core.config import ApiConfig, SystemConfig
 
+# FIX-13a CI regression defense: cap every test in this file at 30s. The
+# observatory WS push-loop runs background asyncio tasks across starlette's
+# TestClient portal thread; on Linux under xdist, an earlier test's residual
+# task or socket state can block the TestClient teardown on a subsequent
+# test. The global pytest-timeout=120 catches any hang eventually, but 30s
+# fails fast with a tighter traceback. Every test here should complete in
+# <5s — 30s is already 6× the p99.
+pytestmark = pytest.mark.timeout(30)
+
 TEST_JWT_SECRET = "test-jwt-secret-for-argus-api-testing-minimum-32-chars"
 TEST_DATE = "2026-03-17"
 
