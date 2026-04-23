@@ -193,9 +193,9 @@ Scope boundaries respected:
 - ✅ No shadow-variant Badge name-pattern heuristic (delimiter-based structural parsing only).
 - ✅ No `order_manager.py` / `auth.py` / other-impromptu-scope edits.
 
-**Commits:** pending (single squashed commit planned).
+**Commit:** `add4e83` (squashed; 23 files, +1206/-56).
 
-**Green CI URL:** pending push.
+**Green CI URL:** https://github.com/stevengizzi/argus/actions/runs/24860817762 — ✅ success.
 
 ---
 
@@ -210,4 +210,6 @@ Scope boundaries respected:
 
 ## 10. Tier 2 Review
 
-Tier 2 review to be launched via the `reviewer` subagent against this close-out + the diff range. Review artifact will land at `docs/sprints/sprint-31.9/IMPROMPTU-07-review.md`.
+✅ **CLEAR** — `docs/sprints/sprint-31.9/IMPROMPTU-07-review.md`.
+
+Summary: all 11 requirements landed; backward compatibility on `/counterfactual/positions` structurally additive (dollar fields preserved, SQLite schema untouched); shadow-variant Badge fix uses the `__` structural delimiter (no name-pattern heuristic); DEF-198 path (b) documented with grep-verified 19-phase count; `[N/12]` labels correctly left un-renumbered; pytest 5073, Vitest 866; CI `24860817762` success.

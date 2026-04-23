@@ -50,7 +50,7 @@ and this document can be archived to `docs/sprints/archive/`.
 | Stage 8.5 | IMPROMPTU-CI (observatory_ws disconnect watcher — DEF-200 + DEF-193) | ✅ CLEAR | 2026-04-23 |
 | Stage 9B | IMPROMPTU-05 (deps & infra: DEF-180/181/179) | ✅ CLEAR (code `6ddd7a7`, review `8d39e21`) | 2026-04-23 |
 | Stage 9B | IMPROMPTU-06 (test-debt: DEF-176/185/192/166/048/049) | ✅ CLEAR (`91998bc`; Tier 2 CONCERNS→resolved in-session) | 2026-04-23 |
-| Stage 9B | IMPROMPTU-07 (doc-hygiene + UI fixes; + Apr 21 F-05/F-06/F-08) | ✅ CLEAR (code pending commit — DEF-164/169/189/191/198 + F-05/F-06/F-08 all landed; Tier 2 review pending) | 2026-04-23 |
+| Stage 9B | IMPROMPTU-07 (doc-hygiene + UI fixes; + Apr 21 F-05/F-06/F-08) | ✅ CLEAR (`add4e83`, Tier 2 review pending) | 2026-04-23 |
 | Stage 9B | IMPROMPTU-08 (architecture.md API catalog regeneration) | ⏸ PENDING | TBD |
 | Stage 9C | IMPROMPTU-09 (Apr 22 verification sweep, read-only) | ⏸ PENDING (post-IMPROMPTU-04 dependency) | TBD |
 | Stage 9C | RETRO-FOLD (P1-P25 into workflow/) | ⏸ PENDING | TBD |
@@ -110,17 +110,17 @@ cut.
 |---|---|---|
 | DEF-048 | test_main.py xdist failures (4 tests) | IMPROMPTU-06 |
 | DEF-049 | test_orchestrator isolation failure | IMPROMPTU-06 |
-| ~~DEF-164~~ | ~~Late-night boot collides with auto-shutdown~~ | ✅ IMPROMPTU-07 (pending commit) |
+| ~~DEF-164~~ | ~~Late-night boot collides with auto-shutdown~~ | ✅ IMPROMPTU-07 `add4e83` |
 | DEF-166 | test_speed_benchmark flaky under pytest-cov | IMPROMPTU-06 |
 | DEF-168 | architecture.md API catalog drift | IMPROMPTU-08 |
-| ~~DEF-169~~ | ~~`--dev` mode retired (reclassify as closed)~~ | ✅ IMPROMPTU-07 (pending commit) |
+| ~~DEF-169~~ | ~~`--dev` mode retired (reclassify as closed)~~ | ✅ IMPROMPTU-07 `add4e83` |
 | DEF-176 | `auto_cleanup_orphans` kwarg removal | IMPROMPTU-06 |
 | DEF-179 | python-jose → PyJWT migration | IMPROMPTU-05 |
 | DEF-180 | Python lockfile via uv | IMPROMPTU-05 |
 | DEF-181 | Node 20 GitHub Actions deprecation (deadline 2026-06-02) | IMPROMPTU-05 |
 | DEF-185 | Analytics-layer assert isinstance (5 sites) | IMPROMPTU-06 |
-| ~~DEF-189~~ | ~~revalidate_strategy.py config_overrides param-name (bug fix only; re-run → Sprint 33)~~ | ✅ IMPROMPTU-07 (pending commit) |
-| ~~DEF-191~~ | ~~Latent SQL-side UTC normalization (doc-only)~~ | ✅ IMPROMPTU-07 (pending commit) |
+| ~~DEF-189~~ | ~~revalidate_strategy.py config_overrides param-name (bug fix only; re-run → Sprint 33)~~ | ✅ IMPROMPTU-07 `add4e83` |
+| ~~DEF-191~~ | ~~Latent SQL-side UTC normalization (doc-only)~~ | ✅ IMPROMPTU-07 `add4e83` |
 | DEF-192 | Test runtime warning cleanup (categories i–iv; category v stays MONITOR per RULE-018) | IMPROMPTU-06 |
 | ~~DEF-198~~ | ~~Boot phase labels `/12` vs handoff-claimed `/17`~~ | ✅ IMPROMPTU-07 path (b) — actual count is 19 (pending commit) |
 
