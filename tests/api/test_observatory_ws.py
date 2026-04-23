@@ -502,6 +502,14 @@ async def test_observatory_ws_graceful_disconnect(
         ws.send_json({"type": "auth", "token": _make_auth_token()})
         ws.receive_json()  # auth_success
         ws.receive_json()  # initial pipeline_update
+        # FIX-13a CI regression: receive one more push-loop message before
+        # disconnecting. The server is a push-only handler (never calls
+        # receive()), so on Linux xdist the TestClient teardown can stall
+        # waiting for the server task to notice the disconnect. Pulling a
+        # message from the push loop primes the ASGI state machine so that
+        # the next send_json surfaces the disconnect correctly. Matches the
+        # pattern that makes test_observatory_ws_interval_configurable safe.
+        ws.receive_json()  # pipeline_update from push loop (interval=200ms)
         # Client closes — the context manager handles close
 
     # If we get here without exceptions, disconnect was graceful
