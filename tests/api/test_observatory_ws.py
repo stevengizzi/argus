@@ -259,13 +259,16 @@ async def test_observatory_ws_sends_initial_state(
     monkeypatch.setenv("ARGUS_JWT_SECRET", TEST_JWT_SECRET)
     set_jwt_secret(TEST_JWT_SECRET)
 
-    # ws_update_interval_ms=200 (default would be 1000). FIX-13a CI regression:
-    # default 1s interval leaves the server task in ``await asyncio.sleep(1.0)``
-    # when the client disconnects; on Linux under xdist that stalls the
-    # TestClient portal teardown. 200ms matches the pattern used by the
-    # already-passing test_observatory_ws_interval_configurable.
+    # ws_update_interval_ms=10000. This test exercises ONLY the initial
+    # pipeline_update — no recurring push needed. IMPROMPTU-CI post-push
+    # evidence: the disconnect-watcher fix eliminates this specific test's
+    # crash, but the broader observatory_ws flake (cross-loop aiosqlite +
+    # TestClient portal teardown) still trips sibling tests that exercise
+    # multiple push cycles. A long interval keeps the push loop from
+    # issuing any DB queries beyond the initial send — eliminating the
+    # remaining race window for this test. See DEF-200 / DEF-193.
     app, obs_conn, temp_db = await _build_observatory_app(
-        tmp_path, ws_update_interval_ms=200,
+        tmp_path, ws_update_interval_ms=10000,
     )
 
     client = TestClient(app)
@@ -300,10 +303,12 @@ async def test_observatory_ws_pipeline_update_format(
     monkeypatch.setenv("ARGUS_JWT_SECRET", TEST_JWT_SECRET)
     set_jwt_secret(TEST_JWT_SECRET)
 
-    # ws_update_interval_ms=200 — see test_observatory_ws_sends_initial_state
-    # above for the FIX-13a CI regression rationale.
+    # ws_update_interval_ms=10000 — this test exercises ONLY the initial
+    # pipeline_update. Long interval prevents recurring DB queries (see
+    # DEF-200 / DEF-193 for the cross-loop aiosqlite race these tests
+    # occasionally trip on Linux under xdist).
     app, obs_conn, temp_db = await _build_observatory_app(
-        tmp_path, ws_update_interval_ms=200,
+        tmp_path, ws_update_interval_ms=10000,
     )
 
     client = TestClient(app)
@@ -674,10 +679,11 @@ async def test_observatory_ws_independent_from_ai_ws(
     monkeypatch.setenv("ARGUS_JWT_SECRET", TEST_JWT_SECRET)
     set_jwt_secret(TEST_JWT_SECRET)
 
-    # ws_update_interval_ms=200 — see test_observatory_ws_sends_initial_state
-    # above for the FIX-13a CI regression rationale.
+    # ws_update_interval_ms=10000 — this test only needs the initial
+    # pipeline_update; long interval eliminates recurring DB queries (see
+    # DEF-200 / DEF-193 for the cross-loop aiosqlite race).
     app, obs_conn, temp_db = await _build_observatory_app(
-        tmp_path, ws_update_interval_ms=200,
+        tmp_path, ws_update_interval_ms=10000,
     )
 
     client = TestClient(app)
