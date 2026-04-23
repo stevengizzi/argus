@@ -187,6 +187,176 @@ class TestPromptManagerPageContext:
         # Should be truncated to ~2000 tokens (~8000 chars)
         assert len(context) <= 8500  # Some buffer for truncation
 
+    @pytest.mark.parametrize(
+        "page,context_data,expected_substrings",
+        [
+            (
+                "Performance",
+                {
+                    "metrics": {
+                        "win_rate": 0.65,
+                        "profit_factor": 1.8,
+                        "sharpe_ratio": 1.2,
+                        "net_pnl": 1234.56,
+                    },
+                    "timeframe": "Last 30 days",
+                },
+                [
+                    "Performance Metrics",
+                    "Win rate: 65.0%",
+                    "Profit factor: 1.80",
+                    "Sharpe ratio: 1.20",
+                    "Net P&L: $1,234.56",
+                    "Timeframe: Last 30 days",
+                ],
+            ),
+            (
+                "Orchestrator",
+                {
+                    "allocations": [{"strategy_id": "orb_breakout", "pct": 25.0}],
+                    "regime": "trending_up",
+                    "schedule_state": "active",
+                },
+                [
+                    "Strategy Allocations",
+                    "orb_breakout: 25.0%",
+                    "Current Regime: trending_up",
+                    "Schedule State: active",
+                ],
+            ),
+            (
+                "PatternLibrary",
+                {
+                    "selected_pattern": {
+                        "name": "Bull Flag",
+                        "stats": {"win_rate": 0.58, "sample_size": 120},
+                    }
+                },
+                [
+                    "Selected Pattern: Bull Flag",
+                    "Win rate: 58.0%",
+                    "Sample size: 120",
+                ],
+            ),
+            (
+                "Debrief",
+                {
+                    "today_summary": {"total_trades": 12, "net_pnl": 456.78},
+                    "selected_conversation": "2026-04-22",
+                },
+                [
+                    "Today's Summary",
+                    "Total trades: 12",
+                    "Net P&L: $456.78",
+                    "Viewing conversation from: 2026-04-22",
+                ],
+            ),
+            (
+                "System",
+                {
+                    "health": {"status": "healthy", "uptime": "3d 4h"},
+                    "connections": {"broker": "connected", "data_feed": "connected"},
+                },
+                [
+                    "System Health",
+                    "Status: healthy",
+                    "Uptime: 3d 4h",
+                    "Connection States",
+                    "broker: connected",
+                    "data_feed: connected",
+                ],
+            ),
+        ],
+    )
+    def test_page_context_formatters(
+        self,
+        page: str,
+        context_data: dict,
+        expected_substrings: list[str],
+        manager: PromptManager,
+    ) -> None:
+        """Each page formatter produces the expected section markers + data lines."""
+        result = manager.build_page_context(page, context_data)
+        assert f"## Current Page: {page}" in result
+        for substring in expected_substrings:
+            assert substring in result, (
+                f"Expected {substring!r} in result for page {page}:\n{result}"
+            )
+
+    def test_unknown_page_falls_back_to_raw_context(self, manager: PromptManager) -> None:
+        """Unknown page identifier falls through to the default ``Context data:`` line."""
+        data = {"foo": "bar", "n": 42}
+        result = manager.build_page_context("UnknownPage", data)
+        assert "## Current Page: UnknownPage" in result
+        assert "Context data:" in result
+        assert "foo" in result and "bar" in result
+
+
+class TestPromptManagerEdgeBranches:
+    """Cover edge branches in prompt helpers that the existing happy-path tests miss."""
+
+    def test_truncate_history_handles_non_string_content(self) -> None:
+        """A history message whose ``content`` is a list (tool_use blocks) must be counted
+        via ``str(content)`` rather than raising — exercises the ``else`` branch of
+        ``isinstance(content, str)`` in ``_truncate_history``.
+        """
+        config = AIConfig(history_token_budget=1000, max_history_messages=100)
+        manager = PromptManager(config)
+
+        history = [
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Here is the data"},
+                    {"type": "tool_use", "id": "t1", "name": "get_data", "input": {}},
+                ],
+            },
+        ]
+
+        system, messages = manager.build_conversation_messages(
+            history=history,
+            user_message="Thanks",
+            system="Test",
+            page_context="",
+        )
+
+        # Non-string content was counted (no exception raised) and kept within budget.
+        assert len(messages) == 2
+        assert messages[0]["content"] == history[0]["content"]
+
+    def test_truncate_history_breaks_on_non_string_content_over_budget(self) -> None:
+        """When non-string content exceeds the token budget on its own, the loop must
+        break rather than including it — covers the ``374 -> 378`` branch where the
+        non-string ``msg_tokens`` branch feeds directly into the budget check.
+        """
+        # AIConfig enforces ``ge=100`` on history_token_budget; exceed it with stringified
+        # content large enough that a single message blows past the budget.
+        config = AIConfig(history_token_budget=100, max_history_messages=100)
+        manager = PromptManager(config)
+
+        # Oversized list content: str(content) > 2000 chars → > 500 tokens, exceeds 100.
+        big_blob = "x" * 3000
+        history = [
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": big_blob},
+                    {"type": "tool_use", "id": "t1", "name": "get_data", "input": {"k": big_blob}},
+                ],
+            },
+        ]
+
+        system, messages = manager.build_conversation_messages(
+            history=history,
+            user_message="New",
+            system="Test",
+            page_context="",
+        )
+
+        # Oversized message dropped; only the new user message remains.
+        assert len(messages) == 1
+        assert messages[0]["content"] == "New"
+
 
 class TestPromptManagerConversationMessages:
     """Test PromptManager conversation message assembly."""

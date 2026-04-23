@@ -499,3 +499,271 @@ class TestExecutorRegistry:
         assert "propose_strategy_suspend" in names
         assert "propose_strategy_resume" in names
         assert "generate_report" in names
+
+    def test_registry_register_adds_custom_executor(self) -> None:
+        """register() adds a custom executor keyed by its tool_name."""
+
+        class CustomExecutor(ActionExecutor):
+            @property
+            def tool_name(self) -> str:
+                return "custom_tool"
+
+            async def execute(
+                self, proposal: ActionProposal, app_state: Any
+            ) -> dict[str, Any]:
+                return {}
+
+        registry = ExecutorRegistry()
+        custom = CustomExecutor()
+        registry.register(custom)
+
+        assert registry.get("custom_tool") is custom
+        assert "custom_tool" in registry.tool_names
+
+
+class _MinimalExecutor(ActionExecutor):
+    """Concrete subclass of ``ActionExecutor`` that does NOT override the defaults.
+
+    Used to exercise base-class defaults (``requires_approval`` and the no-op
+    ``validate``) which subclasses always override, so they'd otherwise stay
+    uncovered.
+    """
+
+    @property
+    def tool_name(self) -> str:
+        return "minimal"
+
+    async def execute(
+        self, proposal: ActionProposal, app_state: Any
+    ) -> dict[str, Any]:
+        return {}
+
+
+class TestActionExecutorBaseDefaults:
+    """Cover the base-class defaults inherited by every concrete executor."""
+
+    def test_default_requires_approval_is_true(self) -> None:
+        """Default ``requires_approval`` property returns True."""
+        executor = _MinimalExecutor()
+        assert executor.requires_approval is True
+
+    async def test_default_validate_passes(self) -> None:
+        """Default ``validate()`` returns ``(True, "")`` regardless of input."""
+        executor = _MinimalExecutor()
+        valid, err = await executor.validate({"anything": 1})
+        assert valid is True
+        assert err == ""
+
+
+class TestRiskParamChangeExecutorPaths:
+    """Cover the remaining param_path branches in RiskParamChangeExecutor.execute().
+
+    The existing ``TestRiskParamChangeExecutor`` suite only tests
+    ``risk.daily_loss_limit_pct``; the other three branches (and the unknown
+    fallback) were uncovered.
+    """
+
+    async def test_execute_updates_weekly_loss_limit(self) -> None:
+        """execute() updates account.weekly_loss_limit_pct and returns old value."""
+        executor = RiskParamChangeExecutor()
+        risk_config = MockRiskConfig()
+        risk_manager = MockRiskManager(_config=risk_config)
+        app_state = MockAppState(risk_manager=risk_manager)
+        tool_input = {
+            "param_path": "risk.weekly_loss_limit_pct",
+            "new_value": 0.08,
+        }
+        proposal = make_proposal("propose_risk_param_change", tool_input)
+
+        result = await executor.execute(proposal, app_state)
+
+        assert risk_config.account.weekly_loss_limit_pct == 0.08
+        assert result["old_value"] == 0.05
+        assert result["new_value"] == 0.08
+        assert result["effective"] is True
+
+    async def test_execute_updates_max_single_stock(self) -> None:
+        """execute() updates cross_strategy.max_single_stock_pct."""
+        executor = RiskParamChangeExecutor()
+        risk_config = MockRiskConfig()
+        risk_manager = MockRiskManager(_config=risk_config)
+        app_state = MockAppState(risk_manager=risk_manager)
+        tool_input = {
+            "param_path": "risk.max_single_stock_pct",
+            "new_value": 0.08,
+        }
+        proposal = make_proposal("propose_risk_param_change", tool_input)
+
+        result = await executor.execute(proposal, app_state)
+
+        assert risk_config.cross_strategy.max_single_stock_pct == 0.08
+        assert result["old_value"] == 0.05
+        assert result["new_value"] == 0.08
+
+    async def test_execute_rejects_per_trade_risk_pct(self) -> None:
+        """execute() raises ExecutionError for the per_trade_risk_pct path."""
+        executor = RiskParamChangeExecutor()
+        risk_config = MockRiskConfig()
+        risk_manager = MockRiskManager(_config=risk_config)
+        app_state = MockAppState(risk_manager=risk_manager)
+        tool_input = {
+            "param_path": "risk.per_trade_risk_pct",
+            "new_value": 0.01,
+        }
+        proposal = make_proposal("propose_risk_param_change", tool_input)
+
+        with pytest.raises(ExecutionError, match="strategy-level modification"):
+            await executor.execute(proposal, app_state)
+
+    async def test_execute_raises_when_risk_manager_none(self) -> None:
+        """execute() guards against a missing risk_manager (line 333)."""
+        executor = RiskParamChangeExecutor()
+        app_state = MockAppState(risk_manager=None)
+        tool_input = {"param_path": "risk.daily_loss_limit_pct", "new_value": 0.04}
+        proposal = make_proposal("propose_risk_param_change", tool_input)
+
+        with pytest.raises(ExecutionError, match="Risk manager not available"):
+            await executor.execute(proposal, app_state)
+
+    async def test_execute_unknown_param_path_raises(self) -> None:
+        """If validate() is bypassed, an unknown param_path trips the final
+        ``else`` safety fallback (line 356) rather than silently no-op'ing."""
+        executor = RiskParamChangeExecutor()
+        risk_config = MockRiskConfig()
+        risk_manager = MockRiskManager(_config=risk_config)
+        app_state = MockAppState(risk_manager=risk_manager)
+        tool_input = {
+            "param_path": "risk.something_new_and_unmapped",
+            "new_value": 0.05,
+        }
+        proposal = make_proposal("propose_risk_param_change", tool_input)
+
+        with pytest.raises(ExecutionError, match="Unknown param path"):
+            await executor.execute(proposal, app_state)
+
+
+class TestStrategyResumeExecutorValidation:
+    """Cover the missing ``validate`` branch on StrategyResumeExecutor."""
+
+    async def test_validate_missing_strategy_id(self) -> None:
+        """validate() returns an error when strategy_id is absent."""
+        executor = StrategyResumeExecutor()
+
+        valid, err = await executor.validate({})
+
+        assert valid is False
+        assert "strategy_id" in err
+
+
+class TestGenerateReportExecutorExecute:
+    """Cover ``GenerateReportExecutor.execute()`` — all 3 branches + fallback + raise."""
+
+    async def test_execute_daily_summary_uses_ai_summary_generator(self) -> None:
+        """When ``app_state.ai_summary_generator`` is set, execute() delegates to it."""
+        executor = GenerateReportExecutor()
+        mock_generator = MagicMock()
+        mock_generator.generate = AsyncMock(return_value="summary text")
+        app_state = MockAppState(
+            ai_summary_generator=mock_generator,
+            ai_client=MagicMock(),
+        )
+        tool_input = {
+            "report_type": "daily_summary",
+            "params": {"date": "2026-04-22"},
+        }
+        proposal = make_proposal("generate_report", tool_input)
+
+        result = await executor.execute(proposal, app_state)
+
+        assert result["report_type"] == "daily_summary"
+        assert result["content"] == "summary text"
+        assert result["date"] == "2026-04-22"
+        assert result["saved"] is True
+        mock_generator.generate.assert_awaited_once_with("2026-04-22", app_state)
+
+    async def test_execute_daily_summary_defaults_date_to_today_et(self) -> None:
+        """When params omit ``date``, execute() fills in today's ET date (YYYY-MM-DD)."""
+        executor = GenerateReportExecutor()
+        mock_generator = MagicMock()
+        mock_generator.generate = AsyncMock(return_value="summary")
+        app_state = MockAppState(ai_summary_generator=mock_generator)
+        tool_input = {"report_type": "daily_summary"}  # no params / no date
+        proposal = make_proposal("generate_report", tool_input)
+
+        result = await executor.execute(proposal, app_state)
+
+        # ET date in YYYY-MM-DD form: length 10, dashes at positions 4 and 7.
+        assert isinstance(result["date"], str)
+        assert len(result["date"]) == 10
+        assert result["date"][4] == "-" and result["date"][7] == "-"
+        mock_generator.generate.assert_awaited_once()
+
+    async def test_execute_daily_summary_fallback_creates_generator(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """When ``ai_summary_generator`` is None, execute() creates one via the
+        local ``from argus.ai.summary import DailySummaryGenerator`` import.
+        """
+        executor = GenerateReportExecutor()
+        mock_generator_instance = MagicMock()
+        mock_generator_instance.generate = AsyncMock(return_value="fallback content")
+        mock_generator_class = MagicMock(return_value=mock_generator_instance)
+
+        # Local import at call site → patch the attribute on the source module.
+        monkeypatch.setattr(
+            "argus.ai.summary.DailySummaryGenerator",
+            mock_generator_class,
+        )
+
+        mock_client = MagicMock()
+        app_state = MockAppState(ai_summary_generator=None, ai_client=mock_client)
+        tool_input = {
+            "report_type": "daily_summary",
+            "params": {"date": "2026-04-22"},
+        }
+        proposal = make_proposal("generate_report", tool_input)
+
+        result = await executor.execute(proposal, app_state)
+
+        assert result["content"] == "fallback content"
+        assert result["saved"] is True
+        mock_generator_class.assert_called_once_with(mock_client)
+        mock_generator_instance.generate.assert_awaited_once_with(
+            "2026-04-22", app_state
+        )
+
+    async def test_execute_strategy_analysis_returns_placeholder(self) -> None:
+        """strategy_analysis returns the placeholder result (saved=False)."""
+        executor = GenerateReportExecutor()
+        app_state = MockAppState()
+        tool_input = {"report_type": "strategy_analysis"}
+        proposal = make_proposal("generate_report", tool_input)
+
+        result = await executor.execute(proposal, app_state)
+
+        assert result["report_type"] == "strategy_analysis"
+        assert "not yet implemented" in result["content"]
+        assert result["saved"] is False
+
+    async def test_execute_risk_review_returns_placeholder(self) -> None:
+        """risk_review returns the placeholder result (saved=False)."""
+        executor = GenerateReportExecutor()
+        app_state = MockAppState()
+        tool_input = {"report_type": "risk_review"}
+        proposal = make_proposal("generate_report", tool_input)
+
+        result = await executor.execute(proposal, app_state)
+
+        assert result["report_type"] == "risk_review"
+        assert "not yet implemented" in result["content"]
+        assert result["saved"] is False
+
+    async def test_execute_unknown_report_type_raises(self) -> None:
+        """An unknown report type bypasses validate() and raises in execute()."""
+        executor = GenerateReportExecutor()
+        app_state = MockAppState()
+        tool_input = {"report_type": "bogus"}
+        proposal = make_proposal("generate_report", tool_input)
+
+        with pytest.raises(ExecutionError, match="Unknown report type"):
+            await executor.execute(proposal, app_state)

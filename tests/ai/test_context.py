@@ -517,6 +517,356 @@ class TestDashboardFullPortfolioContext:
         assert "total_unrealized_pnl" in summary
 
 
+class TestSystemPageContextBody:
+    """Cover ``_build_system_page_context`` (lines 472-501) — the method body is
+    entirely untested; the existing ``test_system_page_context`` only exercises the
+    ``health_monitor=None`` fallback + empty connections.
+    """
+
+    @pytest.fixture
+    def builder(self) -> SystemContextBuilder:
+        return SystemContextBuilder()
+
+    @pytest.mark.asyncio
+    async def test_system_page_with_all_connections(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """health_monitor + broker + data_service set with truthy states → fully
+        populated health dict + connections dict."""
+        health_monitor = MagicMock()
+        health_monitor.status = "healthy"
+        broker = MagicMock()
+        broker.is_connected = True
+        data_service = MagicMock()
+        data_service.is_connected = True
+
+        state = MockAppState(
+            health_monitor=health_monitor,
+            broker=broker,
+            data_service=data_service,
+        )
+
+        context = await builder.build_context(
+            page="System",
+            context_data={"uptime": "3d 4h"},
+            app_state=state,
+        )
+        page = context["page_context"]
+
+        assert page["health"] == {"status": "healthy", "uptime": "3d 4h"}
+        assert page["connections"]["broker"] == "connected"
+        assert page["connections"]["data_feed"] == "connected"
+
+    @pytest.mark.asyncio
+    async def test_system_page_all_disconnected(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """broker/data_service with ``is_connected=False`` → 'disconnected'."""
+        broker = MagicMock()
+        broker.is_connected = False
+        data_service = MagicMock()
+        data_service.is_connected = False
+
+        state = MockAppState(broker=broker, data_service=data_service)
+        context = await builder.build_context(
+            page="System", context_data={}, app_state=state
+        )
+
+        assert context["page_context"]["connections"]["broker"] == "disconnected"
+        assert context["page_context"]["connections"]["data_feed"] == "disconnected"
+
+    @pytest.mark.asyncio
+    async def test_system_page_health_monitor_raises(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """Attribute access on health_monitor.status raises → caught, fallback dict."""
+
+        class _BrokenHealthMonitor:
+            @property
+            def status(self) -> str:
+                raise RuntimeError("status probe failed")
+
+        state = MockAppState(health_monitor=_BrokenHealthMonitor())
+        context = await builder.build_context(
+            page="System", context_data={}, app_state=state
+        )
+
+        assert context["page_context"]["health"] == {
+            "status": "unknown",
+            "uptime": "N/A",
+        }
+
+    @pytest.mark.asyncio
+    async def test_system_page_broker_connection_raises(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """broker.is_connected property raising RuntimeError → 'unknown'."""
+
+        class _BrokenBroker:
+            @property
+            def is_connected(self) -> bool:
+                raise RuntimeError("broker probe failed")
+
+        state = MockAppState(broker=_BrokenBroker())
+        context = await builder.build_context(
+            page="System", context_data={}, app_state=state
+        )
+
+        assert context["page_context"]["connections"]["broker"] == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_system_page_data_service_connection_raises(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """data_service.is_connected raising → 'unknown'."""
+
+        class _BrokenDataService:
+            @property
+            def is_connected(self) -> bool:
+                raise RuntimeError("data probe failed")
+
+        state = MockAppState(data_service=_BrokenDataService())
+        context = await builder.build_context(
+            page="System", context_data={}, app_state=state
+        )
+
+        assert context["page_context"]["connections"]["data_feed"] == "unknown"
+
+
+class TestBuildSystemStateErrorPaths:
+    """Cover ``_build_system_state`` regime/equity/pnl/circuit-breaker branches
+    that no existing test exercises (lines 84-85, 91-99, 116-125).
+    """
+
+    @pytest.fixture
+    def builder(self) -> SystemContextBuilder:
+        return SystemContextBuilder()
+
+    @pytest.mark.asyncio
+    async def test_regime_from_orchestrator_string(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """Orchestrator set with a truthy regime → state['regime'] reflects it."""
+        orchestrator = MagicMock()
+        orchestrator.current_regime = "trending_up"
+        state = MockAppState(orchestrator=orchestrator)
+
+        context = await builder.build_context(
+            page="Dashboard", context_data={}, app_state=state
+        )
+
+        assert context["system"]["regime"] == "trending_up"
+
+    @pytest.mark.asyncio
+    async def test_regime_from_orchestrator_none_falls_back_to_unknown(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """Orchestrator set but current_regime is None → 'unknown'."""
+        orchestrator = MagicMock()
+        orchestrator.current_regime = None
+        state = MockAppState(orchestrator=orchestrator)
+
+        context = await builder.build_context(
+            page="Dashboard", context_data={}, app_state=state
+        )
+
+        assert context["system"]["regime"] == "unknown"
+
+    @pytest.mark.asyncio
+    async def test_broker_account_equity_populated(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """broker.get_account returns account → account_equity populated from .equity."""
+        account = MagicMock()
+        account.equity = 125_000.0
+        broker = MagicMock()
+        broker.get_account = AsyncMock(return_value=account)
+
+        state = MockAppState(broker=broker)
+        context = await builder.build_context(
+            page="Dashboard", context_data={}, app_state=state
+        )
+
+        assert context["system"]["account_equity"] == 125_000.0
+
+    @pytest.mark.asyncio
+    async def test_broker_get_account_returns_none_falls_back_to_zero(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """broker.get_account returns None → fallback 0.0."""
+        broker = MagicMock()
+        broker.get_account = AsyncMock(return_value=None)
+
+        state = MockAppState(broker=broker)
+        context = await builder.build_context(
+            page="Dashboard", context_data={}, app_state=state
+        )
+
+        assert context["system"]["account_equity"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_broker_get_account_raises_falls_back_to_zero(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """broker.get_account raises → caught, account_equity = 0.0."""
+        broker = MagicMock()
+        broker.get_account = AsyncMock(side_effect=RuntimeError("broker dead"))
+
+        state = MockAppState(broker=broker)
+        context = await builder.build_context(
+            page="Dashboard", context_data={}, app_state=state
+        )
+
+        assert context["system"]["account_equity"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_trade_logger_daily_pnl_populated(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """trade_logger.get_todays_pnl returns value → daily_pnl populated."""
+        trade_logger = MagicMock()
+        trade_logger.get_todays_pnl = AsyncMock(return_value=250.75)
+
+        state = MockAppState(trade_logger=trade_logger)
+        context = await builder.build_context(
+            page="Dashboard", context_data={}, app_state=state
+        )
+
+        assert context["system"]["daily_pnl"] == 250.75
+
+    @pytest.mark.asyncio
+    async def test_trade_logger_get_todays_pnl_raises_falls_back_to_zero(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """trade_logger.get_todays_pnl raises → caught, daily_pnl = 0.0."""
+        trade_logger = MagicMock()
+        trade_logger.get_todays_pnl = AsyncMock(side_effect=RuntimeError("db down"))
+
+        state = MockAppState(trade_logger=trade_logger)
+        context = await builder.build_context(
+            page="Dashboard", context_data={}, app_state=state
+        )
+
+        assert context["system"]["daily_pnl"] == 0.0
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_active_is_appended(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """Active circuit breaker → appended to state['circuit_breakers']."""
+        risk_manager = MagicMock()
+        risk_manager.circuit_breaker_active = True
+
+        state = MockAppState(risk_manager=risk_manager)
+        context = await builder.build_context(
+            page="Dashboard", context_data={}, app_state=state
+        )
+
+        breakers = context["system"]["circuit_breakers"]
+        assert len(breakers) == 1
+        assert breakers[0]["type"] == "risk_manager"
+
+    @pytest.mark.asyncio
+    async def test_circuit_breaker_inactive_stays_empty(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """Inactive circuit breaker → circuit_breakers list stays empty."""
+        risk_manager = MagicMock()
+        risk_manager.circuit_breaker_active = False
+
+        state = MockAppState(risk_manager=risk_manager)
+        context = await builder.build_context(
+            page="Dashboard", context_data={}, app_state=state
+        )
+
+        assert context["system"]["circuit_breakers"] == []
+
+    @pytest.mark.asyncio
+    async def test_risk_manager_attribute_raises_is_caught(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """risk_manager.circuit_breaker_active raising RuntimeError → caught silently."""
+
+        class _BrokenRiskManager:
+            @property
+            def circuit_breaker_active(self) -> bool:
+                raise RuntimeError("rm probe failed")
+
+        state = MockAppState(risk_manager=_BrokenRiskManager())
+        context = await builder.build_context(
+            page="Dashboard", context_data={}, app_state=state
+        )
+
+        # No breaker appended, no exception propagated.
+        assert context["system"]["circuit_breakers"] == []
+
+
+class TestPageBuilderFallbacks:
+    """Cover branches the enumerated gap spec calls out under 'Dashboard edge cases
+    and Debrief tail (lines 269-271, 277-278, 405-412)'.
+    """
+
+    @pytest.fixture
+    def builder(self) -> SystemContextBuilder:
+        return SystemContextBuilder()
+
+    @pytest.mark.asyncio
+    async def test_dashboard_regime_pulled_from_orchestrator(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """When orchestrator is set, Dashboard.regime is derived from it (lines 277-278)."""
+        orchestrator = MagicMock()
+        orchestrator.current_regime = "choppy"
+
+        state = MockAppState(orchestrator=orchestrator)
+        context = await builder.build_context(
+            page="Dashboard", context_data={}, app_state=state
+        )
+
+        assert context["page_context"]["regime"] == "choppy"
+
+    @pytest.mark.asyncio
+    async def test_dashboard_order_manager_raises_positions_empty(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """order_manager.get_managed_positions raising → caught, positions = []."""
+        order_manager = MagicMock()
+        order_manager.get_managed_positions.side_effect = RuntimeError("om broken")
+
+        state = MockAppState(order_manager=order_manager)
+        context = await builder.build_context(
+            page="Dashboard", context_data={}, app_state=state
+        )
+
+        assert context["page_context"]["positions"] == []
+
+    @pytest.mark.asyncio
+    async def test_pattern_library_with_selected_pattern(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """PatternLibrary page surfaces selected_pattern from context_data (lines 407-408)."""
+        state = MockAppState()
+        context = await builder.build_context(
+            page="PatternLibrary",
+            context_data={"selected_pattern": {"name": "Bull Flag"}},
+            app_state=state,
+        )
+
+        assert context["page_context"]["selected_pattern"] == {"name": "Bull Flag"}
+
+    @pytest.mark.asyncio
+    async def test_pattern_library_no_selected_pattern_is_none(
+        self, builder: SystemContextBuilder
+    ) -> None:
+        """PatternLibrary page → selected_pattern None when not provided (lines 409-410)."""
+        state = MockAppState()
+        context = await builder.build_context(
+            page="PatternLibrary", context_data={}, app_state=state
+        )
+
+        assert context["page_context"]["selected_pattern"] is None
+
+
 class TestDebriefDateFilter:
     """Test Debrief context uses ET timezone for date filtering."""
 

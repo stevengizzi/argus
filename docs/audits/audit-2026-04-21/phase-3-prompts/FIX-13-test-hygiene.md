@@ -101,10 +101,10 @@ three sessions to keep each session sized correctly:
 - **FIX-13b-test-hygiene-refactors** (executed 2026-04-23): 7 larger
   refactor findings — F5 (CRITICAL), F7, F8, F9, F11, F18, F21, F23.
   Back-annotations marked `**RESOLVED FIX-13b-test-hygiene-refactors**`.
-- **FIX-13c-ai-copilot-coverage** (Stage 8 Parallel — pending):
-  Finding 13 only (AI Copilot coverage expansion, sprint-scale effort).
-  Back-annotated here as
-  `**DEFERRED TO FIX-13c-ai-copilot-coverage**`.
+- **FIX-13c-ai-copilot-coverage** (executed 2026-04-23, Stage 8 Parallel):
+  Finding 13 only (AI Copilot coverage expansion). All four AI modules now
+  ≥ 85% combined (stmt + branch) coverage. Back-annotation marked
+  `**RESOLVED FIX-13c-ai-copilot-coverage**`.
 
 ### Finding 1: `P1-G1-L03` [LOW]
 
@@ -485,7 +485,7 @@ three sessions to keep each session sized correctly:
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
-> **STATUS:** DEFERRED TO FIX-13c-ai-copilot-coverage (Stage 8 Parallel slot) — AI Copilot coverage expansion is out of scope for FIX-13b and scheduled to run in the Stage 8 parallel session.
+> **STATUS:** RESOLVED FIX-13c-ai-copilot-coverage (2026-04-23) — test-only expansion against the four AI Copilot modules, no production code changes. Combined stmt+branch coverage post-session: `prompts.py` 56% → 92%, `context.py` 65% → 86%, `client.py` 70% → 92%, `executors.py` 71% → 85%. Line-only coverage (kickoff's stated "≥ 85% line coverage" target): prompts 99.4%, context 86.1%, client 95.6%, executors 88.5% — all ≥ 85%. Enumerated gap lines covered: prompts.py — 5 untested page formatters (Performance/Orchestrator/PatternLibrary/Debrief/System) via parametrized test + non-string-content path in `_truncate_history` (line 375); executors.py — `GenerateReportExecutor.execute()` all 3 branches + ET-today default + unknown-type raise (lines 562-603), plus 3 remaining `RiskParamChangeExecutor.execute()` param paths (weekly/max-single/per-trade) + risk_manager-None guard + unknown-param fallback + base class `requires_approval`/`validate` defaults (68, 79) + `StrategyResumeExecutor.validate` missing-id + `ExecutorRegistry.register`; context.py — full `_build_system_page_context` body (lines 472-501) across 5 tests (all-connected / all-disconnected / health-monitor raises / broker raises / data_service raises) + `_build_system_state` error/fallback paths across 10 tests (regime-from-orchestrator, broker get_account returns None/raises, trade_logger raises, circuit_breaker active/inactive/raises) + Dashboard regime-from-orchestrator + order_manager-raises + PatternLibrary body; client.py — import-guard (7 tests covering ImportError path + cache), rate-limit retry (success-on-retry + max-retries exhausted), API-error retry (success-on-retry + max-retries), ImportError re-raise via `send_message`, streaming error path (async generator returned + error event yielded on stream-setup exception), `send_with_tool_results` appends tool_result blocks as a single user message. `asyncio.sleep` mocked via `monkeypatch.setattr("argus.ai.client.asyncio.sleep", AsyncMock())` in every retry-path test — all retry tests run in sub-100ms. Two statements remain deliberately uncovered as defensively unreachable: `prompts.py:95` (floor-division math proves the branch unreachable — `len(text) // 4 > budget` implies `len(text) > budget * 4`, contradicting `len(text) <= budget * 4`) and `client.py:267` (`Max retries exceeded` fallback is unreachable — every path inside the retry loop either returns or continues). Test delta: +52 (15 → 23 prompts, 25 → 40 executors, 17 → 36 context, 15 → 25 client). Full suite 4,987 → 5,039. Vitest unchanged. No new DEFs. See `docs/sprints/sprint-31.9/FIX-13c-closeout.md`.
 
 ### Finding 14: `P1-G1-M11` [MEDIUM]
 
