@@ -5,7 +5,7 @@
 - **Sprint:** `sprint-31.9-health-and-hardening`
 - **Session:** `IMPROMPTU-05` (Track B / Stage 9B — safe-during-trading)
 - **Date:** 2026-04-23
-- **Commit:** *pending* (single bundled commit; prior campaign HEAD `a50ac8d`)
+- **Commit:** `6ddd7a7` (single bundled commit; prior campaign HEAD `224d773`)
 - **Baseline HEAD:** `224d773` (IMPROMPTU-CI Tier 2 review artifact — CLEAR)
 - **Test delta:** 5,054 → 5,054 passed (zero delta, as scoped). Vitest 859 → 859 (session touches no UI).
 - **Warning delta:** +8 warnings (pytest 39 → 47). One new `InsecureKeyLengthWarning` from PyJWT's HS256 key-length check on a 29-byte test secret — advisory, not a regression. Remaining warning increase is pytest/xdist ordering variance. (See DEF-192 category (ii) AsyncMock coroutine-never-awaited: this delta falls inside the run-to-run fluctuation band already documented there.)
