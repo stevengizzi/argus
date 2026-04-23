@@ -129,8 +129,8 @@ cut.
 | DEF | Title | Session | Commit |
 |---|---|---|---|
 | ~~DEF-199~~ | ~~`_flatten_unknown_position()` doubles shorts [SAFETY CRITICAL]~~ | IMPROMPTU-04 | `0623801` |
-| ~~DEF-200~~ | ~~`test_observatory_ws_sends_initial_state` crashes xdist worker on Linux CI~~ | IMPROMPTU-CI | TBD (commit) |
-| ~~DEF-193~~ | ~~Observatory WS push-only disconnect detection~~ (same root cause as DEF-200; closed together) | IMPROMPTU-CI | TBD (commit) |
+| ~~DEF-200~~ | ~~`test_observatory_ws_sends_initial_state` crashes xdist worker on Linux CI~~ | IMPROMPTU-CI | `a50ac8d` |
+| ~~DEF-193~~ | ~~Observatory WS push-only disconnect detection~~ (same root cause as DEF-200; closed together) | IMPROMPTU-CI | `a50ac8d` |
 
 ### Named-horizon deferred — post-31.9 Component Ownership sprint
 
