@@ -70,6 +70,7 @@ class AlpacaDataService(DataService):
         data_config: DataServiceConfig,
         clock: Clock | None = None,
         health_monitor: HealthMonitor | None = None,
+        monitor_poll_seconds: float = 5.0,
     ):
         """Initialize AlpacaDataService.
 
@@ -79,12 +80,16 @@ class AlpacaDataService(DataService):
             data_config: Data service configuration.
             clock: Injectable clock (defaults to SystemClock).
             health_monitor: Optional health monitor for status updates.
+            monitor_poll_seconds: Stale-data monitor poll interval. Production
+                default is 5.0; tests override to ~0.1 for deterministic,
+                sub-second stale-detection assertions (FIX-13b F21).
         """
         self._event_bus = event_bus
         self._alpaca_config = config
         self._data_config = data_config
         self._clock = clock if clock is not None else SystemClock()
         self._health_monitor = health_monitor
+        self._monitor_poll_seconds = monitor_poll_seconds
 
         # WebSocket and REST clients (initialized in start())
         self._data_stream: StockDataStream | None = None
@@ -611,7 +616,7 @@ class AlpacaDataService(DataService):
         logger.info("WebSocket reconnection loop exited")
 
     async def _stale_data_monitor(self) -> None:
-        """Background task that runs every 5 seconds during operation.
+        """Background task polling every ``_monitor_poll_seconds`` (default 5.0).
 
         Checks if any subscribed symbol has not received data
         within stale_data_timeout_seconds (default 30s).
@@ -628,7 +633,7 @@ class AlpacaDataService(DataService):
 
         while self._running:
             try:
-                await asyncio.sleep(5)
+                await asyncio.sleep(self._monitor_poll_seconds)
 
                 now = self._clock.now()
 
@@ -698,7 +703,7 @@ class AlpacaDataService(DataService):
             except Exception as e:
                 logger.error(f"Error in stale data monitor loop: {e}", exc_info=True)
                 # Don't crash the monitor, continue checking
-                await asyncio.sleep(5)
+                await asyncio.sleep(self._monitor_poll_seconds)
 
         logger.info("Stale data monitor stopped")
 

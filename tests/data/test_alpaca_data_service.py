@@ -79,12 +79,19 @@ def mock_data_stream():
 
 @pytest.fixture
 async def data_service(event_bus, alpaca_config, data_config, fixed_clock):
-    """Create an AlpacaDataService for testing."""
+    """Create an AlpacaDataService for testing.
+
+    FIX-13b F21: ``monitor_poll_seconds=0.1`` collapses the stale-data
+    monitor loop from the 5s production interval to 100ms so the two
+    stale-detection tests below deterministically observe transitions in
+    sub-second wall-clock time.
+    """
     service = AlpacaDataService(
         event_bus=event_bus,
         config=alpaca_config,
         data_config=data_config,
         clock=fixed_clock,
+        monitor_poll_seconds=0.1,
     )
     return service
 
@@ -519,8 +526,8 @@ class TestAlpacaDataServiceStaleDataMonitor:
         # Advance clock past timeout
         fixed_clock.advance(seconds=alpaca_config.stale_data_timeout_seconds + 1)
 
-        # Wait for next check
-        await asyncio.sleep(6)
+        # Wait for next monitor tick (injected poll = 0.1s, so 0.3s is 3x).
+        await asyncio.sleep(0.3)
 
         # Verify stale flag set
         assert data_service._is_stale is True
@@ -545,8 +552,8 @@ class TestAlpacaDataServiceStaleDataMonitor:
         # Simulate fresh data
         data_service._last_data_time["AAPL"] = fixed_clock.now()
 
-        # Wait for check
-        await asyncio.sleep(6)
+        # Wait for next monitor tick (injected poll = 0.1s, so 0.3s is 3x).
+        await asyncio.sleep(0.3)
 
         # Verify stale flag cleared
         assert data_service._is_stale is False
