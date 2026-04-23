@@ -1,6 +1,6 @@
 # Sprint 31.9 + Post-31.9 Campaign — Completeness Tracker
 
-<!-- last-updated: 2026-04-22 (Stage 7 complete + IMPROMPTU-03 CI-unblock) -->
+<!-- last-updated: 2026-04-22 (Stage 7 complete + IMPROMPTU-03 CI-unblock + Stage 8 FIX-13 split pre-update) -->
 <!-- canonical-source: true — this is the single master tracker; hydrate new conversations from here -->
 
 ## Purpose
@@ -35,7 +35,10 @@ and this document can be archived to `docs/sprints/archive/`.
 | **Stage 6** | **(complete)** | **✅ COMPLETE** | **2026-04-22** |
 | Stage 7 | FIX-09 (backtest-engine, solo) + IMPROMPTU-03 (CI tz flakes) | ✅ CLEAR / CLEAN | 2026-04-22 |
 | **Stage 7** | **(complete)** | **✅ COMPLETE** | **2026-04-22** |
-| Stage 8 | FIX-13 (test hygiene, solo) + IMPROMPTU-01 (scope TBD) | ⏸ PENDING | TBD |
+| Stage 8 Wave 1 | FIX-13a (test hygiene — tactical, solo) | ⏸ PENDING | TBD |
+| Stage 8 Wave 2 | FIX-13b (test hygiene — refactors, solo) | ⏸ PENDING | TBD |
+| Stage 8 Parallel | IMPROMPTU-01 (LIVE OK, parallel if scope-safe) | ⏸ PENDING | TBD |
+| **Stage 8** | **(complete when both waves close)** | ⏸ PENDING | TBD |
 | Stage 9A/B | IMPROMPTU-02 (scope TBD) | ⏸ PENDING | TBD |
 | **Sprint 31.9** | | ⏸ IN PROGRESS | |
 | Post-31.9 | Component Ownership Consolidation (DEF-175) | ⏸ PLANNED | After 31.9 closes |
@@ -56,8 +59,9 @@ First fully passing CI at commit `793d4fd` (2026-04-22).
 
 | Session | Scope | Stage |
 |---|---|---|
-| FIX-13 | Test hygiene (DEF-150, DEF-167, DEF-171, DEF-190, DEF-192) | Stage 8 solo |
-| IMPROMPTU-01 | (parallel with FIX-13 if scope-safe) | Stage 8 parallel |
+| FIX-13a | Test hygiene — tactical (~15 findings + DEF-150/167/171/190/192 closures) | Stage 8 Wave 1 |
+| FIX-13b | Test hygiene — refactors (F5 CRITICAL full refactor, F7+F8 integration triage, F9 flatten fixture, F11 order-manager consolidation, F13 AI coverage, F18 seeded_trade_logger, F21 stale monitor, F23 orb_config fixture) | Stage 8 Wave 2 |
+| IMPROMPTU-01 | (parallel with FIX-13a or FIX-13b if scope-safe) | Stage 8 Parallel |
 | IMPROMPTU-02 | (scope TBD) | Stage 9 |
 | Sprint 31.9 seal | Final barrier + retrospective wrap | Stage 10 |
 
@@ -67,12 +71,35 @@ First fully passing CI at commit `793d4fd` (2026-04-22).
 
 | DEF | Title | Owner Session |
 |---|---|---|
-| DEF-150 | Time-of-day arithmetic flake (minute 0-1 window, 3.3%/hr) | FIX-13 |
-| DEF-167 | Vitest hardcoded dates decay | FIX-13 (folded from original post-FIX-11 plan) |
-| DEF-171 | ULID xdist race | FIX-13 (folded post-CI) |
-| DEF-190 | pyarrow/xdist concurrent register_extension_type race | FIX-13 |
-| DEF-192 | Test runtime warning cleanup debt (~6 categories, 26-27 warnings) | FIX-13 |
+| DEF-150 | Time-of-day arithmetic flake (minute 0-1 window, 3.3%/hr) | FIX-13a |
+| DEF-167 | Vitest hardcoded dates decay | FIX-13a (folded from original post-FIX-11 plan) |
+| DEF-171 | ULID xdist race | FIX-13a (folded post-CI) |
+| DEF-190 | pyarrow/xdist concurrent register_extension_type race | FIX-13a |
+| DEF-192 | Test runtime warning cleanup debt (~6 categories, 26-27 warnings) | FIX-13a |
 | DEF-177 | `RejectionStage.MARGIN_CIRCUIT` addition | FIX-06 or cross-domain session |
+
+### FIX-13b refactor queue — audit findings deferred at Stage 8 pre-update (not opened as DEFs)
+
+These are audit findings deferred from FIX-13a to FIX-13b rather than
+opened as new DEFs. They are tracked here (not in CLAUDE.md DEF register)
+because the commitment is to resolve them in-campaign, not to defer them
+post-campaign.
+
+| Finding | Scope | Rationale for FIX-13b (not FIX-13a) |
+|---|---|---|
+| F5 (CRITICAL) | `_build_system()` full refactor in `test_shadow_mode.py` — minimal real `__init__` or extract `_process_signal` service | Full refactor, not hasattr band-aid. Touches 13 test classes + may require ArgusSystem.__init__ changes. |
+| F7 + F8 | Historical integration test triage — `tests/test_integration_sprint{2,3,4a,4b,5,13,18,19,20,26}.py` (10 files, 93 tests) | Per-file assessment required: keep sprint-18/19/20/26, move sprint-2/3/4a/4b/5 to `tests/integration/historical/`, audit sprint-13 for unique coverage before delete. |
+| F9 | 6 flatten tests at ~30s each = ~180s wall-clock (serialized) in `tests/execution/` | Fixture debugging on Sprint 32.9 sync fill-verification path (`eod_flatten_timeout_seconds: 30`). Either mock fill-event publish or monkeypatch timeout to 0.1s. |
+| F11 | `tests/execution/test_order_manager_*.py` (13 files) → `tests/execution/order_manager/` subpackage | 233 tests + import graph. All-or-nothing refactor; partial is worse than no change. |
+| F13 | AI Copilot coverage — `argus/ai/prompts.py` (63%), `context.py` (64%), `client.py` (73%), `executors.py` (75%) | ~20-40 new tests across 4 AI modules. Parametrized per-page branches + per-prompt sections. |
+| F18 | `seeded_trade_logger` conftest in `tests/api/conftest.py:247-486` — 240 LOC → 50 LOC via `_make_trade(**overrides)` helper | Extract helper analogous to `test_risk_manager.py` / `test_trade_logger.py` patterns. Reduces 15× inlined Trade constructors. |
+| F21 | `test_stale_data_detection` + `test_stale_data_recovery` in `tests/data/test_alpaca_data_service.py:505-557` use real `asyncio.sleep(6)` | Refactor monitor to accept injected poll interval; pass `monitor_poll_seconds=0.1` in tests. Production code change in `AlpacaDataService._stale_data_monitor`. |
+| F23 | `make_orb_config()` 14-param helper in `tests/strategies/test_orb_breakout.py:16-53` → `pytest.fixture` + `dataclasses.replace` parametrization | Incremental fixture extraction; starts with one module, doesn't bulk-rewrite. |
+
+All 8 findings must either RESOLVE or open a DEF by the end of FIX-13b.
+No paper-closing. Operator preference: resolve in-session; DEF-open only
+if investigation reveals production-code implications (per in-flight
+triage protocol).
 
 ### Will resolve in dedicated post-31.9 sprint
 

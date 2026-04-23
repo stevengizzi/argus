@@ -5,7 +5,7 @@
 > at every stage barrier. Survives compaction — read this file to hydrate
 > a fresh Claude.ai conversation.
 >
-> **Last updated:** 2026-04-22 — Stage 7 complete + IMPROMPTU-03 CI-unblock
+> **Last updated:** 2026-04-22 — Stage 7 complete + Stage 8 FIX-13 split pre-update
 > **Campaign HEAD:** `354be7f` (post-IMPROMPTU-03)
 > **Workflow submodule:** `942c53a`
 > **Baseline tests:** 4,980 pytest + 859 Vitest (local) / 4,967 pytest + 859 Vitest (CI, -m "not integration")
@@ -17,7 +17,7 @@
 - **Identifier:** `sprint-31.9-health-and-hardening`
 - **Artifacts directory:** `docs/sprints/sprint-31.9/`
 - **Key docs:** `README.md`, `STAGE-FLOW.md`, `WORK-JOURNAL-HANDOFF.md`, this register
-- **Session count:** 24 planned across 9 stages (Track A: 22 FIX-NN sessions; Track B: 2 IMPROMPTU sessions)
+- **Session count:** 25 planned across 9 stages (Track A: 23 FIX-NN sessions — FIX-13 split into 13a/13b at Stage 8 pre-update; Track B: 2 IMPROMPTU sessions)
 - **Operator:** Steven Gizzi (two-Claude workflow: Claude.ai planning + Claude Code implementation, git bridge)
 - **Account under test:** IBKR paper U24619949 (paper paused during weekend-only sessions)
 
@@ -44,7 +44,10 @@
 | **Stage 6** | **(complete)** | **✅ COMPLETE** |
 | Stage 7 | FIX-09 (backtest-engine, solo) + IMPROMPTU-03 (CI tz flakes) | ✅ CLEAR / CLEAN |
 | **Stage 7** | **(complete)** | **✅ COMPLETE** |
-| Stage 8 | FIX-13 + IMPROMPTU-01 (LIVE OK parallel) | ⏸ PENDING |
+| Stage 8 Wave 1 | FIX-13a (test hygiene — tactical, solo) | ⏸ PENDING |
+| Stage 8 Wave 2 | FIX-13b (test hygiene — refactors, solo) | ⏸ PENDING |
+| Stage 8 Parallel | IMPROMPTU-01 (LIVE OK, parallel with either wave if scope-safe) | ⏸ PENDING |
+| **Stage 8** | **(complete when both waves close)** | ⏸ PENDING |
 | Stage 9A | IMPROMPTU-02 scoping (read-only) | ⏸ PENDING |
 | Stage 9B | IMPROMPTU-02 fix (weekend-only) | ⏸ PENDING |
 
