@@ -5,10 +5,10 @@
 > at every stage barrier. Survives compaction — read this file to hydrate
 > a fresh Claude.ai conversation.
 >
-> **Last updated:** 2026-04-23 — Phase 1a campaign-close drafting complete (pre-IMPROMPTU-04)
-> **Campaign HEAD:** `053b6f8` (April 22 paper session debrief triage committed)
+> **Last updated:** 2026-04-23 — IMPROMPTU-04 landed (DEF-199 closed; startup invariant + C1 log-level fix)
+> **Campaign HEAD:** `0623801` (IMPROMPTU-04 code commit)
 > **Workflow submodule:** `942c53a`
-> **Baseline tests:** 5,039 pytest (local) / 5,026 pytest (CI, `-m "not integration"`) + 859 Vitest
+> **Baseline tests:** 5,052 pytest (local; +13 from IMPROMPTU-04) / 5,026 pytest (CI, `-m "not integration"`, pre-IMPROMPTU-04) + 859 Vitest
 > **Master plan:** `docs/sprints/sprint-31.9/CAMPAIGN-CLOSE-PLAN.md` — this is the canonical source of truth for Stage 9/10 execution. Read it before acting on any remaining session.
 
 ---
@@ -51,7 +51,7 @@
 | FIX-13a-CI-hotfix | pytest-timeout + 4 WS test patches; DEF-193 opened | ✅ CLEAN (informal) |
 | April 22 debrief | DEF-194 through DEF-199 logged; A1 safety bug identified | ✅ Triage committed (053b6f8) |
 | **Stage 8** | **(complete; IMPROMPTU-01/02 placeholders re-homed into Stage 9 plan)** | **✅ COMPLETE** |
-| Stage 9A | IMPROMPTU-04 (safety: A1 + C1 + startup invariant) | ⏸ PENDING (kickoff drafted, not yet pushed) |
+| Stage 9A | IMPROMPTU-04 (safety: A1 + C1 + startup invariant) | ✅ COMPLETE — commit `0623801`, DEF-199 closed |
 | Stage 9B | IMPROMPTU-05 (deps & infra), IMPROMPTU-06 (test-debt), IMPROMPTU-07 (doc-hygiene + UI), IMPROMPTU-08 (architecture.md catalog) | ⏸ PENDING |
 | Stage 9C | IMPROMPTU-09 (verification sweep, read-only) + RETRO-FOLD (P1-P25 into workflow/) | ⏸ PENDING |
 | Stage 10 | SPRINT-CLOSE (summary + seal + archive + 3 DISCOVERY.md) | ⏸ PENDING |
@@ -92,8 +92,9 @@
 | FIX-13b (test hygiene — refactors) | `18a73d7` + `edcc626` + `3f8cfc7` + `9d27909` + `d9d3fe2` + `d329856` + `0352a85` + `4aebeb5` + `b7de595` | MINOR_DEVIATIONS | CONCERNS_RESOLVED | ±0 | Stage 8 Wave 2 (solo, 7 findings). All 7 deferred findings from FIX-13 split landed cleanly: F5 `_build_system()` real `ArgusSystem.__init__`, F7+F8 6 sprint-dated integration files moved to `tests/integration/historical/` (sprint13 moved-not-deleted per in-session triage — `TestBrokerSourceConfig` exercises live surfaces), F9 6 flatten tests monkeypatch `eod_flatten_timeout_seconds=0.1s` (~63s runtime savings; FIX-04 had already reduced 4 of 6 to ~1s so the kickoff's 180s claim was partially stale), F11 13 order-manager test files under `tests/execution/order_manager/` subpackage (4 `parents[2]→parents[3]` path fixes), F18 `_make_trade` helper extracted (228→105 LOC), F21 `monitor_poll_seconds` constructor param on AlpacaDataService (production default 5.0 preserved), F23 `orb_config_factory` callable-fixture replaces `make_orb_config` (35 call-site migration; callable pattern chosen over `.model_copy(update=...)` due to nested sub-models at 6 call sites). Zero new DEFs opened, zero behavior change, 4,987 → 4,987 pytest. F13 (AI Copilot coverage) DEFERRED to FIX-13c per kickoff plan. One production file touched: `argus/data/alpaca_data_service.py` (F21 injection). Zero workflow/ changes. |
 | FIX-13c (ai-copilot-coverage) | `fe64ad2` | CLEAN | CLEAR | +52 | Stage 8 Wave 3 (solo, Finding 13 from FIX-13 split). Pure test-only session, zero production code touched, zero new test files, zero conftest.py changes. 4 AI Copilot modules lifted from baseline coverage to ≥ 85% line: prompts.py 56% → 99.4% (5 untested page formatters parametrized + non-string content path), context.py 64% → 86.1% (System page body + system state error paths), client.py 71% → 95.6% (retry logic + import guard + streaming error + send_with_tool_results), executors.py 69% → 88.5% (GenerateReportExecutor.execute all 3 branches + RiskParamChangeExecutor remaining param paths + registry.register). 72 → 124 tests in `tests/ai/` (+52). Two lines deliberately left uncovered as defensively unreachable (prompts.py:95 integer-division dead branch, client.py:267 retry-loop fallback with hardcoded max_retries=3) — both mathematically verified, reporting-not-patching per Halt Condition 3. Kickoff's "+25 to +35" estimate undercounted by ~70% due to parametrized test fan-out (5 cases per @parametrize) and exhaustive error-path expansion. Every added test anchored to an enumerated gap line. Single consolidated commit per kickoff option. |
 | FIX-13a-CI-hotfix (pytest-timeout + WS test patches) | `d6bdf87` + `7573ea4` + `1141e56` + `0d58ad9` | CLEAN | (informal verification — CI green at green URL) | 0 | Diagnostic + fix for CI timeout regression first manifesting with FIX-13a (c9c8891). Root cause: observatory WS push-only loop doesn't detect client disconnect on Linux under xdist (latent pre-existing bug, unmasked by FIX-13a test-env timing shift). Test-only fix: added pytest-timeout permanently (120s global + 30s on ws tests), ws_update_interval_ms=200 on 4 tests, extra ws.receive_json() in graceful_disconnect. Production-side bug logged as DEF-193 (post-31.9). |
+| IMPROMPTU-04 (DEF-199 EOD short-flip + C1 log + startup invariant) | `0623801` | *pending close-out* | *pending Tier 2* | +13 | Stage 9A (Track B, safety-critical). Three fixes bundled: (A1) side-check at `order_manager.py:1707` + `:1684` — BUY flattens, SELL/unknown logs ERROR + skips; (C1) `pattern_strategy.py:318` log level INFO → DEBUG (Apr 22: 87% of log volume); (invariant) new `check_startup_position_invariant()` helper + `_startup_flatten_disabled` flag in `main.py`, gates `reconstruct_from_broker()` on any non-BUY side. 6 revert-proof DEF-199 canaries + 5 invariant helper tests + 2 C1 log-level tests. Pre-existing Sprint 32.9 / 29.5 EOD tests updated to declare `side=OrderSide.BUY` on mock positions (attribute previously absent). DEF-199 RESOLVED; DEF-194/195/196 remain open as causal upstream. |
 
-Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → 4,985 (post-FIX-04, holds through Stage 4 Wave 1 + hotfixes) → 5,000 (post-FIX-05) → 5,017 (post-FIX-06) → 5,029 (post-FIX-07) → 5,035 (post-FIX-08) → 4,979 (post-FIX-09, −56 sanctioned deletion delta) → 4,980 (post-IMPROMPTU-03, +1 minor drift) → 4,987 (post-FIX-13a, +7 tactical test additions) → 4,987 (post-FIX-13b, ±0 pure refactor) → **5,039 (post-FIX-13c, +52 AI coverage expansion)**. Vitest: 859 (unchanged since FIX-13a).
+Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → 4,985 (post-FIX-04, holds through Stage 4 Wave 1 + hotfixes) → 5,000 (post-FIX-05) → 5,017 (post-FIX-06) → 5,029 (post-FIX-07) → 5,035 (post-FIX-08) → 4,979 (post-FIX-09, −56 sanctioned deletion delta) → 4,980 (post-IMPROMPTU-03, +1 minor drift) → 4,987 (post-FIX-13a, +7 tactical test additions) → 4,987 (post-FIX-13b, ±0 pure refactor) → 5,039 (post-FIX-13c, +52 AI coverage expansion) → **5,052 (post-IMPROMPTU-04, +13 DEF-199 safety tests)**. Vitest: 859 (unchanged since FIX-13a).
 
 ---
 
@@ -130,6 +131,7 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-167 | Vitest hardcoded-date decay — 3 test files converted to `new Date().toISOString()` or dynamic `Date.now()` offsets (TradesPage, PerformancePage, ResearchDocCard). Remaining ~55 Vitest files have hardcoded date strings but all are non-assertion fixture data with no decay surface (closed-with-scope-note per FIX-13a deferred_observations). | FIX-13a | `c9c8891` |
 | DEF-171 | ULID xdist race — `id(order) % 10000` produced collisions on low 13 bits under xdist's worker forking. Replaced with fixture-scoped `itertools.count(1)` in `test_ibkr_broker.py:91`. | FIX-13a | `c9c8891` |
 | DEF-190 | pyarrow/xdist concurrent `register_extension_type` race — conftest prewarm via `pd.DataFrame({"_p": [Period('2024-01')]}) → pa.Table.from_pandas(df)` forces extension registration at module-import time before xdist forks workers. Regression guard at `tests/test_def190_pyarrow_eager_import.py`. | FIX-13a | `c9c8891` |
+| DEF-199 | `_flatten_unknown_position()` doubled short positions at EOD (Apr 22 paper session: 50 of 51 untracked broker positions ended exactly 2× short, 34,239 shares). Three-part fix: (a) side-check branch at `order_manager.py:1707` (EOD Pass 2); (b) same three-branch logic at `:1684` (EOD Pass 1 retry) via new `broker_side_map`; (c) `check_startup_position_invariant()` in `main.py` with `_startup_flatten_disabled` flag gating `reconstruct_from_broker()`. `ibkr_broker.py` + `models/trading.py` + `_flatten_unknown_position` implementation all untouched. +13 pytest: 6 revert-proof A1 canaries, 5 invariant helper tests, 2 C1 log-level tests. Pre-existing Sprint 32.9 / 29.5 mocks updated to declare `side=OrderSide.BUY`. Cross-references DEF-194/195/196 (causal upstream — remain open). | IMPROMPTU-04 | `0623801` |
 
 ### Partially resolved
 
@@ -166,7 +168,7 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-196 | 32 DEC-372 stop-retry-exhaustion cascade after IBKR reconnect (9:40–9:59 ET Apr 22) | MEDIUM | post-31.9-reconnect-recovery-and-rejectionstage sprint |
 | DEF-197 | `data/evaluation.db` 4.78 GB at boot (retention likely not executing) | MEDIUM | post-31.9-component-ownership sprint |
 | DEF-198 | Boot phase labels `[N/12]` contradict FIX-03 handoff's claimed 17-phase sequence | LOW | IMPROMPTU-07 |
-| DEF-199 | `_flatten_unknown_position()` systematically doubles short positions at EOD — **CRITICAL SAFETY** | **CRITICAL** | **IMPROMPTU-04** (blocks next paper session) |
+| ~~DEF-199~~ | ~~`_flatten_unknown_position()` systematically doubles short positions at EOD~~ | **CRITICAL** | ✅ **RESOLVED** — IMPROMPTU-04 commit `0623801` |
 
 ---
 

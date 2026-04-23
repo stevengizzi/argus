@@ -1,6 +1,6 @@
 # Sprint 31.9 + Post-31.9 Campaign — Completeness Tracker
 
-<!-- last-updated: 2026-04-23 (Phase 1a drafted — Stage 9/10 planned, IMPROMPTU-04 kickoff drafted) -->
+<!-- last-updated: 2026-04-23 (IMPROMPTU-04 landed: DEF-199 closed; pending Tier 2) -->
 <!-- canonical-source: true — this is the single master tracker; hydrate new conversations from here -->
 <!-- companion doc: CAMPAIGN-CLOSE-PLAN.md (Loop-Closure Matrix + session plan + reboot instructions) -->
 
@@ -46,7 +46,7 @@ and this document can be archived to `docs/sprints/archive/`.
 | Stage 8 Wave 2 | FIX-13b (test hygiene — refactors, solo, 7 findings) | ✅ CONCERNS_RESOLVED | 2026-04-23 |
 | Stage 8 Wave 3 | FIX-13c (ai-copilot-coverage, solo, F13 carry-over) | ✅ CLEAR | 2026-04-23 |
 | **Stage 8** | **(complete — Waves 1/2/3 all CLEAR; IMPROMPTU-01/02 placeholders re-homed into Stage 9 campaign-close sessions)** | ✅ COMPLETE | 2026-04-23 |
-| Stage 9A | IMPROMPTU-04 (safety: A1 + C1 + startup invariant) | ⏸ PENDING (kickoff drafted 2026-04-23) | TBD |
+| Stage 9A | IMPROMPTU-04 (safety: A1 + C1 + startup invariant) | ✅ CODE LANDED — commit `0623801`; Tier 2 pending | 2026-04-23 |
 | Stage 9B | IMPROMPTU-05 (deps & infra: DEF-180/181/179) | ⏸ PENDING | TBD |
 | Stage 9B | IMPROMPTU-06 (test-debt: DEF-176/185/192/166/048/049) | ⏸ PENDING | TBD |
 | Stage 9B | IMPROMPTU-07 (doc-hygiene + UI fixes; + Apr 21 F-05/F-06/F-08) | ⏸ PENDING | TBD |
@@ -121,7 +121,12 @@ cut.
 | DEF-191 | Latent SQL-side UTC normalization (doc-only) | IMPROMPTU-07 |
 | DEF-192 | Test runtime warning cleanup (categories i–iv; category v stays MONITOR per RULE-018) | IMPROMPTU-06 |
 | DEF-198 | Boot phase labels `/12` vs handoff-claimed `/17` | IMPROMPTU-07 |
-| DEF-199 | `_flatten_unknown_position()` doubles shorts [SAFETY CRITICAL] | **IMPROMPTU-04** |
+
+### Already resolved during campaign
+
+| DEF | Title | Session | Commit |
+|---|---|---|---|
+| ~~DEF-199~~ | ~~`_flatten_unknown_position()` doubles shorts [SAFETY CRITICAL]~~ | IMPROMPTU-04 | `0623801` |
 
 ### Named-horizon deferred — post-31.9 Component Ownership sprint
 
