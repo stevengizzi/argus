@@ -137,14 +137,24 @@ async def test_performance_calculator_excludes_unrecoverable_entries() -> None:
 async def test_get_todays_pnl_excludes_unrecoverable(trade_logger: TradeLogger) -> None:
     """get_todays_pnl does not include trades with entry_price_known=False.
 
-    FIX-05 (DEF-163): ``now`` is ET-aligned so ``exit_time``'s date matches
-    the ET "today" used by ``get_todays_pnl``. The prior UTC-based ``now``
-    failed deterministically during the ~4h window when UTC date drifted
-    one day ahead of ET date.
+    Regression note (DEF-163): prior versions used ``exit_time=now``. When
+    executed during the 20:00–24:00 ET window, ``now`` is in that window and
+    the stored ISO timestamp's ``date()`` on SQLite's side UTC-normalizes to
+    the next day, mismatching ``today_et``. In production, real trades can
+    only exit during market hours (9:30–16:00 ET), so this bug does not fire
+    in operational usage. The fix uses a fixed 15:00 ET exit_time to ensure
+    deterministic test behavior regardless of wall-clock. The latent
+    SQL-side UTC normalization issue is tracked as DEF-191.
     """
+    from datetime import time as _time
     from zoneinfo import ZoneInfo
 
-    now = datetime.now(UTC).astimezone(ZoneInfo("America/New_York"))
+    _et = ZoneInfo("America/New_York")
+    today_et = datetime.now(UTC).astimezone(_et).date()
+    # Mid-market-hours: 15:00 ET = 19:00 UTC (EDT) — far from any UTC date
+    # boundary, guaranteed to round-trip cleanly through SQLite's date().
+    exit_et = datetime.combine(today_et, _time(15, 0), tzinfo=_et)
+    entry_et = exit_et - timedelta(hours=1)
 
     # Log a normal trade
     normal = Trade(
@@ -152,9 +162,9 @@ async def test_get_todays_pnl_excludes_unrecoverable(trade_logger: TradeLogger) 
         symbol="TSLA",
         side=OrderSide.BUY,
         entry_price=200.0,
-        entry_time=now - timedelta(hours=1),
+        entry_time=entry_et,
         exit_price=202.0,
-        exit_time=now,
+        exit_time=exit_et,
         shares=50,
         stop_price=198.0,
         target_prices=[204.0],
@@ -170,9 +180,9 @@ async def test_get_todays_pnl_excludes_unrecoverable(trade_logger: TradeLogger) 
         symbol="DHR",
         side=OrderSide.BUY,
         entry_price=0.0,
-        entry_time=now - timedelta(hours=2),
+        entry_time=exit_et - timedelta(hours=2),
         exit_price=194.10,
-        exit_time=now,
+        exit_time=exit_et,
         shares=14,
         stop_price=0.0,
         target_prices=[0.0],

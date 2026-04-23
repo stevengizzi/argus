@@ -287,9 +287,22 @@ class TestGetNextTradingDay:
         assert result == datetime.date(2026, 3, 9)
 
     def test_defaults_to_today(self) -> None:
+        """Default-arg path returns ET tomorrow when called on an ET weekday.
+
+        Regression note (DEF-188): prior version used ``datetime.date.today()``
+        which is local-tz. Implementation uses ET. On UTC CI runners during
+        the 20:00–24:00 ET window, ``date.today()`` was already tomorrow-UTC
+        while the implementation returned tomorrow-ET — causing a
+        ``result > today`` assertion failure.
+        """
+        from datetime import datetime as _dt
+        from zoneinfo import ZoneInfo
+
         result = get_next_trading_day()
         assert isinstance(result, datetime.date)
-        assert result > datetime.date.today()
+
+        et_today = _dt.now(tz=ZoneInfo("America/New_York")).date()
+        assert result > et_today
 
     def test_thanksgiving_thursday_goes_to_friday(self) -> None:
         # Thanksgiving 2026 = Nov 26 (Thursday) — next is Friday Nov 27
