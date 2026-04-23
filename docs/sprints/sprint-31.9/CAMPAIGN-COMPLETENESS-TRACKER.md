@@ -1,6 +1,6 @@
 # Sprint 31.9 + Post-31.9 Campaign — Completeness Tracker
 
-<!-- last-updated: 2026-04-23 (Stage 8 Wave 2 / FIX-13b complete) -->
+<!-- last-updated: 2026-04-23 (Stage 8 Wave 3 / FIX-13c complete) -->
 <!-- canonical-source: true — this is the single master tracker; hydrate new conversations from here -->
 
 ## Purpose
@@ -37,6 +37,7 @@ and this document can be archived to `docs/sprints/archive/`.
 | **Stage 7** | **(complete)** | **✅ COMPLETE** | **2026-04-22** |
 | Stage 8 Wave 1 | FIX-13a (test hygiene — tactical, solo) | ✅ CLEAR | 2026-04-23 |
 | Stage 8 Wave 2 | FIX-13b (test hygiene — refactors, solo, 7 findings) | ✅ CONCERNS_RESOLVED | 2026-04-23 |
+| Stage 8 Wave 3 | FIX-13c (ai-copilot-coverage, solo, F13 carry-over) | ✅ CLEAR | 2026-04-23 |
 | Stage 8 Parallel | IMPROMPTU-01 (LIVE OK, parallel if scope-safe) | ⏸ PENDING | TBD |
 | **Stage 8** | **(complete when both waves close)** | ⏸ PENDING | TBD |
 | Stage 9A/B | IMPROMPTU-02 (scope TBD) | ⏸ PENDING | TBD |
@@ -53,17 +54,18 @@ First fully passing CI at commit `793d4fd` (2026-04-22).
 - Known flakes monitored in CI: DEF-150 ✅ closed, DEF-167 ✅ closed (scope-noted), DEF-171 ✅ closed, DEF-190 ✅ closed, DEF-192 PARTIAL (numpy cast closed; 5 categories remain)
 - CI-green milestone means zero-tolerance on flakes is enforceable going forward: any red CI run is a real bug until proven otherwise
 
-**Post-Stage-8 Wave 2 expected counts:** 4,987 pytest + 859 Vitest (unchanged).
+**Post-Stage-8 Wave 3 expected counts:** 5,039 pytest + 859 Vitest (+52 pytest from FIX-13c AI coverage expansion; Vitest unchanged).
 
 ## Sessions remaining (Sprint 31.9)
 
 | Session | Scope | Stage |
 |---|---|---|
-| FIX-13a | Test hygiene — tactical (~15 findings + DEF-150/167/171/190/192 closures) | Stage 8 Wave 1 |
-| FIX-13b | Test hygiene — refactors (F5 CRITICAL full refactor, F7+F8 integration triage, F9 flatten fixture, F11 order-manager consolidation, F13 AI coverage, F18 seeded_trade_logger, F21 stale monitor, F23 orb_config fixture) | Stage 8 Wave 2 |
-| IMPROMPTU-01 | (parallel with FIX-13a or FIX-13b if scope-safe) | Stage 8 Parallel |
-| IMPROMPTU-02 | (scope TBD) | Stage 9 |
-| Sprint 31.9 seal | Final barrier + retrospective wrap | Stage 10 |
+| ~~FIX-13a~~ | ~~Test hygiene — tactical~~ | ~~Stage 8 Wave 1~~ ✅ CLEAR |
+| ~~FIX-13b~~ | ~~Test hygiene — refactors (7 findings)~~ | ~~Stage 8 Wave 2~~ ✅ CONCERNS_RESOLVED |
+| ~~FIX-13c~~ | ~~Test hygiene — AI Copilot coverage (Finding 13)~~ | ~~Stage 8 Wave 3~~ ✅ CLEAR |
+| IMPROMPTU-01 | (scope TBD — Stage 8 Parallel slot) | Stage 8 Parallel |
+| IMPROMPTU-02 | (scope TBD — 9A scoping + 9B fix) | Stage 9A / 9B |
+| Sprint 31.9 seal | Final barrier + retrospective fold into `workflow/` | Stage 10 / sprint-close |
 
 ## Open DEF items — every known DEF with resolution assignment
 
@@ -77,8 +79,9 @@ First fully passing CI at commit `793d4fd` (2026-04-22).
 ### FIX-13b refactor queue
 
 > **All 7 findings RESOLVED in Stage 8 Wave 2** (F5, F7+F8 linked, F9, F11,
-> F18, F21, F23 — see "Already resolved during campaign" below). F13 (AI
-> Copilot coverage) DEFERRED to Stage 8 Parallel as FIX-13c-ai-copilot-coverage.
+> F18, F21, F23 — see "Already resolved during campaign" below). **F13 (AI
+> Copilot coverage) RESOLVED in Stage 8 Wave 3 as FIX-13c-ai-copilot-coverage**
+> — all FIX-13 family findings now closed.
 
 ### Will resolve in dedicated post-31.9 sprint
 
@@ -125,6 +128,7 @@ Closed by campaign sessions (grouped by closing session):
 - IMPROMPTU-03: DEF-163 (re-opened at Stage 6, now fully resolved with in-window CI regression evidence), DEF-188 (opened and closed same session)
 - FIX-13a: DEF-150 (time-of-day arithmetic), DEF-167 (Vitest hardcoded dates — 3 files; ~55 remaining files have no decay surface, closed-with-scope-note), DEF-171 (ULID xdist race — `itertools.count(1)`), DEF-190 (pyarrow/xdist prewarm with Period-dtype forcing function), DEF-192 PARTIAL (numpy cast closed; 5 categories remain per RULE-018 blocker on TestBaseline + pending DEF-176 for OrderManager kwarg migration)
 - FIX-13b: 7 deferred findings from FIX-13 split (F5 `_build_system()` real `__init__`, F7+F8 6 sprint-dated integration files to `tests/integration/historical/`, F9 flatten monkeypatch, F11 13-file subpackage consolidation, F18 `_make_trade` helper, F21 `monitor_poll_seconds` injection, F23 `orb_config_factory` fixture). Zero new DEFs, zero net pytest delta.
+- FIX-13c: Finding 13 (AI Copilot coverage expansion) RESOLVED. 4 AI modules lifted to ≥ 85% line coverage (prompts 56→99.4%, context 64→86.1%, client 71→95.6%, executors 69→88.5%). +52 pytest (72→124 in tests/ai/). Zero production code touched. Zero new DEFs. Two lines documented as defensively unreachable (prompts.py:95, client.py:267) — both mathematically verified, reported not patched.
 - Campaign hotfixes (xdist + CI 4-bug): no DEFs closed directly; enabled CI-green milestone
 
 ### Post-31.9 deferred items (opened this campaign)
@@ -175,6 +179,8 @@ Campaign-wide lessons to fold into `workflow/` metarepo protocols before closing
 | P19 | Audit observations with specific counts ("9 @patch decorators", "unused import X") can go stale between audit-generation and session execution. F22 (audit said 9 @patch decorators) and F24 (audit said "unused AfternoonMomentumStrategy import") were both wrong at re-verification time. Claude Code correctly marked them RESOLVED-VERIFIED with stale-observation annotations rather than inventing fixes. When audit findings reference specific counts or "unused" claims, grep-verify the observation before applying the suggested fix — if the observation no longer holds, mark the finding RESOLVED-VERIFIED with the verification evidence recorded. |
 | P20 | When a kickoff claims runtime impact ("6 × 30s = 180s"), measure actual durations via `pytest --durations=10` rather than inferring from config defaults. F9 in FIX-13b revealed that 4 of 6 flatten tests had already been reduced to ~1s by an earlier fix (FIX-04 P1-G2-M04's shared `config` fixture override with `eod_flatten_timeout_seconds=1`); only 2 of 6 actually cost 30s each. The kickoff claim was partially stale. The fix itself (uniform monkeypatch) was still correct and future-proofing, but the kickoff's runtime-impact estimate was wrong. For future refactor kickoffs that cite runtime savings, run `pytest --durations=N` against the baseline HEAD in pre-draft investigation and cite the measured numbers, not the theoretical ceiling. |
 | P21 | When a kickoff proposes a `git mv` that changes directory depth, pre-grep for `parents[N]` path-literal call sites in the moved files and enumerate the expected fix-count in the kickoff. FIX-13b F11 flagged the hazard generically but didn't specify count; Claude Code found 4 sites during execution (1 in `test_core.py`, 3 in `test_sprint329.py`). Specifying the expected count upfront gives the session a check against its own work — if only 3 sites fixed, it knows to keep looking; if 5 sites fixed, it knows to recheck the 5th. Pre-grep pattern: `grep -rn "parents\[[0-9]\]" {target_files}` for any `git mv` that reparents files into a deeper subpackage. |
+| P22 | Audit-documented coverage percentages can be stale by >5pp when a session executes months after the audit. FIX-13c's pre-draft re-measurement found three of four AI modules were WORSE than the audit claimed (prompts 56% vs audit's 63%; executors 69% vs audit's 75%; client 71% vs audit's 73%). For any future audit finding that cites a measured metric (coverage %, LOC count, warning count, file count, test count), re-measure in pre-draft investigation and treat the re-measurement as authoritative. Audit values should be regarded as directional flags, not ground truth. Cross-references P19 (audit count claims go stale for grep-verifiable observations like `@patch` counts or "unused import" claims). |
+| P23 | When a kickoff recommends a parametrized test pattern (`@pytest.mark.parametrize`), the test-delta estimate should multiply the single-test estimate by the number of parameter cases. FIX-13c's kickoff estimated +25 to +35 pytest; actual was +52, primarily because the recommended parametrized page-formatter test was counted as 1 test but pytest reports it as 5 (one per `(page, context_data, expected_substrings)` tuple). Additionally, exhaustive error-path tests (e.g., 10 tests for `_build_system_state` error paths: orchestrator × 2, broker × 3, account-equity × 2, circuit-breaker × 3) can drive delta beyond initial enumeration. When drafting a test-coverage kickoff: (a) count each `@parametrize` case as a separate test in the estimate; (b) enumerate expected error-path tests exhaustively rather than using "a few tests for error paths" language. |
 
 These become inputs to the campaign-close retrospective. They should be folded
 into the `workflow/` metarepo protocols in a separate commit BEFORE Sprint 31.9
