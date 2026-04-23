@@ -284,6 +284,11 @@ async def test_observatory_ws_sends_initial_state(
         assert "data" in initial
         assert "timestamp" in initial
         assert "evaluating" in initial["data"]
+        # IMPROMPTU-CI guard: let the server finish its post-initial prep
+        # queries (get_symbol_tiers + get_session_summary) before the
+        # client disconnects. See test_observatory_ws_disconnect_cancels_
+        # push_loop_promptly for the full rationale — same race.
+        await asyncio.sleep(0.1)
 
     await obs_conn.close()
     await temp_db.close()
@@ -328,6 +333,8 @@ async def test_observatory_ws_pipeline_update_format(
         # Seed data: 3 symbols evaluated, 1 signal
         assert data["evaluating"] == 3
         assert data["signal"] == 1
+        # IMPROMPTU-CI guard — see test_observatory_ws_sends_initial_state.
+        await asyncio.sleep(0.1)
 
     await obs_conn.close()
     await temp_db.close()
@@ -713,6 +720,8 @@ async def test_observatory_ws_independent_from_ai_ws(
         # Observatory connection should still be alive
         initial = obs_ws.receive_json()
         assert initial["type"] == "pipeline_update"
+        # IMPROMPTU-CI guard — see test_observatory_ws_sends_initial_state.
+        await asyncio.sleep(0.1)
 
     await obs_conn.close()
     await temp_db.close()
