@@ -921,6 +921,13 @@ class OrderManagerConfig(BaseModel):
     stop_cancel_retry_max: int = Field(default=3, ge=0)
     auto_shutdown_after_eod: bool = True  # Gracefully shutdown after EOD flatten
     auto_shutdown_delay_seconds: int = Field(default=60, ge=0)  # Delay before shutdown
+    # DEF-164 (IMPROMPTU-07, 2026-04-23): grace period during which
+    # auto-shutdown is suppressed post-boot. Prevents late-night boots
+    # that fire after an EOD flatten has already queued a ShutdownRequested
+    # event from tearing down mid-init (notably mid-HistoricalQueryService
+    # CREATE VIEW — see DEF-165). Default 10 min covers typical init +
+    # the ~5 min Parquet view build. Set to 0 to disable the grace window.
+    auto_shutdown_boot_grace_minutes: int = Field(default=10, ge=0)
     # Flatten-pending timeout: cancel+resubmit stale flatten orders (Sprint 28.75)
     flatten_pending_timeout_seconds: int = Field(default=120, ge=10)
     max_flatten_retries: int = Field(default=3, ge=1)

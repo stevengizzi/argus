@@ -1,5 +1,12 @@
 # IMPROMPTU-01 — Log hygiene + UI unit fixes
 
+> **[RETIRED 2026-04-23 — scope executed by IMPROMPTU-07]** This placeholder's
+> F-05 / F-06 / F-08 scope was bundled into `IMPROMPTU-07-doc-hygiene-and-ui-fixes.md`
+> and landed with the DEF-164/169/189/191/198 doc-hygiene bundle. See
+> `IMPROMPTU-07-closeout.md` for the close-out artifact. This file is retained
+> for archival reference only. F-01 (pattern_strategy log level) was already
+> closed earlier in the campaign.
+
 > Generated from 2026-04-21 market session debrief. Paste into a fresh Claude Code session. This prompt is **standalone** — do not read other session prompts in this campaign.
 
 ## Scope

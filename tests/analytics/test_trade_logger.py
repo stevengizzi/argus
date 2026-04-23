@@ -220,3 +220,78 @@ class TestTradeLogger:
         assert row is not None
         assert row["decision_type"] == "eod_review"
         assert row["strategy_id"] is None
+
+
+class TestF05LogTruncationWidth:
+    """Apr 21 debrief F-05 (IMPROMPTU-07 regression): widen ULID log-
+    truncation from 8 chars to 12 chars.
+
+    Context: every trade ULID emitted by ``log_trade`` and every decision
+    ULID emitted by ``log_orchestrator_decision`` was truncated to 8
+    chars in the log line. ULIDs encode the timestamp in the first ~10
+    chars of Crockford base32, so 8-char prefixes collide routinely on
+    trades from the same second — producing spurious "duplicate
+    trade_id" confusion during session debugging. 12 chars includes the
+    full timestamp half plus ~2 random chars and is collision-free in
+    practice.
+    """
+
+    async def test_log_trade_emits_12_char_ulid_prefix(
+        self, trade_logger: TradeLogger, caplog
+    ) -> None:
+        """The 'Logged trade X' INFO line contains the first 12 chars of
+        the trade ULID (not 8). Revert-proof: trade.id[:8] would fail
+        this assertion on any ULID whose first 12 chars contain a char
+        absent from the first 8 — which is ~every ULID."""
+        import logging
+
+        caplog.set_level(logging.INFO, logger="argus.analytics.trade_logger")
+        trade = make_trade()
+        await trade_logger.log_trade(trade)
+
+        log_lines = [
+            rec.getMessage()
+            for rec in caplog.records
+            if rec.name == "argus.analytics.trade_logger"
+            and "Logged trade" in rec.getMessage()
+        ]
+        assert len(log_lines) == 1, f"Expected 1 'Logged trade' log, got {log_lines}"
+        logged = log_lines[0]
+
+        # The 12-char prefix must appear; 8-char prefix alone without the
+        # extra 4 chars would indicate regression back to the F-05 bug.
+        prefix_12 = trade.id[:12]
+        assert prefix_12 in logged, (
+            f"F-05 regression: log line should contain trade.id[:12]="
+            f"{prefix_12!r}; got: {logged!r}"
+        )
+
+    async def test_log_orchestrator_decision_emits_12_char_ulid_prefix(
+        self, trade_logger: TradeLogger, caplog
+    ) -> None:
+        """Same 12-char prefix width for orchestrator-decision logs."""
+        import logging
+
+        caplog.set_level(logging.DEBUG, logger="argus.analytics.trade_logger")
+        decision_id = await trade_logger.log_orchestrator_decision(
+            date="2026-04-23",
+            decision_type="allocation",
+            strategy_id="strat_orb",
+            details={"reason": "pre-market"},
+            rationale="Test",
+        )
+
+        log_lines = [
+            rec.getMessage()
+            for rec in caplog.records
+            if rec.name == "argus.analytics.trade_logger"
+            and "orchestrator decision" in rec.getMessage()
+        ]
+        assert len(log_lines) == 1, f"Expected 1 decision log, got {log_lines}"
+        logged = log_lines[0]
+
+        prefix_12 = decision_id[:12]
+        assert prefix_12 in logged, (
+            f"F-05 regression: log line should contain decision_id[:12]="
+            f"{prefix_12!r}; got: {logged!r}"
+        )

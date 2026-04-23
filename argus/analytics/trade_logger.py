@@ -123,7 +123,7 @@ class TradeLogger:
 
         logger.info(
             "Logged trade %s: %s %s %s %.2f -> %.2f (%s)",
-            trade.id[:8],
+            trade.id[:12],
             trade.strategy_id,
             trade.side.value,
             trade.symbol,
@@ -320,6 +320,18 @@ class TradeLogger:
         """Get total net P&L for today's closed trades.
 
         Uses ET timezone for date comparison to match trading hours.
+
+        NOTE (DEF-191, IMPROMPTU-07, 2026-04-23): SQLite's ``date()``
+        function normalizes stored ISO timestamps with tz offsets to UTC
+        before extracting the date. For market-hours-only trades
+        (exits 9:30–16:00 ET), the UTC date equals the ET date, so this
+        query works correctly. If ARGUS ever supports after-hours trading
+        (pre-market >= 4:00 ET or after-hours <= 20:00 ET), trades exiting
+        in the 20:00–24:00 ET window would be miscounted — their UTC date
+        rolls over one day earlier than the ET date. Resolution deferred
+        to a future after-hours-trading sprint; see CLAUDE.md DEF-191 for
+        fix options (denormalized ``trading_date`` column, or switch stored
+        ``exit_time`` to naive-ET ISO).
 
         Returns:
             Sum of net_pnl for all trades exited today.
@@ -645,7 +657,7 @@ class TradeLogger:
 
         logger.debug(
             "Logged orchestrator decision %s: %s for %s",
-            decision_id[:8],
+            decision_id[:12],
             decision_type,
             strategy_id or "system",
         )

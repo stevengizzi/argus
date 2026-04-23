@@ -63,6 +63,118 @@ _STRATEGY_ID_MAP: dict[str, str] = {
     "flat_top_breakout": "strat_flat_top_breakout",
 }
 
+# DEF-189 (IMPROMPTU-07, 2026-04-23): VectorBT IS naming → Pydantic config
+# field name. `extract_fixed_params()` emits VectorBT-era parameter names
+# (e.g. `or_minutes`, `target_r`, `max_hold_minutes`) because the
+# walk-forward IS path still uses VectorBT. BacktestEngine's
+# `_apply_config_overrides()` looks up flat keys against the strategy's
+# Pydantic config model (e.g. OrbBreakoutConfig.orb_window_minutes).
+# Without this remap, every VectorBT-named key failed strict dot-path
+# resolution and the revalidate_strategy.py fixed-params flow ran with
+# defaults instead of the intended overrides. Keys omitted from a sub-map
+# are passed through unchanged; unknown keys are caught at the Pydantic
+# model-fields validation step in `_translate_params()`.
+_PARAM_NAME_MAP: dict[str, dict[str, str]] = {
+    "orb": {
+        "or_minutes": "orb_window_minutes",
+        "target_r": "target_2_r",
+        "max_hold_minutes": "time_stop_minutes",
+    },
+    "orb_scalp": {
+        # `scalp_target_r` already matches. `max_hold_bars` is derived from
+        # `max_hold_seconds // 60` by extract_fixed_params — there is no
+        # clean reverse mapping (× 60 would re-quantize), so it's filtered
+        # out at translate-time rather than remapped here.
+    },
+    "vwap_reclaim": {
+        "volume_multiplier": "volume_confirmation_multiplier",
+        "target_r": "target_2_r",
+        "time_stop_bars": "time_stop_minutes",
+    },
+    "afternoon_momentum": {
+        "target_r": "target_2_r",
+        "time_stop_bars": "max_hold_minutes",
+    },
+    "red_to_green": {
+        # All extract_fixed_params keys already match RedToGreenConfig field
+        # names (min_gap_down_pct, level_proximity_pct,
+        # volume_confirmation_multiplier, time_stop_minutes).
+    },
+    # PatternModule strategies (bull_flag, flat_top_breakout) — the keys
+    # extract_fixed_params emits are already pattern-config field names
+    # (wired via Pydantic on BullFlagConfig / FlatTopBreakoutConfig).
+    # No remapping needed; the Pydantic-field validation below still guards
+    # against typos.
+}
+
+
+def _translate_params(
+    strategy_key: str, fixed_params: dict[str, Any]
+) -> dict[str, Any]:
+    """Translate VectorBT-style param names to Pydantic config field names.
+
+    Remaps known VectorBT IS naming via ``_PARAM_NAME_MAP`` and validates
+    each resulting key against the target strategy's Pydantic config model
+    fields. Unknown keys are filtered out with a WARNING — this is the
+    defense against the DEF-189 class of bug where typos silently no-op'd
+    in BacktestEngine's strict dot-path override handler.
+
+    Args:
+        strategy_key: StrategyType enum value (e.g. "orb", "vwap_reclaim").
+        fixed_params: Raw params from ``extract_fixed_params()``.
+
+    Returns:
+        Dict with remapped + validated keys suitable for
+        ``BacktestEngineConfig.config_overrides``.
+    """
+    from argus.core.config import (
+        AfternoonMomentumConfig,
+        BullFlagConfig,
+        FlatTopBreakoutConfig,
+        OrbBreakoutConfig,
+        OrbScalpConfig,
+        RedToGreenConfig,
+        VwapReclaimConfig,
+    )
+
+    config_class_by_key: dict[str, type] = {
+        "orb": OrbBreakoutConfig,
+        "orb_scalp": OrbScalpConfig,
+        "vwap_reclaim": VwapReclaimConfig,
+        "afternoon_momentum": AfternoonMomentumConfig,
+        "red_to_green": RedToGreenConfig,
+        "bull_flag": BullFlagConfig,
+        "flat_top_breakout": FlatTopBreakoutConfig,
+    }
+
+    mapping = _PARAM_NAME_MAP.get(strategy_key, {})
+    config_class = config_class_by_key.get(strategy_key)
+    if config_class is None:
+        raise ValueError(f"Unknown strategy key for param translation: {strategy_key}")
+
+    valid_fields = set(config_class.model_fields.keys())
+    translated: dict[str, Any] = {}
+    skipped: list[str] = []
+    for k, v in fixed_params.items():
+        target_key = mapping.get(k, k)
+        if target_key in valid_fields:
+            translated[target_key] = v
+        else:
+            skipped.append(f"{k} -> {target_key}")
+
+    if skipped:
+        logger.warning(
+            "revalidate_strategy: skipping %d config_overrides key(s) for %s "
+            "that do not map to a Pydantic field on %s: %s. "
+            "The revalidation will run with default values for these params.",
+            len(skipped),
+            strategy_key,
+            config_class.__name__,
+            skipped,
+        )
+
+    return translated
+
 # Divergence thresholds
 SHARPE_DIVERGENCE_THRESHOLD = 0.5
 WIN_RATE_DIVERGENCE_THRESHOLD = 10.0  # percentage points
@@ -377,10 +489,14 @@ async def run_backtest_engine_fallback(
     strategy_type = StrategyType(strategy_key)
     strategy_id = _STRATEGY_ID_MAP[strategy_key]
 
-    # Build config_overrides from fixed_params
-    # Map param names to strategy config paths
-    yaml_name = _STRATEGY_YAML_MAP[strategy_key]
-    config_overrides = {f"{yaml_name}.{k}": v for k, v in fixed_params.items()}
+    # DEF-189 (IMPROMPTU-07, 2026-04-23): build flat-key config_overrides
+    # via VectorBT→Pydantic-name translation. The prior form —
+    # ``{f"{yaml_name}.{k}": v for k, v in fixed_params.items()}`` —
+    # produced dot-paths like ``orb_breakout.or_minutes`` which failed
+    # BacktestEngine's strict dot-path resolution silently (because
+    # ``orb_breakout`` is not a nested submodel on ``OrbBreakoutConfig``).
+    # Every override was dropped; revalidations ran with defaults.
+    config_overrides = _translate_params(strategy_key, fixed_params)
 
     engine_config = BacktestEngineConfig(
         strategy_type=strategy_type,

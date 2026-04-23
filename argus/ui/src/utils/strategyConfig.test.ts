@@ -302,4 +302,67 @@ describe('strategyConfig', () => {
       expect(getStrategyName('strat_narrow_range_breakout')).toBe('Narrow Range Breakout');
     });
   });
+
+  describe('experiment-variant strategy IDs (IMPROMPTU-07, 2026-04-23)', () => {
+    // Context: variants use `__` as a structural separator
+    // (`strat_bull_flag__v2_strong_pole`). Before IMPROMPTU-07 these
+    // fell through to the grey "unknown" fallback in getStrategyDisplay
+    // and Tailwind accessors, so the Command Center rendered active
+    // shadow variants as greyed-out "STRA" badges. The fix strips the
+    // `__<variant>` suffix and inherits the base strategy's color +
+    // shortName, while preserving the full variant ID in `badgeId`.
+    it('getStrategyDisplay: variant inherits base color, name, short name', () => {
+      const variant = getStrategyDisplay('strat_bull_flag__v2_strong_pole');
+      // Inherits base (Bull Flag) color + display metadata.
+      expect(variant.color).toBe('#22d3ee');
+      expect(variant.shortName).toBe('FLAG');
+      expect(variant.letter).toBe('F');
+      expect(variant.name).toBe('Bull Flag');
+      // But badgeId preserves the full variant id for test hooks /
+      // tooltip disambiguation.
+      expect(variant.badgeId).toBe('strat_bull_flag__v2_strong_pole');
+    });
+
+    it('getStrategyDisplay: dip_and_rip variants inherit rose color', () => {
+      const v2 = getStrategyDisplay('strat_dip_and_rip__v2_tight_dip_quality');
+      const v3 = getStrategyDisplay('strat_dip_and_rip__v3_strict_volume');
+      expect(v2.color).toBe('#fb7185');
+      expect(v3.color).toBe('#fb7185');
+      expect(v2.shortName).toBe('DIP');
+      expect(v3.shortName).toBe('DIP');
+    });
+
+    it('getStrategyBadgeClass: variant uses base strategy tint, not fallback', () => {
+      const klass = getStrategyBadgeClass('strat_bull_flag__v2_strong_pole');
+      expect(klass).toBe('text-cyan-400 bg-cyan-400/15');
+      // Regression check: the old greyed-out fallback class is NOT used.
+      expect(klass).not.toBe('text-argus-text-dim bg-argus-surface-2');
+    });
+
+    it('getStrategyBorderClass / getStrategyBarClass / getStrategyColor: all resolve variants to base', () => {
+      expect(getStrategyBorderClass('strat_narrow_range_breakout__v2_deep_compression'))
+        .toBe('border-l-green-400');
+      expect(getStrategyBarClass('strat_gap_and_go__v3_direct_entry'))
+        .toBe('bg-sky-400');
+      expect(getStrategyColor('strat_hod_break__v2_volume_conviction'))
+        .toBe('#34d399');
+    });
+
+    it('base strategy IDs remain unchanged (no false-positive stripping)', () => {
+      // Without `__`, stripVariantSuffix is a no-op: base strategies
+      // continue to render exactly as they did pre-fix.
+      const orb = getStrategyDisplay('strat_orb_breakout');
+      expect(orb.badgeId).toBe('strat_orb_breakout');
+      expect(orb.color).toBe('#60a5fa');
+      expect(getStrategyBadgeClass('strat_orb_breakout'))
+        .toBe('text-blue-400 bg-blue-400/15');
+    });
+
+    it('truly unknown variant (unknown base) still falls through to grey', () => {
+      // Defensive: a variant whose base isn't in STRATEGY_DISPLAY still
+      // gets the grey fallback rather than crashing.
+      const unknown = getStrategyDisplay('strat_totally_unknown__v2_foo');
+      expect(unknown.color).toBe('#6b7280');
+    });
+  });
 });

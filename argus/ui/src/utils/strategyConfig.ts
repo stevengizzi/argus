@@ -251,9 +251,38 @@ function normalizeStrategyId(strategyId: string): string {
 }
 
 /**
+ * Strip the variant suffix from an experiment-variant strategy ID to
+ * recover the base strategy ID. Variant IDs use `__` as the structural
+ * separator — e.g. `strat_bull_flag__v2_strong_pole` →
+ * `strat_bull_flag`, `strat_dip_and_rip__v3_strict_volume` →
+ * `strat_dip_and_rip`. See `config/experiments.yaml` + DEC-378 for the
+ * canonical variant-id contract.
+ *
+ * IMPROMPTU-07 (2026-04-23): before this helper existed, variant IDs
+ * fell through to the grey "unknown strategy" fallback in
+ * `getStrategyDisplay`, so shadow variants showed up greyed-out in the
+ * Command Center badges (Dashboard, Trades, Observatory) even though
+ * they were active shadow positions.
+ *
+ * Delimiter-based (not pattern-match heuristic): any ID without the
+ * `__` separator is returned unchanged, so base strategy IDs are
+ * untouched.
+ */
+function stripVariantSuffix(strategyId: string): string {
+  const idx = strategyId.indexOf('__');
+  return idx >= 0 ? strategyId.slice(0, idx) : strategyId;
+}
+
+/**
  * Get strategy display config with fallback for unknown strategies.
  * Handles both prefixed ('strat_orb_breakout') and non-prefixed ('orb_breakout') IDs,
  * and resolves legacy short-form aliases ('orb', 'scalp', 'vwap', 'momentum').
+ *
+ * IMPROMPTU-07 (2026-04-23): also resolves experiment-variant IDs
+ * (`strat_bull_flag__v2_strong_pole` etc.) by stripping the `__`
+ * variant suffix and looking up the base strategy's display config, so
+ * shadow variants share the base strategy's color and no longer render
+ * as greyed-out "unknown strategy" badges across the Command Center.
  */
 export function getStrategyDisplay(strategyId: string): StrategyDisplayConfig {
   // Normalize: lowercase, replace hyphens with underscores
@@ -276,6 +305,20 @@ export function getStrategyDisplay(strategyId: string): StrategyDisplayConfig {
     return STRATEGY_DISPLAY[aliasTarget];
   }
 
+  // Experiment-variant IDs (e.g. `strat_bull_flag__v2_strong_pole`):
+  // strip the `__<variant>` suffix and try again against the base
+  // strategy. Variant IDs use `__` as a structural separator (see
+  // config/experiments.yaml). When we find the base, inherit its
+  // color and short name but preserve the variant's full ID in badgeId.
+  const baseId = stripVariantSuffix(prefixedId);
+  if (baseId !== prefixedId && STRATEGY_DISPLAY[baseId]) {
+    const base = STRATEGY_DISPLAY[baseId];
+    return {
+      ...base,
+      badgeId: strategyId,
+    };
+  }
+
   // Grey fallback for unknown strategies: title-case the ID
   return {
     name: strategyId.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
@@ -289,37 +332,67 @@ export function getStrategyDisplay(strategyId: string): StrategyDisplayConfig {
 
 /**
  * Get border-left class for a strategy with fallback.
+ * Resolves experiment-variant IDs to the base strategy's class
+ * (IMPROMPTU-07: prevents variant badges greying out).
  */
 export function getStrategyBorderClass(strategyId: string): string {
   const normalized = normalizeStrategyId(strategyId);
-  return STRATEGY_BORDER_CLASSES[normalized] ?? STRATEGY_BORDER_CLASSES[strategyId] ?? 'border-l-gray-400';
+  const base = stripVariantSuffix(normalized);
+  return (
+    STRATEGY_BORDER_CLASSES[normalized]
+    ?? STRATEGY_BORDER_CLASSES[base]
+    ?? STRATEGY_BORDER_CLASSES[strategyId]
+    ?? 'border-l-gray-400'
+  );
 }
 
 /**
  * Get background class for a strategy with fallback.
+ * Resolves experiment-variant IDs to the base strategy's class
+ * (IMPROMPTU-07: prevents variant badges greying out).
  */
 export function getStrategyBarClass(strategyId: string): string {
   const normalized = normalizeStrategyId(strategyId);
-  return STRATEGY_BAR_CLASSES[normalized] ?? STRATEGY_BAR_CLASSES[strategyId] ?? 'bg-gray-400';
+  const base = stripVariantSuffix(normalized);
+  return (
+    STRATEGY_BAR_CLASSES[normalized]
+    ?? STRATEGY_BAR_CLASSES[base]
+    ?? STRATEGY_BAR_CLASSES[strategyId]
+    ?? 'bg-gray-400'
+  );
 }
 
 /**
  * Get badge class (text + tinted background) for a strategy.
  * When `onAmber` is true, returns a high-contrast slate class suitable for
  * amber/yellow parent backgrounds instead of the strategy-specific tint.
+ * Resolves experiment-variant IDs to the base strategy's class
+ * (IMPROMPTU-07: prevents variant badges greying out).
  */
 export function getStrategyBadgeClass(strategyId: string, onAmber = false): string {
   if (onAmber) return STRATEGY_AMBER_BADGE_CLASS;
   const normalized = normalizeStrategyId(strategyId);
-  return STRATEGY_BADGE_CLASSES[normalized] ?? STRATEGY_FALLBACK_BADGE_CLASS;
+  const base = stripVariantSuffix(normalized);
+  return (
+    STRATEGY_BADGE_CLASSES[normalized]
+    ?? STRATEGY_BADGE_CLASSES[base]
+    ?? STRATEGY_FALLBACK_BADGE_CLASS
+  );
 }
 
 /**
- * Get strategy hex color with fallback.
+ * Get strategy hex color with fallback. Resolves experiment-variant IDs
+ * to the base strategy's color (IMPROMPTU-07).
  */
 export function getStrategyColor(strategyId: string): string {
   const normalized = normalizeStrategyId(strategyId);
-  return STRATEGY_DISPLAY[normalized]?.color ?? STRATEGY_DISPLAY[strategyId]?.color ?? '#6b7280';
+  const base = stripVariantSuffix(normalized);
+  return (
+    STRATEGY_DISPLAY[normalized]?.color
+    ?? STRATEGY_DISPLAY[base]?.color
+    ?? STRATEGY_DISPLAY[strategyId]?.color
+    ?? '#6b7280'
+  );
 }
 
 /** Get the short display label (e.g., "ORB", "PM", "VWB"). */

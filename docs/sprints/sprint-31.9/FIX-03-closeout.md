@@ -17,7 +17,7 @@
 | argus/core/orchestrator.py | modified | DEF-093: `_latest_regime_vector` type annotation `object \| None` → `RegimeVector \| None` via TYPE_CHECKING import |
 | argus/intelligence/experiments/spawner.py | modified | Finding 4: direct `variant_strategy._config_fingerprint = …` assignment replaced by `set_config_fingerprint()` method call |
 | argus/strategies/pattern_strategy.py | modified | Finding 4: new public `set_config_fingerprint(fingerprint: str) -> None` method |
-| docs/architecture.md | modified | Finding 30 / P1-A1-M01: §3.9 System Entry Point rewritten to enumerate the actual 17-phase sequence (7.5, 8.5, 10.25, 10.3 retained as sentinel, 10.4 Event Routing renumbered, 10.7 Counterfactual) and the close-path symmetry added to shutdown description |
+| docs/architecture.md | modified | Finding 30 / P1-A1-M01: §3.9 System Entry Point rewritten to enumerate the actual 19-phase sequence — 12 primary + 7 sub-phases: 7.5, 8.5, 9.5, 10.25, 10.3 (retained as sentinel), 10.4 Event Routing renumbered, 10.7 Counterfactual — and the close-path symmetry added to shutdown description. (Phase count corrected from "17" to "19" by IMPROMPTU-07 DEF-198, 2026-04-23; the original "17" miscounted the 9.5 and 10.4 sub-phases.) |
 | docs/audits/audit-2026-04-21/p1-a1-main-py.md | modified | Added "FIX-03 Resolution" section covering all 19 P1-A1 findings (C1, M1-M10, L1-L8) + the adjacent findings (D1-M01/M02/M06/M13, C1-M03, A2-L07, D2-M01/M03, G1-M02, DEF-048+049) that FIX-03 closed via main.py edits |
 | docs/audits/audit-2026-04-21/p1-a2-core-rest.md | modified | Added "FIX-03 Resolution" section annotating L-07 as RESOLVED via main.py M10; notes `Orchestrator._latest_regime_vector` typing tightened |
 | docs/audits/audit-2026-04-21/p1-c1-execution.md | modified | Added "FIX-03 Resolution" section annotating M-03 (lazy Alpaca import) as RESOLVED |
@@ -82,7 +82,7 @@
 | Finding 27 (P1-A2-L07): triple regime-recheck cadence | DONE | Subsumed by Finding 10 / M10 |
 | Finding 28 (P1-D2-M01): variant exit_overrides → OrderManager | DONE | `_variant_exit_overrides` dict collected during Phase 9 spawning; merged into `strategy_exit_overrides` in Phase 10 before OrderManager construction |
 | Finding 29 (P1-D2-M03): ExperimentStore + LearningStore retention | PARTIAL | ExperimentStore done in main.py boot; LearningStore deferred as DEF-173 (lives in api/server.py lifespan, FIX-11 territory) |
-| Finding 30 (P1-A1-M01): architecture.md §3.9 + start() docstring | DONE | Both rewritten to the 17-phase actual sequence |
+| Finding 30 (P1-A1-M01): architecture.md §3.9 + start() docstring | DONE | Both rewritten to the 19-phase actual sequence — 12 primary + 7 sub-phases: 7.5, 8.5, 9.5, 10.25, 10.3, 10.4, 10.7 (phase count corrected from "17" to "19" by IMPROMPTU-07 DEF-198, 2026-04-23) |
 | Finding 31 (DEF-048+049): test_main.py xdist + isolation | PARTIAL | Autouse `_scrub_anthropic_env` fixture addresses DEF-048 env-leak. DEF-049's stale-mock isolation failure of `test_orchestrator_uses_strategies_from_registry` is pre-existing and out of the "apply DEF-046 pattern" scope |
 
 ### Regression Checks
@@ -209,7 +209,7 @@
     "main.py line count dropped 2,469 → 2,291 (-178 net); coverage % headline at 20% will re-settle on the smaller line count at next measurement."
   ],
   "doc_impacts": [
-    {"document": "docs/architecture.md", "change_description": "§3.9 System Entry Point rewritten to enumerate the actual 17-phase startup sequence"},
+    {"document": "docs/architecture.md", "change_description": "§3.9 System Entry Point rewritten to enumerate the actual 19-phase startup sequence (12 primary + 7 sub-phases — phase count corrected from \"17\" to \"19\" by IMPROMPTU-07 DEF-198, 2026-04-23)"},
     {"document": "CLAUDE.md", "change_description": "DEF-172 + DEF-173 added to Deferred Items table; DEF-074 + DEF-093 rows marked RESOLVED via FIX-03 (no Active Sprint block update since the audit's Stage 2 is still in motion)"},
     {"document": "docs/audits/audit-2026-04-21/p1-a1-main-py.md", "change_description": "Full FIX-03 Resolution section added covering all 19 P1-A1 findings + 12 adjacent cross-domain findings"},
     {"document": "docs/audits/audit-2026-04-21/p1-a2-core-rest.md", "change_description": "FIX-03 Resolution section annotating L-07"},

@@ -68,6 +68,66 @@ class CounterfactualPositionsResponse(BaseModel):
     timestamp: str
 
 
+def _compute_r_multiple(
+    excursion: float | None, entry: float | None, stop: float | None
+) -> float | None:
+    """Convert an MFE/MAE dollar-excursion into an R-multiple.
+
+    ``max_favorable_excursion`` / ``max_adverse_excursion`` are stored in
+    ``counterfactual_positions`` as dollar values (best/worst unrealized
+    $ move from entry). The operator-facing Shadow Trades UI renders
+    these through an ``RMultipleCell`` formatter — a dollar value passed
+    through that formatter showed up as tiny "$0.15R" style strings.
+
+    This helper converts at serialization time so the stored schema is
+    unchanged (non-destructive — Apr 21 debrief F-06 option (a)) and
+    downstream consumers of ``max_favorable_excursion`` / ``max_adverse_excursion``
+    keep working.
+
+    Returns ``None`` when any input is missing (schema nullable) or the
+    per-share risk is <=0 (zero-R signal; should have been caught by the
+    zero-R guard in CounterfactualTracker but we belt-and-braces here).
+    """
+    if excursion is None or entry is None or stop is None:
+        return None
+    risk = abs(entry - stop)
+    if risk <= 0:
+        return None
+    return excursion / risk
+
+
+def _enrich_with_r_multiples(positions: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Add ``mfe_r`` / ``mae_r`` fields to each position dict.
+
+    The existing ``max_favorable_excursion`` / ``max_adverse_excursion``
+    dollar fields are preserved intact — this is strictly additive
+    (backward-compatible for any consumer still reading the dollar fields).
+    Apr 21 debrief F-06 option (a), resolved IMPROMPTU-07, 2026-04-23.
+    """
+    enriched: list[dict[str, object]] = []
+    for pos in positions:
+        entry = pos.get("entry_price")
+        stop = pos.get("stop_price")
+        mfe = pos.get("max_favorable_excursion")
+        mae = pos.get("max_adverse_excursion")
+
+        entry_f = float(entry) if isinstance(entry, (int, float)) else None
+        stop_f = float(stop) if isinstance(stop, (int, float)) else None
+        mfe_f = float(mfe) if isinstance(mfe, (int, float)) else None
+        mae_f = float(mae) if isinstance(mae, (int, float)) else None
+
+        out = dict(pos)
+        out["mfe_r"] = _compute_r_multiple(mfe_f, entry_f, stop_f)
+        out["mae_r"] = _compute_r_multiple(mae_f, entry_f, stop_f)
+        # MAE is stored as a positive dollar drawdown (per CounterfactualTracker
+        # docstring); convert it to a negative R-multiple so the Shadow
+        # Trades UI renders it as "-0.85R" rather than "+0.85R".
+        if out["mae_r"] is not None and out["mae_r"] > 0:
+            out["mae_r"] = -out["mae_r"]
+        enriched.append(out)
+    return enriched
+
+
 # --- Endpoints ---
 
 
@@ -131,7 +191,7 @@ async def get_counterfactual_positions(
         ) from exc
 
     return {
-        "positions": positions,
+        "positions": _enrich_with_r_multiples(positions),
         "total_count": total_count,
         "limit": limit,
         "offset": offset,

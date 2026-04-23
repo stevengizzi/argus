@@ -1196,7 +1196,7 @@ ARGUS maintains **two Parquet caches** after Sprint 31.85. Confusing them is a l
 
 ### 3.9 System Entry Point (`main.py`)
 
-Wires all components together. The live sequence today has 17 phases (12 primary + 5 sub-phases). Sub-phases were bolted on as features landed (Universe Manager, Regime V2, Quality Pipeline, Telemetry, Counterfactual) without renumbering the spine; this drift is cosmetic but worth the full enumeration below so the doc actually matches `argus/main.py` (FIX-03 P1-A1-M01 reconciliation, audit 2026-04-21).
+Wires all components together. The live sequence today has 19 phases (12 primary + 7 sub-phases: 7.5, 8.5, 9.5, 10.25, 10.3, 10.4, 10.7). Sub-phases were bolted on as features landed (Universe Manager, Regime V2, Quality Pipeline, Telemetry, Event Routing, Counterfactual) without renumbering the spine; this drift is cosmetic but worth the full enumeration below so the doc actually matches `argus/main.py` (FIX-03 P1-A1-M01 reconciliation, audit 2026-04-21; phase count corrected IMPROMPTU-07, DEF-198, 2026-04-23).
 
 1. Config + Clock + EventBus
 2. Database + TradeLogger (+ AI persistence tables: ConversationManager, UsageTracker, optional ActionManager)

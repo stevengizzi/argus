@@ -616,9 +616,14 @@ class RiskManager:
                         f"{signal.symbol} (policy: FIRST_SIGNAL)"
                     )
                 elif policy == DuplicateStockPolicy.PRIORITY_BY_WIN_RATE:
-                    # V1 simplified: reject without win rate comparison
-                    # Full implementation requires win rate data from TradeLogger
-                    logger.warning(
+                    # V1 simplified: reject without win rate comparison.
+                    # Full implementation requires win rate data from
+                    # TradeLogger. Logged at DEBUG (was WARNING) per
+                    # Apr 21 debrief F-08 / IMPROMPTU-07, 2026-04-23 —
+                    # this known-unfinished-feature notification fired
+                    # 100+ times per session at WARNING level, drowning
+                    # genuine operational alerts.
+                    logger.debug(
                         "PRIORITY_BY_WIN_RATE is not fully implemented — rejecting %s for %s "
                         "(V1 simplified: always rejects duplicates)",
                         signal.symbol,

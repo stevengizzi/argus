@@ -79,8 +79,14 @@ function makeShadowTrade(overrides: Partial<ShadowTrade> = {}): ShadowTrade {
     theoretical_pnl: 150.0,
     theoretical_r_multiple: 0.75,
     duration_seconds: 2700,
-    max_adverse_excursion: -0.3,
+    max_adverse_excursion: 0.3,
     max_favorable_excursion: 1.2,
+    // Apr 21 debrief F-06 (IMPROMPTU-07, 2026-04-23): backend now
+    // serializes R-multiple MFE/MAE alongside the dollar fields;
+    // ShadowTradesTab renders from the R-multiple fields. MAE is
+    // flipped to negative at the REST-response layer.
+    mfe_r: 0.6,
+    mae_r: -0.15,
     bars_monitored: 45,
     ...overrides,
   };
@@ -346,6 +352,43 @@ describe('ShadowTradesTab — sortable columns', () => {
     fireEvent.click(strategyHeader);
     // Both clicks produce a sort icon; just verify it's still present
     expect(strategyHeader.querySelector('svg')).toBeInTheDocument();
+  });
+});
+
+describe('ShadowTradesTab — F-06 MFE/MAE R-multiple rendering', () => {
+  it('test_f06_mfe_mae_r_columns_render_from_r_multiple_fields', () => {
+    // Apr 21 debrief F-06 (IMPROMPTU-07, 2026-04-23): MFE/MAE columns
+    // must render the R-multiple fields (mfe_r / mae_r), not the dollar
+    // fields (max_favorable_excursion / max_adverse_excursion). Feeding
+    // dollar values through RMultipleCell produced "$0.00R"-style
+    // labels in the UI. Column headers must now expose the sort test
+    // IDs sort-mfe_r / sort-mae_r instead of the old sort-max_*
+    // identifiers.
+    const trades = [
+      makeShadowTrade({ mfe_r: 1.23, mae_r: -0.85 }),
+    ];
+    vi.mocked(useShadowTrades).mockReturnValue({
+      data: makeResponse(trades),
+      isLoading: false,
+      error: null,
+      isFetching: false,
+      isPending: false,
+    } as ReturnType<typeof useShadowTrades>);
+
+    render(<ShadowTradesTab />, { wrapper });
+
+    // Column headers are bound to the new R-multiple sort keys.
+    expect(screen.getByTestId('sort-mfe_r')).toBeInTheDocument();
+    expect(screen.getByTestId('sort-mae_r')).toBeInTheDocument();
+    // Old dollar-keyed headers are gone.
+    expect(screen.queryByTestId('sort-max_favorable_excursion')).toBeNull();
+    expect(screen.queryByTestId('sort-max_adverse_excursion')).toBeNull();
+
+    // RMultipleCell renders +1.23R and -0.85R. Round trip the number via
+    // the cell's formatter rather than asserting exact string to stay
+    // insensitive to formatter tweaks.
+    expect(screen.getByText(/\+?1\.23R/)).toBeInTheDocument();
+    expect(screen.getByText(/-0\.85R/)).toBeInTheDocument();
   });
 });
 

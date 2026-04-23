@@ -32,8 +32,14 @@ type SortKey =
   | 'entry_price'
   | 'theoretical_pnl'
   | 'theoretical_r_multiple'
-  | 'max_favorable_excursion'
-  | 'max_adverse_excursion'
+  // Apr 21 debrief F-06 (IMPROMPTU-07, 2026-04-23): MFE/MAE columns
+  // now sort on the R-multiple fields (`mfe_r`/`mae_r`) rather than
+  // the dollar-valued `max_*_excursion` fields the UI previously fed
+  // through RMultipleCell — that combination produced "$0.00R"
+  // strings in the table. Backend still serializes the dollar fields
+  // for backward compat; they're just no longer the column sort key.
+  | 'mfe_r'
+  | 'mae_r'
   | 'rejection_stage'
   | 'quality_grade';
 
@@ -411,19 +417,19 @@ function ShadowTable({
             </th>
             <th
               className={`${thClass} ${sortableClass}`}
-              onClick={() => onSort('max_favorable_excursion')}
-              data-testid="sort-max_favorable_excursion"
+              onClick={() => onSort('mfe_r')}
+              data-testid="sort-mfe_r"
             >
               MFE (R)
-              <SortIndicator col="max_favorable_excursion" />
+              <SortIndicator col="mfe_r" />
             </th>
             <th
               className={`${thClass} ${sortableClass}`}
-              onClick={() => onSort('max_adverse_excursion')}
-              data-testid="sort-max_adverse_excursion"
+              onClick={() => onSort('mae_r')}
+              data-testid="sort-mae_r"
             >
               MAE (R)
-              <SortIndicator col="max_adverse_excursion" />
+              <SortIndicator col="mae_r" />
             </th>
             <th
               className={`${thClass} ${sortableClass}`}
@@ -474,10 +480,10 @@ function ShadowTable({
                   <RMultipleCell value={trade.theoretical_r_multiple} />
                 </td>
                 <td className={tdClass}>
-                  <RMultipleCell value={trade.max_favorable_excursion} />
+                  <RMultipleCell value={trade.mfe_r} />
                 </td>
                 <td className={tdClass}>
-                  <RMultipleCell value={trade.max_adverse_excursion} />
+                  <RMultipleCell value={trade.mae_r} />
                 </td>
                 <td className={tdClass}>
                   <StageBadge stage={trade.rejection_stage} />

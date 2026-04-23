@@ -369,3 +369,66 @@ class TestCounterfactualPositionsEndpoint:
         """Request without JWT returns 401."""
         resp = await client_with_cf.get("/api/v1/counterfactual/positions")
         assert resp.status_code == 401
+
+
+class TestF06MfeMaeRMultiples:
+    """Apr 21 debrief F-06 (IMPROMPTU-07, 2026-04-23): the positions
+    endpoint now serializes ``mfe_r`` / ``mae_r`` R-multiple fields
+    alongside the original dollar-valued ``max_favorable_excursion`` /
+    ``max_adverse_excursion`` fields. The UI renders MFE/MAE via
+    RMultipleCell which expects R-multiples — feeding it the dollar
+    values produced "$0.00R"-style labels.
+
+    The fix is additive: the dollar fields are preserved for
+    backward-compat; the R fields are computed at serialization time
+    from ``(excursion_dollars) / |entry_price - stop_price|``.
+    MAE is stored as a positive dollar drawdown, so ``mae_r`` is
+    flipped to a negative R-multiple for UI rendering.
+    """
+
+    @pytest.mark.asyncio
+    async def test_response_includes_mfe_r_and_mae_r_fields(
+        self,
+        client_with_cf: AsyncClient,
+        auth_headers: dict[str, str],
+        cf_store: CounterfactualStore,
+    ) -> None:
+        """New mfe_r/mae_r fields present alongside dollar fields."""
+        await _seed_cf_position(cf_store, "pos_mfe_1", theoretical_pnl=-2.0)
+
+        resp = await client_with_cf.get(
+            "/api/v1/counterfactual/positions",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        pos = resp.json()["positions"][0]
+        assert "mfe_r" in pos, "F-06 regression: mfe_r field missing from response"
+        assert "mae_r" in pos, "F-06 regression: mae_r field missing from response"
+        # Backward-compat: dollar fields still present.
+        assert "max_favorable_excursion" in pos
+        assert "max_adverse_excursion" in pos
+
+    @pytest.mark.asyncio
+    async def test_mfe_r_matches_known_r_multiple(
+        self,
+        client_with_cf: AsyncClient,
+        auth_headers: dict[str, str],
+        cf_store: CounterfactualStore,
+    ) -> None:
+        """Seeded fixture: entry=100, stop=95 (risk_per_share=5),
+        max_favorable_excursion=3.0 → mfe_r = 3.0 / 5 = 0.6.
+        max_adverse_excursion=2.0 stored as positive dollars →
+        mae_r = -2.0 / 5 = -0.4 (flipped by the enrichment helper).
+        """
+        await _seed_cf_position(cf_store, "pos_mfe_math", theoretical_pnl=-2.0)
+
+        resp = await client_with_cf.get(
+            "/api/v1/counterfactual/positions",
+            headers=auth_headers,
+        )
+        pos = resp.json()["positions"][0]
+        assert pos["mfe_r"] == pytest.approx(0.6, abs=1e-9)
+        assert pos["mae_r"] == pytest.approx(-0.4, abs=1e-9)
+        # Dollar fields unchanged by the enrichment step.
+        assert pos["max_favorable_excursion"] == pytest.approx(3.0)
+        assert pos["max_adverse_excursion"] == pytest.approx(2.0)

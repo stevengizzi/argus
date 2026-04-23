@@ -117,6 +117,14 @@ export interface ShadowTrade {
   duration_seconds: number | null;
   max_adverse_excursion: number | null;
   max_favorable_excursion: number | null;
+  // Apr 21 debrief F-06 (IMPROMPTU-07, 2026-04-23): R-multiple
+  // renderings of MFE/MAE, computed at serialization time from
+  // entry_price / stop_price / excursion-dollars. `mfe_r` is positive,
+  // `mae_r` is negative (drawdowns stored as positive dollars are
+  // flipped during enrichment). `null` when per-share risk is 0 or
+  // any input is missing. Dollar fields preserved for backward compat.
+  mfe_r: number | null;
+  mae_r: number | null;
   bars_monitored: number;
 }
 

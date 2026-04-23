@@ -208,7 +208,7 @@ class ArgusSystem:
         self._api_task: asyncio.Task[None] | None = None
         self._config: ArgusConfig | None = None  # Store config for API access
         self._cached_watchlist: list[Any] = []  # Scanner results for API watchlist endpoint
-        self._universe_manager: UniverseManager | None = None  # Sprint 23: Universe Manager
+        self._universe_manager: UniverseManager | None = None
         # Strategy dict for candle routing (BaseStrategy per value via isinstance narrowing)
         self._strategies: dict[str, Any] = {}
         # Sprint 24: Quality pipeline components (initialized after DB + config)
@@ -216,19 +216,19 @@ class ArgusSystem:
         self._position_sizer: DynamicPositionSizer | None = None
         self._catalyst_storage: object | None = None  # CatalystStorage, if pipeline active
         self._regime_history_store: RegimeHistoryStore | None = None  # Sprint 27.6, closed on shutdown
-        self._eval_check_task: asyncio.Task[None] | None = None  # Sprint 25.5: eval health check
+        self._eval_check_task: asyncio.Task[None] | None = None
         self._eval_store: EvaluationEventStore | None = None  # Sprint 25.6: reused in health check
         # _run_regime_reclassification task removed FIX-03 P1-A1-M10 / DEF-074 —
         # Orchestrator._poll_loop already runs the same reclassify cadence.
         self._regime_check_count: int = 0  # Sprint 25.9: counter for INFO logging cadence
-        self._bg_refresh_task: asyncio.Task[None] | None = None  # Sprint 25.9: background cache refresh
+        self._bg_refresh_task: asyncio.Task[None] | None = None
         self._reconciliation_task: asyncio.Task[None] | None = None  # Sprint 27.65: position recon
         self._candle_store: IntradayCandleStore | None = None  # Sprint 27.65 S4: intraday bar store
         self._counterfactual_enabled: bool = False  # Sprint 27.7 S3b sets True after tracker init
-        self._counterfactual_tracker: object | None = None  # Sprint 27.7: CounterfactualTracker
-        self._counterfactual_store: object | None = None  # Sprint 27.7: CounterfactualStore
+        self._counterfactual_tracker: object | None = None
+        self._counterfactual_store: object | None = None
         self._counterfactual_task: asyncio.Task[None] | None = None  # Sprint 27.7: maintenance task
-        self._promotion_evaluator: object | None = None  # Sprint 32 S7: PromotionEvaluator
+        self._promotion_evaluator: object | None = None
         self._experiments_auto_promote: bool = False  # Sprint 32 S7: auto_promote config flag
         # Sprint 32.9 / FIX-03 P1-A1-L05: one-shot log per session for signal
         # cutoff, keyed on the ET session date so multi-day runs re-log.
@@ -238,13 +238,22 @@ class ArgusSystem:
         self._intraday_candle_handler: Callable[[CandleEvent], Any] | None = None
         # Variant exit overrides collected during spawning (FIX-03 P1-D2-M01).
         self._variant_exit_overrides: dict[str, dict[str, Any]] = {}
+        # DEF-164 (IMPROMPTU-07, 2026-04-23): monotonic boot timestamp used
+        # by _on_shutdown_requested to suppress auto-shutdown during the
+        # post-boot grace window. Set at the top of start(); None pre-start
+        # so early shutdown requests (shouldn't happen) don't pass the
+        # "0s elapsed" suppression test by accident.
+        self._boot_monotonic: float | None = None
 
     async def start(self) -> None:
         """Initialize and start all components in dependency order.
 
         Live phase sequence (see ``docs/architecture.md`` §3.9 for the full
-        per-phase breakdown). Twelve primary phases plus five config-gated
-        sub-phases bolted on as features landed:
+        per-phase breakdown). Twelve primary phases plus seven sub-phases
+        (7.5, 8.5, 9.5, 10.25, 10.3, 10.4, 10.7) bolted on as features landed
+        — 19 phases total. (IMPROMPTU-07 DEF-198, 2026-04-23: the "five
+        config-gated sub-phases" language in the original FIX-03 docstring
+        miscounted 9.5 and 10.4.):
 
         1. Config + Clock + EventBus (no dependencies)
         2. Database + TradeLogger + AI persistence (needs config)
@@ -279,6 +288,12 @@ class ArgusSystem:
         logger.info("=" * 60)
         logger.info("ARGUS TRADING SYSTEM — STARTING")
         logger.info("=" * 60)
+
+        # DEF-164: capture boot time before any phase begins so the
+        # shutdown-grace computation in _on_shutdown_requested covers the
+        # full init window (including the long HistoricalQueryService
+        # Parquet-view build during Phase 11).
+        self._boot_monotonic = time.monotonic()
 
         # --- Phase 1: Foundation ---
         logger.info("[1/12] Loading configuration...")
@@ -1980,9 +1995,38 @@ class ArgusSystem:
         Publishes SessionEndEvent for Learning Loop auto-trigger, then
         schedules graceful shutdown after the configured delay.
 
+        DEF-164 (IMPROMPTU-07, 2026-04-23): when a late-night boot fires
+        after EOD — or when an EOD flatten queues a ShutdownRequested event
+        immediately after a reboot — honour the boot grace window so the
+        shutdown doesn't tear down HistoricalQueryService (or any other
+        slow phase-11 component) mid-init. See CLAUDE.md DEF-164 + DEF-165
+        for the interrupt-close interaction.
+
         Args:
             event: The shutdown request event with delay configuration.
         """
+        if (
+            self._config is not None
+            and self._boot_monotonic is not None
+            and self._config.order_manager.auto_shutdown_boot_grace_minutes > 0
+        ):
+            grace_seconds = (
+                self._config.order_manager.auto_shutdown_boot_grace_minutes * 60
+            )
+            elapsed = time.monotonic() - self._boot_monotonic
+            if elapsed < grace_seconds:
+                logger.info(
+                    "Auto-shutdown deferred (reason=%s): boot grace window "
+                    "active (elapsed=%.1fs / grace=%ds). Per DEF-164, a "
+                    "shutdown fired during boot can tear down slow-init "
+                    "components (HistoricalQueryService CREATE VIEW) "
+                    "mid-flight. Boot will continue; no shutdown scheduled.",
+                    event.reason,
+                    elapsed,
+                    grace_seconds,
+                )
+                return
+
         delay = event.delay_seconds
         logger.info(
             "Auto-shutdown requested (reason=%s). Initiating in %ds...",
