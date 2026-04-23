@@ -91,16 +91,20 @@ Findings below are ordered to minimize file churn (edits to the same file are ad
 
 ## FIX-13 Split Notice (2026-04-23)
 
-Per operator direction, this 25-finding audit prompt has been split into
-two sessions to keep each session sized correctly:
+Per operator direction, this 25-finding audit prompt was split across
+three sessions to keep each session sized correctly:
 
 - **FIX-13a-test-hygiene-tactical** (executed 2026-04-23): ~15 tactical
-  findings + 4 scope-added DEFs. Back-annotations land here with
+  findings + 4 scope-added DEFs. Back-annotations marked
   `**RESOLVED FIX-13a-test-hygiene-tactical**` or
   `**RESOLVED-VERIFIED FIX-13a-test-hygiene-tactical**`.
-- **FIX-13b-test-hygiene-refactors** (pending): 8 larger refactor
-  findings (F5, F7, F8, F9, F11, F13, F18, F21, F23). Back-annotated
-  here as `**DEFERRED TO FIX-13b-test-hygiene-refactors**`.
+- **FIX-13b-test-hygiene-refactors** (executed 2026-04-23): 7 larger
+  refactor findings — F5 (CRITICAL), F7, F8, F9, F11, F18, F21, F23.
+  Back-annotations marked `**RESOLVED FIX-13b-test-hygiene-refactors**`.
+- **FIX-13c-ai-copilot-coverage** (Stage 8 Parallel — pending):
+  Finding 13 only (AI Copilot coverage expansion, sprint-scale effort).
+  Back-annotated here as
+  `**DEFERRED TO FIX-13c-ai-copilot-coverage**`.
 
 ### Finding 1: `P1-G1-L03` [LOW]
 
@@ -249,7 +253,7 @@ two sessions to keep each session sized correctly:
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
-> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (full `_build_system()` refactor — 13 test classes affected; band-aid hasattr guards would be discarded by FIX-13b's proper fix).
+> **STATUS:** RESOLVED FIX-13b-test-hygiene-refactors (commit 18a73d7) — `_build_system()` now calls the real `ArgusSystem(config_dir=Path("/tmp/argus-test-fixture"), dry_run=True, enable_api=False)` constructor instead of `object.__new__(ArgusSystem)`. `ArgusSystem.__init__` is pure attribute-init (no I/O — all deferred to `start()`), so the dummy config_dir is safe. All 14+ subsequent mock attribute assignments remain in place and override the `None` defaults. Any future attribute added to `__init__` now gets a safe default even if this fixture forgets to mock it. 21/21 shadow_mode tests pass.
 
 ### Finding 6: `P1-G2-M07` [MEDIUM]
 
@@ -307,7 +311,7 @@ two sessions to keep each session sized correctly:
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
-> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (10 files, 93 tests — per-file triage required).
+> **STATUS:** RESOLVED FIX-13b-test-hygiene-refactors (commit edcc626) — 6 sprint-dated files moved to `tests/integration/historical/` (sprint2, sprint3, sprint4a, sprint4b, sprint5, sprint13). Sprint-18/19/20/26 kept at `tests/` top level (per P1-G2-M10 triage — still exercise current production paths). New `tests/integration/historical/README.md` documents the directory as frozen. Sprint 13 decision: moved (not deleted) — its TestBrokerSourceConfig class still exercises live `BrokerSource` enum + `IBKRConfig` default surfaces; TestBrokerSelection + TestIBKRBrokerIntegration classes are duplicative but harmless. 31 tests collect and pass in the new location.
 
 ### Finding 8: `P1-G2-M10` [MEDIUM]
 
@@ -336,7 +340,7 @@ two sessions to keep each session sized correctly:
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
-> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (6-file sprint-dated integration triage — per-file judgment required).
+> **STATUS:** RESOLVED FIX-13b-test-hygiene-refactors (commit edcc626) — same commit as Finding 7. All 6 sprint-dated files moved to `tests/integration/historical/` with a README documenting the directory as frozen.
 
 ### Finding 9: `P1-G1-M04` [MEDIUM]
 
@@ -365,7 +369,7 @@ two sessions to keep each session sized correctly:
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
-> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (6 flatten tests at 30s each — fixture debugging on Sprint 32.9 sync fill-verification path).
+> **STATUS:** RESOLVED FIX-13b-test-hygiene-refactors (commit 3f8cfc7) — per-test `monkeypatch.setattr(order_manager._config, "eod_flatten_timeout_seconds", 0.1)` applied to all 6 flatten tests (`test_eod_flatten_closes_all_positions`, `test_emergency_flatten_closes_everything`, `test_emergency_flatten_cancels_open_orders`, `test_bracket_flatten_cancels_bracket_orders`, `test_circuit_breaker_triggers_emergency_flatten`, `test_eod_flatten_broker_only_positions`). Scoped timing: 64.11s → 0.79s (~63s/full-run reduction). Production 30s default in `OrderManagerConfig.eod_flatten_timeout_seconds` is unchanged. Finding as originally worded assumed all 6 tests take 30s each; empirically 4 take ~1s (FIX-04 P1-G2-M04's prior `config` fixture override to 1s) and only `test_eod_flatten_closes_all_positions` + `test_eod_flatten_broker_only_positions` took the full 30s — the monkeypatch is applied uniformly regardless per the kickoff's "do NOT skip any" instruction.
 
 ### Finding 10: `P1-G2-M09` [MEDIUM]
 
@@ -423,7 +427,7 @@ two sessions to keep each session sized correctly:
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
-> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (13 files, 233 tests — subpackage consolidation with many imports to update).
+> **STATUS:** RESOLVED FIX-13b-test-hygiene-refactors (commit 9d27909) — all 13 `tests/execution/test_order_manager*.py` files moved to `tests/execution/order_manager/` subpackage with `test_order_manager_` prefix stripped (`test_order_manager.py → test_core.py`, etc.). 4 path-dependent tests (1 in `test_core.py`, 3 in `test_sprint329.py`) had `Path(__file__).parents[2]` bumped to `parents[3]` to compensate for the extra nesting level. 238 tests collect and pass under `-n auto`. No CI or source-code references to the old paths.
 
 ### Finding 12: `P1-G1-L02` [LOW]
 
@@ -481,7 +485,7 @@ two sessions to keep each session sized correctly:
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
-> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (20-40 new AI Copilot tests — sprint-scale effort).
+> **STATUS:** DEFERRED TO FIX-13c-ai-copilot-coverage (Stage 8 Parallel slot) — AI Copilot coverage expansion is out of scope for FIX-13b and scheduled to run in the Stage 8 parallel session.
 
 ### Finding 14: `P1-G1-M11` [MEDIUM]
 
@@ -626,7 +630,7 @@ two sessions to keep each session sized correctly:
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
-> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (240→50 LOC fixture refactor with cross-test impact).
+> **STATUS:** RESOLVED FIX-13b-test-hygiene-refactors (commit d9d3fe2) — extracted file-local `_make_trade` helper in `tests/api/conftest.py` that closes over the shared `side=OrderSide.BUY` + `entry_time = base_time - entry_offset` pattern. All 15 `Trade(...)` calls in `seeded_trade_logger` preserved exactly; fixture body reduced by 123 LOC net (103 insertions, 226 deletions). No behavioral change; 552 `tests/api/` tests pass.
 
 ### Finding 19: `P1-G2-M08` [MEDIUM]
 
@@ -726,7 +730,7 @@ two sessions to keep each session sized correctly:
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
-> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (requires production-code change — injected poll interval on `_stale_data_monitor`).
+> **STATUS:** RESOLVED FIX-13b-test-hygiene-refactors (commit d329856) — `AlpacaDataService.__init__` now accepts `monitor_poll_seconds: float = 5.0` (production default preserved). `_stale_data_monitor()` polls at the injected rate via `self._monitor_poll_seconds` (previously hardcoded `asyncio.sleep(5)` in both the main loop and the exception-retry path). Test fixture passes `monitor_poll_seconds=0.1`; the two stale-detection tests reduced `asyncio.sleep(6)` → `asyncio.sleep(0.3)` (3x the injected 0.1s poll). Scoped timing: `TestAlpacaDataServiceStaleDataMonitor` ~12s → ~0.7s. All 451 `tests/data/` tests pass.
 
 ### Finding 22: `P1-G2-L06` [LOW]
 
@@ -797,7 +801,7 @@ two sessions to keep each session sized correctly:
    the fix. If it removes code, grep-verify no other call sites remain.
 4. Update the audit report row with `**RESOLVED FIX-13-test-hygiene**`.
 
-> **STATUS:** DEFERRED TO FIX-13b-test-hygiene-refactors (make_orb_config 14-parameter helper → pytest.fixture; strategy-test scope).
+> **STATUS:** RESOLVED FIX-13b-test-hygiene-refactors (commit 0352a85) — module-level `make_orb_config(...)` replaced with a pytest fixture `orb_config_factory` returning a callable. All 14 keyword arguments preserved exactly. Additional `default_orb_config` fixture added for zero-arg call sites. 35 test signatures updated to inject `orb_config_factory`; 35 `make_orb_config(...)` call sites rewritten to `orb_config_factory(...)`. Judgment call: the kickoff suggested `model_copy(update={...})` against a default instance, but `OrbBreakoutConfig` carries nested `risk_limits` (StrategyRiskLimits) and `operating_window` (OperatingWindow) sub-models that don't flatten under `model_copy`. Factory fixture gives identical ergonomics to the old function without Pydantic deep-update verbosity. File-local scope (not moved to conftest) — other ORB strategies have different config shapes. 37 ORB breakout tests pass; 790 `tests/strategies/` tests pass overall.
 
 ### Finding 24: `P1-G2-L08` [LOW]
 
