@@ -558,7 +558,7 @@ class TestAutoShutdownAfterVerification:
 class TestConfigValidation:
     def test_order_manager_yaml_has_new_fields(self) -> None:
         """config/order_manager.yaml contains eod_flatten_timeout_seconds and eod_flatten_retry_rejected."""
-        config_path = Path(__file__).parents[2] / "config" / "order_manager.yaml"
+        config_path = Path(__file__).parents[3] / "config" / "order_manager.yaml"
         with config_path.open() as f:
             raw = yaml.safe_load(f)
 
@@ -576,7 +576,7 @@ class TestConfigValidation:
 
     def test_order_manager_yaml_has_margin_circuit_fields(self) -> None:
         """config/order_manager.yaml contains margin circuit breaker fields."""
-        config_path = Path(__file__).parents[2] / "config" / "order_manager.yaml"
+        config_path = Path(__file__).parents[3] / "config" / "order_manager.yaml"
         with config_path.open() as f:
             raw = yaml.safe_load(f)
 
@@ -944,7 +944,7 @@ class TestReconciliationReadsSharesNotQty:
         import ast
         from pathlib import Path
 
-        main_path = Path(__file__).parents[2] / "argus" / "main.py"
+        main_path = Path(__file__).parents[3] / "argus" / "main.py"
         source = main_path.read_text()
 
         # The fix should use "shares" not "qty" for Position objects in reconciliation

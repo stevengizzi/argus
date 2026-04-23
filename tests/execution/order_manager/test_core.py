@@ -1606,7 +1606,7 @@ def test_script_has_executable_permission() -> None:
     import os
     from pathlib import Path
 
-    script_path = Path(__file__).parents[2] / "scripts" / "ibkr_close_all_positions.py"
+    script_path = Path(__file__).parents[3] / "scripts" / "ibkr_close_all_positions.py"
     assert script_path.exists(), f"Script not found: {script_path}"
     assert os.access(script_path, os.X_OK), f"Script not executable: {script_path}"
 
