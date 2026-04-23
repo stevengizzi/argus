@@ -5,10 +5,10 @@
 > at every stage barrier. Survives compaction — read this file to hydrate
 > a fresh Claude.ai conversation.
 >
-> **Last updated:** 2026-04-22 — Stage 5 complete
-> **Campaign HEAD:** `7b70390` (FIX-07 single commit; post-barrier becomes current HEAD)
+> **Last updated:** 2026-04-22 — Stage 6 complete
+> **Campaign HEAD:** `daae0fd` (post-FIX-08 docs commit)
 > **Workflow submodule:** `942c53a`
-> **Baseline tests:** 5,029 pytest + 859 Vitest (local) / 5,028+ pytest + 859 Vitest (CI, -m "not integration"), 0 failures
+> **Baseline tests:** 5,035 pytest + 859 Vitest (local) / 5,035 pytest + 859 Vitest (CI, -m "not integration")
 
 ---
 
@@ -40,7 +40,8 @@
 | Stage 5 Wave 1 | FIX-06 (data layer) | ✅ CLEAR |
 | Stage 5 Wave 2 | FIX-07 (intelligence/catalyst/quality) | ✅ CLEAR |
 | **Stage 5** | **(complete)** | **✅ COMPLETE** |
-| Stage 6 | FIX-08 solo | ⏸ PENDING |
+| Stage 6 | FIX-08 (experiments + learning loop, solo) | ✅ CLEAR |
+| **Stage 6** | **(complete)** | **✅ COMPLETE** |
 | Stage 7 | FIX-09 solo | ⏸ PENDING |
 | Stage 8 | FIX-13 + IMPROMPTU-01 (LIVE OK parallel) | ⏸ PENDING |
 | Stage 9A | IMPROMPTU-02 scoping (read-only) | ⏸ PENDING |
@@ -75,8 +76,9 @@
 | FIX-05 (core: orchestrator + risk + regime) | `4590859` + `2fec7ca` + `f0283d3` | CLEAN | CLEAR | +10 | Stage 4 Wave 2. 37 findings (2 CRITICAL + 18 MEDIUM + 17 LOW). Both CRITICALs landed with regression tests exercising uncovered lines. Closed DEF-091/092/104/163/170. Opened DEF-182 (weekly reconciliation). |
 | FIX-06 (data layer) | `4ea09a7` + `49fef3b` | MINOR_DEVIATIONS | CLEAR | +17 | Stage 5 Wave 1. 26 findings (1 CRITICAL + 8 MEDIUM + rest LOW/COSMETIC). F25 CRITICAL resolved via FIX-16-compatible overlay path (spec option (b) moot post-FIX-16); three-layer revert-proof regression defense. SystemAlertEvent added to core/events.py as documented scope expansion. DEF-037/165 closed; DEF-014 PARTIAL (emitter side landed; HealthMonitor subscription awaits P1-A1 M9); DEF-032 re-verified; DEF-183 opened (Alpaca retirement). |
 | FIX-07 (intelligence/catalyst/quality) | `7b70390` | MINOR_DEVIATIONS | CLEAR | +12 | Stage 5 Wave 2 (serial). 23 findings (7 MEDIUM + rest LOW, no CRITICAL). Finding 5 (RejectionStage split) deferred to DEF-184, coordinated with DEF-177. Two scope expansions ratified: `argus/core/protocols.py` (new file, FIX-06 precedent) + `argus/intelligence/learning/models.py` (actual DEF-106 location; spec cited wrong file). DEC-311 received Amendment 1 (kept[-1] dedup anchor pinned via option (c) — preserves in-flight paper-trading counts). DEF-096 + DEF-106 closed; DEF-184 opened. |
+| FIX-08 (experiments + learning loop) | `33ad7da` + `daae0fd` | MINOR_DEVIATIONS | CLEAR | +7 | Stage 6 (solo). 18 findings (3 MEDIUM + 7 LOW + 8 COSMETIC, no CRITICAL). Finding 1 (fingerprint unification runner↔factory) landed with detection-only hash pinned to `ddec1b2a09ee2263` (backward-compat verified). Finding 15 (redistribution drift recording) closes the cumulative-drift-guard evasion loophole. Finding 17 (threshold raise/lower split) eliminates the contradictory-proposal bug. DEF-107 + DEF-123 closed. Spec path drift on Finding 18 documented (P12). Reviewer surfaced DEF-163 re-open — Python-side fix from FIX-05 was incomplete (SQL-side UTC/ET date mismatch in TradeLogger.get_todays_pnl). |
 
-Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → 4,985 (post-FIX-04, holds through Stage 4 Wave 1 + hotfixes) → 5,000 (post-FIX-05) → 5,017 (post-FIX-06) → **5,029 (post-FIX-07)**. Vitest: 846 → **859**.
+Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign start after FIX-03's CLAUDE.md strikethrough) → 4,944 (post-FIX-11) → 4,946 (post-FIX-02) → 4,964 (post-Stage-2) → 4,965 (post-IMPROMPTU-def172-173-175) → 4,984 (post-FIX-16) → 4,985 (post-FIX-04, holds through Stage 4 Wave 1 + hotfixes) → 5,000 (post-FIX-05) → 5,017 (post-FIX-06) → 5,029 (post-FIX-07) → **5,035 (post-FIX-08)**. Vitest: 846 → **859**.
 
 ---
 
@@ -99,13 +101,14 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 | DEF-091 | Public accessors for V1 RegimeClassifier + VIXDataService private attrs — `compute_trend_score()` + `vol_low_threshold`/`vol_high_threshold` properties on V1; `config` property on VIXDataService | FIX-05 | `4590859` |
 | DEF-092 | Unused Protocol types in `argus/core/regime.py` — four orphaned Protocol classes deleted | FIX-05 | `4590859` |
 | DEF-104 | Dual ExitReason enums drift risk — `argus.core.events.ExitReason` now re-exports from `argus.models.trading` (single source of truth) | FIX-05 | `4590859` |
-| DEF-163 | Timezone-boundary + hardcoded-date Python tests — ET alignment in `test_get_todays_pnl_excludes_unrecoverable`, ET capture in `test_history_store_migration`, relative `computed_at` in `_make_vector()`. Vitest side remains under DEF-167 (FIX-13). | FIX-05 | `4590859` |
 | DEF-170 | VIX regime calculators inert in production — `RegimeClassifierV2.attach_vix_service()` re-instantiates all four VIX calculators from the injected service | FIX-05 | `4590859` |
 | DEF-032 | `criteria_list` parameter ignored on FMP scanner — RESOLVED-VERIFIED: DEF-032 still accurate; inline pointer comment added at call site | FIX-06 | `4ea09a7` |
 | DEF-037 | FMP API key redaction in error logs — `_redact()` helper threaded through 4 FMP network-error log sites | FIX-06 | `4ea09a7` |
 | DEF-165 | DuckDB conn close hang when CREATE VIEW interrupted — `self._conn.interrupt()` before `.close()` | FIX-06 | `4ea09a7` |
 | DEF-096 | Protocol type for duck-typed candle store + store references — `argus/core/protocols.py` with `CandleStoreProtocol` + `CounterfactualStoreProtocol` | FIX-07 | `7b70390` |
 | DEF-106 | `models.py from_dict()` assert isinstance batch — 8 sites in `intelligence/learning/models.py` + 1 in `routes/counterfactual.py` converted to `if not isinstance: raise TypeError` | FIX-07 | `7b70390` |
+| DEF-107 | Unused `raiseRec` destructured variable in LearningInsightsPanel.tsx L388 — deleted | FIX-08 | `33ad7da` |
+| DEF-123 | `build_parameter_grid()` float accumulation — RESOLVED-VERIFIED: existing `round(min + i*step, 6)` form is mathematically equivalent to `numpy.arange`; spec-suggested numpy migration would add a dependency for cosmetic gain; docstrings updated with rationale | FIX-08 | `33ad7da` |
 
 ### Partially resolved
 
@@ -120,6 +123,7 @@ Baseline progression: 4,934 (pre-campaign) → 4,858 (actual pytest at campaign 
 |---|---|---|---|
 | DEF-168 | `docs/architecture.md` API catalog drift | LOW | P1-H1a (not yet scheduled as FIX-NN) |
 | DEF-169 | `--dev` mode retired (informational only) | INFO | Ongoing (no owner needed) |
+| DEF-163 | Timezone-boundary bug in `test_get_todays_pnl_excludes_unrecoverable` (FIX-05 fix was Python-side only; SQL-side `date()` UTC/ET mismatch in `TradeLogger.get_todays_pnl` remains). Re-opened post-FIX-08 after reviewer observed ongoing ~4h-per-day failure window. | LOW | **FIX-13** |
 | DEF-171 | `test_all_ulids_mapped_bidirectionally` xdist flake | LOW | **FIX-13 (Stage 8)** |
 | DEF-174 | Tauri desktop wrapper never integrated; `platform.ts` deleted as misleading dead code | LOW / opportunistic | Deferred (only if desktop packaging becomes a requirement) |
 | DEF-175 | Component ownership consolidation — `CatalystStorage`, `SetupQualityEngine`, `DynamicPositionSizer`, `ExperimentStore`, `LearningStore` constructed in both `main.py` and `api/server.py` lifespan phases; broader pattern behind DEF-172/173 | MEDIUM | **Dedicated post-Sprint-31.9 sprint** (~2–3 sessions). Pre-sprint discovery at `docs/sprints/post-31.9-component-ownership/DISCOVERY.md`. Blocked on Sprint 31.9 closure. |
