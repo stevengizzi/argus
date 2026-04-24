@@ -53,7 +53,7 @@ and this document can be archived to `docs/sprints/archive/`.
 | Stage 9B | IMPROMPTU-07 (doc-hygiene + UI fixes; + Apr 21 F-05/F-06/F-08) | ✅ CLEAR (`add4e83`; Tier 2 review CLEAR in `489cb3f`; CI run 24860817762 green) | 2026-04-23 |
 | Stage 9B | IMPROMPTU-08 (architecture.md API catalog regeneration) | ✅ CLEAR (`a905335`; MINOR_DEVIATIONS — Apr 23 debrief bundled per operator direction, close-out manifest incomplete; Tier 2 CONCERNS→resolved in-session via F1+F2 fold-in pre-commit) | 2026-04-23 |
 | Stage 9B | IMPROMPTU-10 (evaluation.db retention diagnostic + fix: DEF-197 pulled forward per Apr 23 trajectory) | ✅ CLEAR (periodic 4-hour retention task in `EvaluationEventStore.initialize()`; +3 lifecycle regression tests; one-shot operator cleanup documented in IMPROMPTU-10-closeout.md §7) | 2026-04-23 |
-| Stage 9C | IMPROMPTU-11 (A2/C12 cascade mechanism diagnostic: DEF-204 mechanism identification; fix to post-31.9-reconciliation-drift) | ⏸ PENDING | TBD |
+| Stage 9C | IMPROMPTU-11 (A2/C12 cascade mechanism diagnostic: DEF-204 mechanism identification; fix to post-31.9-reconciliation-drift) | ✅ DIAGNOSTIC CLEAR (read-only; mechanism IDENTIFIED — H1+H7 missing `ocaGroup` on bracket children + standalone trail/escalation SELLs ~98% of blast radius; H2+H8 detection blindness allows accumulation; H5 DEF-158 retry side-blind doubles pre-existing shorts; report at `docs/sprints/sprint-31.9/IMPROMPTU-11-mechanism-diagnostic.md`; DEF-204 OPEN, fix routed to `post-31.9-reconciliation-drift`; P26 retrospective candidate captured) | 2026-04-24 |
 | Stage 9C | IMPROMPTU-09 (Apr 22 verification sweep, read-only) | ⏸ PENDING (post-IMPROMPTU-04 dependency) | TBD |
 | Stage 9C | RETRO-FOLD (P1-P25 into workflow/) | ⏸ PENDING | TBD |
 | Stage 10 | SPRINT-CLOSE (summary + seal + archive + 3 DISCOVERY.md) | ⏸ PENDING | TBD |
@@ -61,6 +61,7 @@ and this document can be archived to `docs/sprints/archive/`.
 | Post-31.9 | Component Ownership Consolidation (DEF-175 + DEF-182 + ~~DEF-193~~ [closed IMPROMPTU-CI] + DEF-197 + DEF-201 [residual observatory_service aiosqlite cross-loop; test-side band-aid in place] + DEF-014 HealthMonitor + C7) | ⏸ PLANNED | After 31.9 closes |
 | Post-31.9 | Reconnect-Recovery + RejectionStage (DEF-177 + DEF-184 + DEF-194 + DEF-195 + DEF-196 + DEF-014 IBKR TODOs + Apr 21 F-04) | ⏸ PLANNED (DISCOVERY.md drafted in SPRINT-CLOSE) | After 31.9 closes |
 | Post-31.9 | Alpaca Retirement (DEF-178 + DEF-183 + DEF-014 Alpaca TODO) | ⏸ PLANNED (DISCOVERY.md drafted in SPRINT-CLOSE) | After 31.9 closes |
+| Post-31.9 | **Reconciliation Drift (DEF-204 — NEW per IMPROMPTU-11)** — 3 sessions: (a) explicit `ocaGroup`+`ocaType=1` on bracket children + `oca_group_id` through ManagedPosition so trail/escalation/resubmit-stop SELLs share bracket OCA; (b) side-aware reconciliation contract — `dict[str, float]` → `dict[str, tuple[OrderSide, int]]` + handle broker-orphan direction with CRITICAL alert + entry gate; (c) side-aware DEF-158 retry path mirroring IMPROMPTU-04 EOD Pass 1/2 fix | ⏸ PLANNED (DISCOVERY.md to be drafted in SPRINT-CLOSE; mechanism evidence in `docs/sprints/sprint-31.9/IMPROMPTU-11-mechanism-diagnostic.md`) | After 31.9 closes — **CRITICAL SAFETY: must land before live trading** |
 | **Campaign** | | ⏸ IN PROGRESS | |
 
 ## CI infrastructure status
