@@ -51,7 +51,7 @@ and this document can be archived to `docs/sprints/archive/`.
 | Stage 9B | IMPROMPTU-05 (deps & infra: DEF-180/181/179) | ✅ CLEAR (code `6ddd7a7`, review `8d39e21`) | 2026-04-23 |
 | Stage 9B | IMPROMPTU-06 (test-debt: DEF-176/185/192/166/048/049) | ✅ CLEAR (`91998bc`; Tier 2 CONCERNS→resolved in-session) | 2026-04-23 |
 | Stage 9B | IMPROMPTU-07 (doc-hygiene + UI fixes; + Apr 21 F-05/F-06/F-08) | ✅ CLEAR (`add4e83`; Tier 2 review CLEAR in `489cb3f`; CI run 24860817762 green) | 2026-04-23 |
-| Stage 9B | IMPROMPTU-08 (architecture.md API catalog regeneration) | ✅ CODE LANDED — DEF-168 closed; 100 REST + 4 WS routes catalogued; +4 pytest; Tier 2 pending | 2026-04-23 |
+| Stage 9B | IMPROMPTU-08 (architecture.md API catalog regeneration) | ✅ CLEAR (`a905335`; MINOR_DEVIATIONS — Apr 23 debrief bundled per operator direction, close-out manifest incomplete; Tier 2 CONCERNS→resolved in-session via F1+F2 fold-in pre-commit) | 2026-04-23 |
 | Stage 9C | IMPROMPTU-09 (Apr 22 verification sweep, read-only) | ⏸ PENDING (post-IMPROMPTU-04 dependency) | TBD |
 | Stage 9C | RETRO-FOLD (P1-P25 into workflow/) | ⏸ PENDING | TBD |
 | Stage 10 | SPRINT-CLOSE (summary + seal + archive + 3 DISCOVERY.md) | ⏸ PENDING | TBD |
