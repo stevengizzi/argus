@@ -1,11 +1,11 @@
-# Sprint 31.9 IMPROMPTU-09: Verification Sweep (8 Apr 22 Debrief Gaps)
+# Sprint 31.9 IMPROMPTU-09: Verification Sweep (9 Apr 22 + Apr 23 Debrief Gaps)
 
 > Drafted Phase 2. Paste into a fresh Claude Code session. This prompt is **standalone** — do not read other session prompts in this campaign. **Read-only** — no code changes land in this session.
 
 ## Scope
 
 **Finding addressed:**
-The Apr 22 paper session debrief (`docs/sprints/sprint-31.9/debrief-2026-04-22-triage.md`) identified 8 verification gaps — claims made during triage that require evidence from a subsequent paper session or from read-only inspection. This session walks through all 8, runs the queries/greps/inspections, and produces a verification report. May open new DEFs; does NOT modify code.
+The Apr 22 paper session debrief (`docs/sprints/sprint-31.9/debrief-2026-04-22-triage.md`) identified 8 verification gaps, and the Apr 23 debrief added a 9th (VG-9, VIX DB-side wiring confirmation) — claims made during triage that require evidence from a subsequent paper session or from read-only inspection. This session walks through all 9, runs the queries/greps/inspections, and produces a verification report. May open new DEFs; does NOT modify code.
 
 **Dependencies:**
 - **IMPROMPTU-04 must have landed** (A1 fix + startup invariant + C1 log downgrade) — some verification items require running with the A1 fix present.
@@ -59,17 +59,18 @@ git status  # Expected: clean
 ## Pre-Flight Context Reading
 
 1. Read these files:
-   - `docs/sprints/sprint-31.9/debrief-2026-04-22-triage.md` — the triage doc that spawned the 8 gaps. Look for a "Verification gaps" section or equivalent; if not explicitly sectioned, gaps are scattered inline throughout the debrief.
-   - `docs/sprints/sprint-31.9/CAMPAIGN-CLOSE-PLAN.md` §"IMPROMPTU-09" — check if the plan enumerates the 8 gaps with specific verification tactics.
+   - `docs/sprints/sprint-31.9/debrief-2026-04-22-triage.md` — the triage doc that spawned the first 8 gaps. Look for a "Verification gaps" section or equivalent; if not explicitly sectioned, gaps are scattered inline throughout the debrief.
+   - `docs/sprints/sprint-31.9/debrief-2026-04-23-triage.md` §B1 — VIX wiring confirmation gap (VG-9, added post-April-23 debrief).
+   - `docs/sprints/sprint-31.9/CAMPAIGN-CLOSE-PLAN.md` §"IMPROMPTU-09" — check if the plan enumerates the 9 gaps with specific verification tactics.
    - `CLAUDE.md` — DEF-194/195/196/197/198/199 entries (Apr 22 debrief's bucket A1/B1-8/C1-8 findings)
    - `docs/protocols/market-session-debrief.md` — the debrief protocol itself; understand the 7-phase structure
 
-2. Compile the canonical list of 8 gaps. If they're not explicitly enumerated in the debrief, infer from the triage notes by looking for phrases like "needs verification," "pending paper session," "to confirm," "assumed but unverified." Enumerate them in the verification report's §1.
+2. Compile the canonical list of 9 gaps (8 from Apr 22 + VG-9 from Apr 23 §B1). If they're not explicitly enumerated in the debrief, infer from the triage notes by looking for phrases like "needs verification," "pending paper session," "to confirm," "assumed but unverified." Enumerate them in the verification report's §1.
 
 ## Objective
 
-Produce a verification report that, for each of the 8 gaps from the Apr 22
-debrief triage, records:
+Produce a verification report that, for each of the 9 gaps (8 from Apr 22 +
+VG-9 from Apr 23 §B1), records:
 - **Claim** (what the triage asserted)
 - **Verification method** (SQL query, log grep, paper session observation, or code inspection)
 - **Evidence** (the actual query/grep output or log excerpt)
@@ -82,15 +83,18 @@ cross-references to the new verification report.
 
 ## Requirements
 
-### Requirement 1: Enumerate the 8 gaps
+### Requirement 1: Enumerate the 9 gaps
 
-In the verification report (`IMPROMPTU-09-verification-report.md`), open with
-a flat table of all 8 gaps, each with a unique ID (VG-1 through VG-8, for
-"Verification Gap"). Derive from the debrief triage doc.
+In the verification report (`IMPROMPTU-09-verification-report.md`), open with a flat table of all 9 gaps, each with a unique ID (VG-1 through VG-9, for "Verification Gap"). Note: VG-1–VG-8 derive from the April 22 debrief triage; VG-9 was added post-April-23 debrief (see Pre-Flight Context Reading above).
 
-If the count differs from 8 after rigorous reading (could be 7 or 9 or 10
+If the count differs from 9 after rigorous reading (could be 8 or 10 or more
 depending on how you split inline gaps), record the actual count + why you
-deviated from the planning-time estimate. Don't force 8.
+deviated from the planning-time estimate. Don't force 9.
+
+**VG-9 — VIX dimensions populated in `regime_history.db`.**
+- **Claim (Apr 23 debrief §B1):** FIX-05 / DEF-170 `VIXDataService` wiring log-confirmed at startup (`VIXDataService wired into Orchestrator (forwarded to RegimeClassifierV2 if present)` + `ready=True, stale=False`). Downstream DB-side verification not yet performed.
+- **Verification method (B — SQL):** Read-only SQL against `data/regime_history.db` — `SELECT MIN(vix_close), MAX(vix_close), AVG(vix_close), COUNT(*) FROM regime_history WHERE date(timestamp) = '2026-04-23';` (or whichever date the next post-IMPROMPTU-04 paper session produces).
+- **Expected:** `MIN` and `MAX` both non-null; `COUNT(*)` > 0. If all rows have `vix_close IS NULL`, FIX-05 regression — open a new DEF.
 
 ### Requirement 2: For each gap, verify
 
@@ -206,7 +210,7 @@ End the report with a summary table:
 ## Definition of Done
 
 - [ ] Verification report at `docs/sprints/sprint-31.9/IMPROMPTU-09-verification-report.md`
-- [ ] All 8 (or N) gaps from the Apr 22 debrief have an explicit entry with evidence
+- [ ] All 9 (or N) gaps (8 from Apr 22 debrief + VG-9 from Apr 23 §B1) have an explicit entry with evidence
 - [ ] Summary table with aggregate counts
 - [ ] Any new DEFs opened in CLAUDE.md + RUNNING-REGISTER
 - [ ] Any existing DEFs marked CLOSED-VERIFIED with this session's commit SHA

@@ -176,7 +176,7 @@ Docs-only, parallelizable with any other session.
 | Final CLAUDE.md doc-sync — strike IMPROMPTU-04..09 resolved DEFs | DEC-275 discipline |
 | Draft `docs/sprints/post-31.9-reconnect-recovery-and-rejectionstage/DISCOVERY.md` | Handoff for named future sprint |
 | Draft `docs/sprints/post-31.9-alpaca-retirement/DISCOVERY.md` | Handoff for named future sprint |
-| Update `docs/sprints/post-31.9-component-ownership/DISCOVERY.md` — add DEF-182, DEF-193, DEF-197, DEF-014 HealthMonitor, C7 | Existing scope expansion |
+| Update `docs/sprints/post-31.9-component-ownership/DISCOVERY.md` — add DEF-182, DEF-193, ~~DEF-197~~ (resolved in IMPROMPTU-10), **DEF-202 (replaces C7)**, DEF-014 HealthMonitor | Existing scope expansion |
 
 ### Category 2 — NAMED-HORIZON DEFERRED (33 items)
 
@@ -184,7 +184,7 @@ Each is scheduled to a specific named future sprint. Not part of this campaign.
 
 | Named Horizon | Items |
 |---|---|
-| **post-31.9-component-ownership** | DEF-175 (core), DEF-182 (weekly reconciliation stub), DEF-193 (Observatory WS disconnect detection), DEF-197 (evaluation.db retention), DEF-014 HealthMonitor subscription, debrief §C7 (post-shutdown IBKR reconnect + asyncio Task destroyed) |
+| **post-31.9-component-ownership** | DEF-175 (core), DEF-182 (weekly reconciliation stub), DEF-193 (Observatory WS disconnect detection), ~~DEF-197~~ (**pulled forward to IMPROMPTU-10** per Apr 23 trajectory), **DEF-202 (post-shutdown hang, subsumes Apr 22 §C7 + Apr 23 §C9)**, DEF-014 HealthMonitor subscription |
 | **post-31.9-reconnect-recovery-and-rejectionstage** | DEF-177 (`RejectionStage.MARGIN_CIRCUIT`), DEF-184 (RejectionStage/TrackingReason split), DEF-194 (IBKR stale position cache), DEF-195 (`max_concurrent_positions` divergence + BITO 8% concentration), DEF-196 (32 DEC-372 stop-retry-exhaustion cascade), DEF-014 IBKR emitter TODOs (`ibkr_broker.py:453,531`), Apr 21 debrief F-04 (flatten-retry against non-existent positions) |
 | **post-31.9-alpaca-retirement** | DEF-178 (`alpaca-py` to `[incubator]` extras), DEF-183 (full Alpaca code+test retirement), DEF-014 Alpaca emitter TODO (`alpaca_data_service.py:593`) |
 | **Sprint 30 Short Selling** | DEF-128 (IBKR err 404 multi-position qty divergence prevention) |
@@ -266,12 +266,14 @@ inventoried individually). The Matrix above is authoritative.
 ```
 IMPROMPTU-04   safety (A1 + C1 + startup invariant)          [BLOCKS PAPER TRADING]
 ├─ then any order (file-disjoint, parallelizable):
-│  IMPROMPTU-05   deps & infra (DEF-180/181/179)
-│  IMPROMPTU-06   test-debt (DEF-176/185/192/166/048/049)
-│  IMPROMPTU-07   doc-hygiene + UI fixes
-│  IMPROMPTU-08   architecture.md catalog regen
-├─ after IMPROMPTU-04 lands AND one paper session has run:
-│  IMPROMPTU-09   Apr 22 verification sweep (read-only)
+│  IMPROMPTU-05   deps & infra (DEF-180/181/179)            ✅ LANDED
+│  IMPROMPTU-06   test-debt (DEF-176/185/192/166/048/049)   ✅ LANDED
+│  IMPROMPTU-07   doc-hygiene + UI fixes                    ✅ LANDED
+│  IMPROMPTU-08   architecture.md catalog regen             ✅ LANDED
+├─ inserted post-Apr-23 debrief (DEF-197 priority elevation MEDIUM→HIGH):
+│  IMPROMPTU-10   evaluation.db retention diagnostic + fix (DEF-197)
+├─ after IMPROMPTU-04 + IMPROMPTU-10 land AND one paper session has run:
+│  IMPROMPTU-09   Apr 22 + Apr 23 verification sweep (9 gaps, read-only)
 ├─ parallelizable with any above:
 │  RETRO-FOLD     P1-P25 into workflow/ metarepo
 └─ runs LAST, after all above:
@@ -304,6 +306,7 @@ IMPROMPTU-04   safety (A1 + C1 + startup invariant)          [BLOCKS PAPER TRADI
 | IMPROMPTU-06 | safe-during-trading | `tests/execution/order_manager/*`, `tests/analytics/`, `argus/analytics/ensemble_evaluation.py`, `argus/intelligence/learning/outcome_collector.py`, `argus/execution/order_manager.py` (kwarg removal only), test infra | Standard | — |
 | IMPROMPTU-07 | safe-during-trading | `argus/main.py`, `scripts/revalidate_strategy.py`, `argus/analytics/trade_logger.py`, `argus/api/routes/counterfactual.py`, `argus/ui/src/features/trades/ShadowTradesTab.tsx`, `argus/ui/src/api/types.ts`, `argus/ui/src/utils/strategyConfig.ts`, `argus/ui/src/features/*/Badge.tsx`, `argus/core/risk_manager.py`, docs | Standard | — |
 | IMPROMPTU-08 | safe-during-trading | `docs/architecture.md` + possibly new `scripts/regenerate_api_catalog.py` | Standard | — |
+| IMPROMPTU-10 | safe-during-trading | `argus/strategies/telemetry_store.py`, possibly `argus/main.py`, `tests/strategies/test_telemetry_store.py`, docs | Standard | — (file-disjoint with all other campaign sessions) |
 | IMPROMPTU-09 | read-only | new `docs/sprints/sprint-31.9/debrief-2026-04-22-verification.md`; reads `data/argus.db`, `data/catalyst.db`, `logs/argus_20260423.jsonl` (next session log) | None (read-only) | IMPROMPTU-04 landed + one paper session |
 | RETRO-FOLD | docs-only | `workflow/` submodule; `CAMPAIGN-COMPLETENESS-TRACKER.md` | None (docs) | — |
 | SPRINT-CLOSE | docs-only | `docs/sprints/sprint-31.9/*`, `docs/sprints/archive/`, `docs/sprints/post-31.9-*/DISCOVERY.md`, `CLAUDE.md` final doc sync | Standard (final verification) | All above |
@@ -317,8 +320,9 @@ its own DISCOVERY.md drafted during SPRINT-CLOSE.
 
 1. **post-31.9-component-ownership** — 2–3 sessions. Discovery doc exists at
    `docs/sprints/post-31.9-component-ownership/DISCOVERY.md`, needs update
-   during SPRINT-CLOSE to incorporate DEF-182, DEF-193, DEF-197, DEF-014
-   HealthMonitor subscription, C7.
+   during SPRINT-CLOSE to incorporate DEF-182, DEF-193, (DEF-197 resolved in
+   IMPROMPTU-10), DEF-014 HealthMonitor subscription, DEF-202 (replaces C7,
+   subsumes Apr 23 §C9).
 2. **post-31.9-reconnect-recovery-and-rejectionstage** — 2–3 sessions. Discovery
    drafted during SPRINT-CLOSE. Covers DEF-177, DEF-184, DEF-194, DEF-195,
    DEF-196, DEF-014 IBKR TODOs, Apr 21 F-04.

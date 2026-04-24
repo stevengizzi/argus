@@ -52,6 +52,7 @@ and this document can be archived to `docs/sprints/archive/`.
 | Stage 9B | IMPROMPTU-06 (test-debt: DEF-176/185/192/166/048/049) | ✅ CLEAR (`91998bc`; Tier 2 CONCERNS→resolved in-session) | 2026-04-23 |
 | Stage 9B | IMPROMPTU-07 (doc-hygiene + UI fixes; + Apr 21 F-05/F-06/F-08) | ✅ CLEAR (`add4e83`; Tier 2 review CLEAR in `489cb3f`; CI run 24860817762 green) | 2026-04-23 |
 | Stage 9B | IMPROMPTU-08 (architecture.md API catalog regeneration) | ✅ CLEAR (`a905335`; MINOR_DEVIATIONS — Apr 23 debrief bundled per operator direction, close-out manifest incomplete; Tier 2 CONCERNS→resolved in-session via F1+F2 fold-in pre-commit) | 2026-04-23 |
+| Stage 9B | IMPROMPTU-10 (evaluation.db retention diagnostic + fix: DEF-197 pulled forward per Apr 23 trajectory) | ⏸ PENDING | TBD |
 | Stage 9C | IMPROMPTU-09 (Apr 22 verification sweep, read-only) | ⏸ PENDING (post-IMPROMPTU-04 dependency) | TBD |
 | Stage 9C | RETRO-FOLD (P1-P25 into workflow/) | ⏸ PENDING | TBD |
 | Stage 10 | SPRINT-CLOSE (summary + seal + archive + 3 DISCOVERY.md) | ⏸ PENDING | TBD |
@@ -216,6 +217,13 @@ Closed by campaign sessions (grouped by closing session):
 
 - DEF-189 — revalidate_strategy.py config_overrides param-name mismatch (MEDIUM, dedicated standalone micro-fix)
 - DEF-191 — Latent get_todays_pnl SQL-side UTC normalization (LOW, pre-empts after-hours trading support)
+
+Opened post-Apr-23 debrief (routed by delta-update):
+
+| DEF | Title | Target |
+|---|---|---|
+| DEF-202 | post-shutdown hang (63 min, subsumes Apr 22 §C7 + Apr 23 §C9) | post-31.9-component-ownership sprint |
+| DEF-203 | max_concurrent_positions WARNING spam not throttled | Category 3 MONITOR-ONLY (next risk_manager.py touch) |
 
 These join the existing post-31.9 backlog: DEF-175 (Component Ownership Consolidation sprint), DEF-177 + DEF-184 coordination (RejectionStage split), DEF-178, DEF-183, DEF-185, DEF-186, DEF-187.
 
