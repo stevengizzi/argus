@@ -69,6 +69,9 @@ class EvaluationEventStore:
             exceeds this size in MB.
         SIZE_WARNING_THRESHOLD_MB: Log WARNING if DB exceeds this size after
             maintenance.
+        RETENTION_INTERVAL_SECONDS: Cadence for the periodic retention task.
+            Defaults to 4 hours so a long-running session triggers cleanup
+            without waiting for the next boot.
     """
 
     RETENTION_DAYS: int = 7
@@ -76,6 +79,7 @@ class EvaluationEventStore:
     STARTUP_RECLAIM_FREELIST_RATIO: float = 0.5
     STARTUP_RECLAIM_MIN_SIZE_MB: int = 500
     SIZE_WARNING_THRESHOLD_MB: int = 2000
+    RETENTION_INTERVAL_SECONDS: int = 4 * 60 * 60
     _WARNING_INTERVAL_SECONDS: float = 60.0
 
     def __init__(self, db_path: str) -> None:
@@ -87,6 +91,7 @@ class EvaluationEventStore:
         self._db_path = db_path
         self._conn: aiosqlite.Connection | None = None
         self._last_warning_time: float = 0.0
+        self._retention_task: asyncio.Task[None] | None = None
 
     async def initialize(self) -> None:
         """Create the evaluation_events table and indexes if they don't exist.
@@ -142,6 +147,13 @@ class EvaluationEventStore:
                 final_size_mb,
                 self.SIZE_WARNING_THRESHOLD_MB,
             )
+
+        # IMPROMPTU-10 (DEF-197): the single startup cleanup_old_events() call
+        # cannot keep up with multi-day sessions — once a session crosses the
+        # retention boundary, day-8 rows accumulate until the next boot. Spawn
+        # a periodic retention task so cleanup fires every 4 hours regardless
+        # of how long the process runs. Cancelled in close().
+        self._retention_task = asyncio.create_task(self._run_periodic_retention())
 
     async def write_event(self, event: EvaluationEvent) -> None:
         """Persist a single evaluation event.
@@ -295,6 +307,28 @@ class EvaluationEventStore:
                 "Cleaned up %d old evaluation events (before %s)", deleted, cutoff
             )
 
+    async def _run_periodic_retention(self) -> None:
+        """Run cleanup_old_events() on a fixed cadence until cancelled.
+
+        Sleeps RETENTION_INTERVAL_SECONDS between iterations. Failures inside
+        cleanup_old_events() are logged and do not stop the loop. Exits
+        cleanly on CancelledError.
+        """
+        while True:
+            try:
+                await asyncio.sleep(self.RETENTION_INTERVAL_SECONDS)
+            except asyncio.CancelledError:
+                raise
+            try:
+                await self.cleanup_old_events()
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.warning(
+                    "EvaluationEventStore: periodic retention iteration failed",
+                    exc_info=True,
+                )
+
     def _get_db_size_mb(self) -> float:
         """Return the database file size in MB, or 0 if file does not exist."""
         path = Path(self._db_path)
@@ -351,7 +385,14 @@ class EvaluationEventStore:
         await self._conn.execute("PRAGMA journal_mode = WAL")
 
     async def close(self) -> None:
-        """Close the database connection."""
+        """Close the database connection and cancel the retention task."""
+        if self._retention_task is not None:
+            self._retention_task.cancel()
+            try:
+                await self._retention_task
+            except asyncio.CancelledError:
+                pass
+            self._retention_task = None
         if self._conn is not None:
             await self._conn.close()
             self._conn = None

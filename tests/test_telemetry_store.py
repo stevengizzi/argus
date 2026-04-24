@@ -181,6 +181,73 @@ async def test_store_cleanup_preserves_recent(store: EvaluationEventStore) -> No
     assert len(results) == 1
 
 
+# ---------------------------------------------------------------------------
+# IMPROMPTU-10 (DEF-197): periodic retention scheduler regression tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_periodic_retention_task_starts_on_initialize(
+    store: EvaluationEventStore,
+) -> None:
+    """initialize() schedules the periodic retention task on a live event loop."""
+    assert store._retention_task is not None
+    assert not store._retention_task.done()
+
+
+@pytest.mark.asyncio
+async def test_periodic_retention_task_cancels_cleanly_on_close(
+    tmp_path: Path,
+) -> None:
+    """close() cancels the periodic retention task without leaking exceptions.
+
+    Reverting the close() cancellation block leaves task.done() False after
+    close() returns and produces a 'Task was destroyed but it is pending'
+    warning at GC time — this assertion catches the regression.
+    """
+    db_path = str(tmp_path / "cancel.db")
+    s = EvaluationEventStore(db_path)
+    await s.initialize()
+    task = s._retention_task
+    assert task is not None
+    assert not task.done()
+    await s.close()
+    assert task.done()
+    assert task.cancelled() or task.exception() is None
+
+
+@pytest.mark.asyncio
+async def test_periodic_retention_invokes_cleanup_old_events(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """The periodic loop actually fires cleanup_old_events() on its cadence.
+
+    Reverting the asyncio.create_task(self._run_periodic_retention()) line in
+    initialize() leaves the old-row in place after the wait window — this
+    assertion catches the regression. Wall-clock cost ~0.2s.
+    """
+    monkeypatch.setattr(EvaluationEventStore, "RETENTION_INTERVAL_SECONDS", 0.05)
+    db_path = str(tmp_path / "periodic.db")
+    s = EvaluationEventStore(db_path)
+    await s.initialize()
+    try:
+        old_ts = datetime.now(_ET) - timedelta(days=10)
+        await s.write_event(_make_event(timestamp=old_ts))
+        pre = await s.query_events(
+            strategy_id="strat_orb", date=old_ts.strftime("%Y-%m-%d")
+        )
+        assert len(pre) == 1
+        # Wait long enough for at least one periodic iteration (50ms + buffer)
+        import asyncio as _asyncio
+        await _asyncio.sleep(0.2)
+        post = await s.query_events(
+            strategy_id="strat_orb", date=old_ts.strftime("%Y-%m-%d")
+        )
+        assert len(post) == 0
+    finally:
+        await s.close()
+
+
 @pytest.mark.asyncio
 async def test_store_write_failure_doesnt_raise(tmp_path) -> None:
     """write_event() logs but never raises on DB failure."""
