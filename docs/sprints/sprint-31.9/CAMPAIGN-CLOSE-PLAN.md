@@ -277,9 +277,11 @@ IMPROMPTU-04   safety (A1 + C1 + startup invariant)          [BLOCKS PAPER TRADI
 ├─ parallelizable:
 │  RETRO-FOLD     P1-P25 into workflow/ metarepo                        ✅ LANDED
 ├─ inserted post-Apr-24 debrief (DEF-204 CRITICAL — cascade mechanism):
-│  IMPROMPTU-11   A2/C12 cascade mechanism diagnostic (read-only; fix routes to post-31.9-reconciliation-drift)
+│  IMPROMPTU-11   A2/C12 cascade mechanism diagnostic (read-only)        ✅ LANDED
 ├─ after IMPROMPTU-11 + Apr 24 paper session + three debriefs available:
 │  IMPROMPTU-09   Apr 22 + Apr 23 + Apr 24 verification sweep (9 gaps, read-only; 4 pre-populated)
+├─ inserted post-IMPROMPTU-11 (DEF-205 LOW — pytest date-decay):
+│  TEST-HYGIENE-01   pytest date-decay fix (12 hardcoded date conversions)
 └─ runs LAST, after all above:
    SPRINT-CLOSE   summary + seal + archive + 4 DISCOVERY.md (post-31.9-reconciliation-drift NEW)
 ```
@@ -313,6 +315,7 @@ IMPROMPTU-04   safety (A1 + C1 + startup invariant)          [BLOCKS PAPER TRADI
 | IMPROMPTU-10 | safe-during-trading | `argus/strategies/telemetry_store.py`, possibly `argus/main.py`, `tests/strategies/test_telemetry_store.py`, docs | Standard | — (file-disjoint with all other campaign sessions) |
 | IMPROMPTU-11 | safe-during-trading | read-only: `argus/execution/order_manager.py`, `logs/argus_20260424.jsonl`, the three debriefs; writes `docs/sprints/sprint-31.9/IMPROMPTU-11-mechanism-diagnostic.md` + register/tracker | Standard | — (file-disjoint with IMPROMPTU-09 — can parallelize) |
 | IMPROMPTU-09 | read-only | new `docs/sprints/sprint-31.9/debrief-2026-04-22-verification.md`; reads `data/argus.db`, `data/catalyst.db`, `logs/argus_20260423.jsonl` (next session log) | None (read-only) | IMPROMPTU-04 landed + one paper session |
+| TEST-HYGIENE-01 | safe-during-trading | `tests/intelligence/test_filter_accuracy.py`, `tests/api/test_counterfactual_api.py`, docs | Standard | After IMPROMPTU-09 (file-disjoint with IMPROMPTU-09; no shared file overlap) |
 | RETRO-FOLD | docs-only | `workflow/` submodule; `CAMPAIGN-COMPLETENESS-TRACKER.md` | None (docs) | — |
 | SPRINT-CLOSE | docs-only | `docs/sprints/sprint-31.9/*`, `docs/sprints/archive/`, `docs/sprints/post-31.9-*/DISCOVERY.md`, `CLAUDE.md` final doc sync | Standard (final verification) | All above |
 

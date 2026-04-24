@@ -55,6 +55,7 @@ and this document can be archived to `docs/sprints/archive/`.
 | Stage 9B | IMPROMPTU-10 (evaluation.db retention diagnostic + fix: DEF-197 pulled forward per Apr 23 trajectory) | ✅ CLEAR (periodic 4-hour retention task in `EvaluationEventStore.initialize()`; +3 lifecycle regression tests; one-shot operator cleanup documented in IMPROMPTU-10-closeout.md §7) | 2026-04-23 |
 | Stage 9C | IMPROMPTU-11 (A2/C12 cascade mechanism diagnostic: DEF-204 mechanism identification; fix to post-31.9-reconciliation-drift) | ✅ DIAGNOSTIC CLEAR (read-only; mechanism IDENTIFIED — H1+H7 missing `ocaGroup` on bracket children + standalone trail/escalation SELLs ~98% of blast radius; H2+H8 detection blindness allows accumulation; H5 DEF-158 retry side-blind doubles pre-existing shorts; report at `docs/sprints/sprint-31.9/IMPROMPTU-11-mechanism-diagnostic.md`; DEF-204 OPEN, fix routed to `post-31.9-reconciliation-drift`; P26 retrospective candidate captured) | 2026-04-24 |
 | Stage 9C | IMPROMPTU-09 (Apr 22 verification sweep, read-only) | ⏸ PENDING (post-IMPROMPTU-04 dependency) | TBD |
+| Stage 9C | TEST-HYGIENE-01 (pytest date-decay fix: DEF-205 — 12 hardcoded date seeds → dynamic patterns) | ⏸ PENDING | TBD |
 | Stage 9C | RETRO-FOLD (P1-P25 into workflow/) | ⏸ PENDING | TBD |
 | Stage 10 | SPRINT-CLOSE (summary + seal + archive + 3 DISCOVERY.md) | ⏸ PENDING | TBD |
 | **Sprint 31.9** | | ⏸ IN PROGRESS | |
