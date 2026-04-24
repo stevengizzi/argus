@@ -309,9 +309,10 @@ operator-handoff line below once the run completes.
    across 7 days.
 7. Green CI URL: *pending commit + push*.
 
-One-line summary (will be filled post-CI):
-`IMPROMPTU-10 complete. Close-out: CLEAN. Review: <pending>. Diagnostic:
+One-line summary:
+`IMPROMPTU-10 complete. Close-out: CLEAN. Review: CLEAR
+(docs/sprints/sprint-31.9/IMPROMPTU-10-review.md). Diagnostic:
 data within retention window — single startup cleanup can't keep up
 with multi-day sessions. Fix: candidate (1) — periodic 4-h retention
-task. Commits: <pending>. Test delta: 5077 → 5080 pytest. CI: <pending>.
-DEF-197 closed.`
+task. Commits: 8bdec82 (fix) + ec1b244 (SHA backfill). Test delta:
+5077 → 5080 pytest. CI: pending push. DEF-197 closed.`
