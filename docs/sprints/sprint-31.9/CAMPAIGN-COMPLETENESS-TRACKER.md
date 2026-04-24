@@ -273,10 +273,43 @@ Campaign-wide lessons to fold into `workflow/` metarepo protocols before closing
 | P24 | Test-only sessions that exercise optional runtime dependencies must mock those dependencies at the `sys.modules` level rather than relying on local package availability. FIX-13c's `test_get_client_caches_instance` called `client._get_client()` without mocking the anthropic import, which triggers a lazy `from anthropic import AsyncAnthropic`. Locally the test passed because pre-draft coverage measurement had pip-installed the `anthropic` package; on CI (where anthropic is not in any `[project.dependencies]` or `[project.optional-dependencies]` group — it's a pure runtime optional) the import raised `ImportError` and the test failed. This is a generalization of P18 (verify library-behavior assumptions): P18 covers the case where a kickoff's suggested import trigger doesn't actually fire the behavior; P24 covers the dual case where the local environment silently supplies a dependency that the test shouldn't assume. Rule of thumb: if a test touches any module that's lazy-imported or conditionally imported in production, mock at `sys.modules` level via `monkeypatch.setitem(sys.modules, "package", fake_or_None)` so the test works in environments without the optional package installed. Cross-reference the sibling test `test_get_client_raises_importerror_when_anthropic_missing` which uses this pattern correctly (sets `sys.modules["anthropic"] = None` to force the ImportError path). |
 | P25 | CI results must be verified green before the next session starts. Six commits accumulated between FIX-13a (`c9c8891`) and FIX-13c hotfix (`ffcfb5c`) without anyone confirming CI passed. Each successive push arrived before the previous CI run completed, so GitHub cancelled prior runs and "red" was never explicitly observed — the FIX-13a timeout regression remained hidden across FIX-13b (7 commits), Stage 8 Wave 2 barrier, FIX-13c (3 commits), and Stage 8 Wave 3 barrier. It was only unmasked when the FIX-13c anthropic ImportError happened to be the first run to fail fast enough to produce visible output. Campaign rule going forward: each session's close-out must cite a green CI run link for the session's final commit (or the barrier commit if the session is bundled). Tier 2 reviewer verifies CI status as part of the checklist, not just local pytest. Without this, a red CI state can persist invisibly across multiple sessions. pytest-timeout (added permanently by FIX-13c CI diagnostic hotfix) partially defends this class of regression by converting future hangs into per-test failures with tracebacks, but does not catch non-hang regressions or green→red transitions that complete within the timeout budget. Operationally this also implies campaign sessions should not push commits faster than CI can run — roughly 4-minute intervals at current runtime — or explicitly wait on a green run before starting the next session. |
 
-These become inputs to the campaign-close retrospective. They should be folded
-into the `workflow/` metarepo protocols in a separate commit BEFORE Sprint 31.9
-seals. Recommended: add them to the retrospective section of the final Sprint
-31.9 summary doc.
+### RETRO-FOLD disposition (P1–P25 → metarepo `claude-workflow`)
+
+All 25 lessons folded during RETRO-FOLD (Stage 9C, 2026-04-23, metarepo commit `63be1b6`).
+Each metarepo addition carries an Origin footnote citing its P-number. No lesson
+dropped, no lesson deferred as non-generalizable.
+
+| P # | Landed in metarepo |
+|-----|--------------------|
+| P1  | `claude/skills/review.md` §"Dependency-Change Sessions" (new category under Step 2) — commit `63be1b6` |
+| P2  | `templates/implementation-prompt.md` §"Marker Validation" (new subsection after Config Validation) — commit `63be1b6` |
+| P3  | `claude/skills/review.md` §"Architectural Compliance" (new sub-check for library-migration sessions) — commit `63be1b6` |
+| P4  | `claude/skills/close-out.md` §"Step 3: Commit" (pre-commit scope-check step) — commit `63be1b6` |
+| P5  | `claude/rules/universal.md` §9 RULE-039 + `templates/implementation-prompt.md` §"Risky Batch Edit — Staged Flow" — commit `63be1b6` |
+| P6  | `claude/rules/universal.md` §9 RULE-038 (consolidated with P12/P13/P19/P22) — commit `63be1b6` |
+| P7  | `claude/rules/universal.md` §10 RULE-040 — commit `63be1b6` |
+| P8  | `claude/rules/universal.md` §11 RULE-041 — commit `63be1b6` |
+| P9  | `claude/rules/universal.md` §12 RULE-042 — commit `63be1b6` |
+| P10 | `claude/skills/close-out.md` §"Test Results" (delta-equality invariant note) — commit `63be1b6` |
+| P11 | `claude/skills/close-out.md` §"Change Manifest" (sprint-ops-file inclusion note) — commit `63be1b6` |
+| P12 | `claude/rules/universal.md` §9 RULE-038 (consolidated with P6/P13/P19/P22) — commit `63be1b6` |
+| P13 | `claude/rules/universal.md` §9 RULE-038 (as one of 4 variants) + `protocols/sprint-planning.md` §"Quality Checks" (tracker-nickname reconcile item) — commit `63be1b6` |
+| P14 | `claude/rules/universal.md` §13 RULE-044 — commit `63be1b6` |
+| P15 | `claude/rules/universal.md` §13 RULE-045 — commit `63be1b6` |
+| P16 | `claude/rules/universal.md` §13 RULE-046 — commit `63be1b6` |
+| P17 | `claude/rules/universal.md` §12 RULE-043 — commit `63be1b6` |
+| P18 | `claude/rules/universal.md` §13 RULE-048 — commit `63be1b6` |
+| P19 | `claude/rules/universal.md` §9 RULE-038 (consolidated with P6/P12/P13/P22) — commit `63be1b6` |
+| P20 | `protocols/sprint-planning.md` §"Test count estimation guide" (measure-don't-infer extension) — commit `63be1b6` |
+| P21 | `claude/rules/universal.md` §14 RULE-049 — commit `63be1b6` |
+| P22 | `claude/rules/universal.md` §9 RULE-038 (consolidated with P6/P12/P13/P19) — commit `63be1b6` |
+| P23 | `protocols/sprint-planning.md` §"Test count estimation guide" (parametrized-case multiplication extension) — commit `63be1b6` |
+| P24 | `claude/rules/universal.md` §13 RULE-047 — commit `63be1b6` |
+| P25 | `claude/rules/universal.md` §15 RULE-050 + `claude/skills/close-out.md` §"Step 4: CI Verification" + `claude/skills/review.md` §"Step 1" check-6 — commit `63be1b6` |
+
+These lessons have completed their round-trip from local campaign capture → metarepo
+canonical protocol. Future sprints and future projects inherit them through the
+standard `workflow/` submodule seeding pipeline.
 
 ## Acceptance criteria for "campaign complete"
 
