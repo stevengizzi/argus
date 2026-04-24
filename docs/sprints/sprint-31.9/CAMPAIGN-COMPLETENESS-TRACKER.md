@@ -232,6 +232,7 @@ Opened post-Apr-24 debrief:
 | DEF | Title | Target |
 |---|---|---|
 | DEF-204 | CRITICAL SAFETY — upstream cascade of unexpected shorts, independent of DEF-199. IMPROMPTU-11 diagnosis → post-31.9-reconciliation-drift fix | post-31.9-reconciliation-drift sprint (fix); IMPROMPTU-11 (diagnostic) |
+| DEF-205 | pytest date-decay (sibling of DEF-167); 12 failures, pre-existing on main | Next test-hygiene touch (LOW priority — cosmetic) |
 
 These join the existing post-31.9 backlog: DEF-175 (Component Ownership Consolidation sprint), DEF-177 + DEF-184 coordination (RejectionStage split), DEF-178, DEF-183, DEF-185, DEF-186, DEF-187.
 
