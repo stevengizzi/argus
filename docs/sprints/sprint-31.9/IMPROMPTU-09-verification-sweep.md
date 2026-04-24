@@ -61,6 +61,7 @@ git status  # Expected: clean
 1. Read these files:
    - `docs/sprints/sprint-31.9/debrief-2026-04-22-triage.md` — the triage doc that spawned the first 8 gaps. Look for a "Verification gaps" section or equivalent; if not explicitly sectioned, gaps are scattered inline throughout the debrief.
    - `docs/sprints/sprint-31.9/debrief-2026-04-23-triage.md` §B1 — VIX wiring confirmation gap (VG-9, added post-April-23 debrief).
+   - `docs/sprints/sprint-31.9/debrief-2026-04-24-triage.md` — **pre-populates evidence for 4 of 9 gaps** (VG-1 A1 fire-test: debrief §A1 CONFIRMED; VG-2 startup invariant: debrief §B6 INCONCLUSIVE-unexercised; VG-8 C1 downgrade: debrief §B4 CONFIRMED 86% log reduction; VG-9 VIX wiring state: debrief §B1 CONFIRMED at boot, DB-side query still needed). IMPROMPTU-09 validates each debrief claim against DB/log evidence rather than re-performing debrief work.
    - `docs/sprints/sprint-31.9/CAMPAIGN-CLOSE-PLAN.md` §"IMPROMPTU-09" — check if the plan enumerates the 9 gaps with specific verification tactics.
    - `CLAUDE.md` — DEF-194/195/196/197/198/199 entries (Apr 22 debrief's bucket A1/B1-8/C1-8 findings)
    - `docs/protocols/market-session-debrief.md` — the debrief protocol itself; understand the 7-phase structure
@@ -80,6 +81,8 @@ VG-9 from Apr 23 §B1), records:
 Do NOT modify production code, tests, or configs. Do NOT re-run existing
 revalidations. Do NOT edit the debrief triage document itself — only add
 cross-references to the new verification report.
+
+**Note on evidence reuse:** The Apr 24 debrief has substantively pre-answered gaps VG-1, VG-2, VG-8, and provided preliminary evidence for VG-9. IMPROMPTU-09's job for these gaps is *not* to redo the work — it's to verify the debrief's claims hold against independent DB queries (for VG-9: actual `regime_history.db` SELECT) and to confirm the log-side evidence cited in the debrief actually exists in the form described (reviewer cross-check discipline). The Apr 22 gaps remain fully open — today's debrief doesn't cover those.
 
 ## Requirements
 

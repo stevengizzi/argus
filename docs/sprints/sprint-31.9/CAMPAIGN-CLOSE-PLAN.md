@@ -177,6 +177,7 @@ Docs-only, parallelizable with any other session.
 | Draft `docs/sprints/post-31.9-reconnect-recovery-and-rejectionstage/DISCOVERY.md` | Handoff for named future sprint |
 | Draft `docs/sprints/post-31.9-alpaca-retirement/DISCOVERY.md` | Handoff for named future sprint |
 | Update `docs/sprints/post-31.9-component-ownership/DISCOVERY.md` — add DEF-182, DEF-193, ~~DEF-197~~ (resolved in IMPROMPTU-10), **DEF-202 (replaces C7)**, DEF-014 HealthMonitor | Existing scope expansion |
+| Create `docs/sprints/post-31.9-reconciliation-drift/DISCOVERY.md` — NEW sprint directory; seed with DEF-204 + IMPROMPTU-11 mechanism findings + IMSR forensic anchor + adversarial-review profile | NEW named horizon |
 
 ### Category 2 — NAMED-HORIZON DEFERRED (33 items)
 
@@ -186,6 +187,7 @@ Each is scheduled to a specific named future sprint. Not part of this campaign.
 |---|---|
 | **post-31.9-component-ownership** | DEF-175 (core), DEF-182 (weekly reconciliation stub), DEF-193 (Observatory WS disconnect detection), ~~DEF-197~~ (**pulled forward to IMPROMPTU-10** per Apr 23 trajectory), **DEF-202 (post-shutdown hang, subsumes Apr 22 §C7 + Apr 23 §C9)**, DEF-014 HealthMonitor subscription |
 | **post-31.9-reconnect-recovery-and-rejectionstage** | DEF-177 (`RejectionStage.MARGIN_CIRCUIT`), DEF-184 (RejectionStage/TrackingReason split), DEF-194 (IBKR stale position cache), DEF-195 (`max_concurrent_positions` divergence + BITO 8% concentration), DEF-196 (32 DEC-372 stop-retry-exhaustion cascade), DEF-014 IBKR emitter TODOs (`ibkr_broker.py:453,531`), Apr 21 debrief F-04 (flatten-retry against non-existent positions) |
+| **post-31.9-reconciliation-drift** (NEW — added post-Apr-24 debrief) | DEF-204 (A2/C12 upstream cascade mechanism — CRITICAL safety). Fix requires careful `argus/execution/order_manager.py` reconciliation / bracket-leg accounting changes with adversarial review. Not safe-during-trading. Mechanism identified in IMPROMPTU-11 (Sprint 31.9 Stage 9C). IMSR forensic anchor: `ARGUS=200 vs IBKR=100` flatten-qty mismatch. Cross-references DEF-158 (dup-SELL prevention — the detection mechanism working correctly), DEF-196 (stop-retry cascade — different family). Operator mitigation via daily `ibkr_close_all_positions.py` pending fix. |
 | **post-31.9-alpaca-retirement** | DEF-178 (`alpaca-py` to `[incubator]` extras), DEF-183 (full Alpaca code+test retirement), DEF-014 Alpaca emitter TODO (`alpaca_data_service.py:593`) |
 | **Sprint 30 Short Selling** | DEF-128 (IBKR err 404 multi-position qty divergence prevention) |
 | **Sprint 31B Research Console** | DEF-147 (DuckDB Research Console backend) |
@@ -271,13 +273,15 @@ IMPROMPTU-04   safety (A1 + C1 + startup invariant)          [BLOCKS PAPER TRADI
 │  IMPROMPTU-07   doc-hygiene + UI fixes                    ✅ LANDED
 │  IMPROMPTU-08   architecture.md catalog regen             ✅ LANDED
 ├─ inserted post-Apr-23 debrief (DEF-197 priority elevation MEDIUM→HIGH):
-│  IMPROMPTU-10   evaluation.db retention diagnostic + fix (DEF-197)
-├─ after IMPROMPTU-04 + IMPROMPTU-10 land AND one paper session has run:
-│  IMPROMPTU-09   Apr 22 + Apr 23 verification sweep (9 gaps, read-only)
-├─ parallelizable with any above:
-│  RETRO-FOLD     P1-P25 into workflow/ metarepo
+│  IMPROMPTU-10   evaluation.db retention diagnostic + fix (DEF-197)   ✅ LANDED
+├─ parallelizable:
+│  RETRO-FOLD     P1-P25 into workflow/ metarepo                        ✅ LANDED
+├─ inserted post-Apr-24 debrief (DEF-204 CRITICAL — cascade mechanism):
+│  IMPROMPTU-11   A2/C12 cascade mechanism diagnostic (read-only; fix routes to post-31.9-reconciliation-drift)
+├─ after IMPROMPTU-11 + Apr 24 paper session + three debriefs available:
+│  IMPROMPTU-09   Apr 22 + Apr 23 + Apr 24 verification sweep (9 gaps, read-only; 4 pre-populated)
 └─ runs LAST, after all above:
-   SPRINT-CLOSE   summary + seal + archive + 3 DISCOVERY.md
+   SPRINT-CLOSE   summary + seal + archive + 4 DISCOVERY.md (post-31.9-reconciliation-drift NEW)
 ```
 
 ### Parallelism rules
@@ -307,6 +311,7 @@ IMPROMPTU-04   safety (A1 + C1 + startup invariant)          [BLOCKS PAPER TRADI
 | IMPROMPTU-07 | safe-during-trading | `argus/main.py`, `scripts/revalidate_strategy.py`, `argus/analytics/trade_logger.py`, `argus/api/routes/counterfactual.py`, `argus/ui/src/features/trades/ShadowTradesTab.tsx`, `argus/ui/src/api/types.ts`, `argus/ui/src/utils/strategyConfig.ts`, `argus/ui/src/features/*/Badge.tsx`, `argus/core/risk_manager.py`, docs | Standard | — |
 | IMPROMPTU-08 | safe-during-trading | `docs/architecture.md` + possibly new `scripts/regenerate_api_catalog.py` | Standard | — |
 | IMPROMPTU-10 | safe-during-trading | `argus/strategies/telemetry_store.py`, possibly `argus/main.py`, `tests/strategies/test_telemetry_store.py`, docs | Standard | — (file-disjoint with all other campaign sessions) |
+| IMPROMPTU-11 | safe-during-trading | read-only: `argus/execution/order_manager.py`, `logs/argus_20260424.jsonl`, the three debriefs; writes `docs/sprints/sprint-31.9/IMPROMPTU-11-mechanism-diagnostic.md` + register/tracker | Standard | — (file-disjoint with IMPROMPTU-09 — can parallelize) |
 | IMPROMPTU-09 | read-only | new `docs/sprints/sprint-31.9/debrief-2026-04-22-verification.md`; reads `data/argus.db`, `data/catalyst.db`, `logs/argus_20260423.jsonl` (next session log) | None (read-only) | IMPROMPTU-04 landed + one paper session |
 | RETRO-FOLD | docs-only | `workflow/` submodule; `CAMPAIGN-COMPLETENESS-TRACKER.md` | None (docs) | — |
 | SPRINT-CLOSE | docs-only | `docs/sprints/sprint-31.9/*`, `docs/sprints/archive/`, `docs/sprints/post-31.9-*/DISCOVERY.md`, `CLAUDE.md` final doc sync | Standard (final verification) | All above |
