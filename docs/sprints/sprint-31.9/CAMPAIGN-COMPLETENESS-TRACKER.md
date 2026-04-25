@@ -55,7 +55,7 @@ and this document can be archived to `docs/sprints/archive/`.
 | Stage 9B | IMPROMPTU-10 (evaluation.db retention diagnostic + fix: DEF-197 pulled forward per Apr 23 trajectory) | ✅ CLEAR (periodic 4-hour retention task in `EvaluationEventStore.initialize()`; +3 lifecycle regression tests; one-shot operator cleanup documented in IMPROMPTU-10-closeout.md §7) | 2026-04-23 |
 | Stage 9C | IMPROMPTU-11 (A2/C12 cascade mechanism diagnostic: DEF-204 mechanism identification; fix to post-31.9-reconciliation-drift) | ✅ DIAGNOSTIC CLEAR (read-only; mechanism IDENTIFIED — H1+H7 missing `ocaGroup` on bracket children + standalone trail/escalation SELLs ~98% of blast radius; H2+H8 detection blindness allows accumulation; H5 DEF-158 retry side-blind doubles pre-existing shorts; report at `docs/sprints/sprint-31.9/IMPROMPTU-11-mechanism-diagnostic.md`; DEF-204 OPEN, fix routed to `post-31.9-reconciliation-drift`; P26 retrospective candidate captured) | 2026-04-24 |
 | Stage 9C | IMPROMPTU-09 (Apr 22+23+24 verification sweep, 9 gaps — read-only) | ✅ CLEAR (report at `docs/sprints/sprint-31.9/IMPROMPTU-09-verification-report.md`; 6 CONFIRMED / 1 INCONCLUSIVE-present / 1 REFUTED → NEW DEF-206 / 1 CONFIRMED-cross-ref DEF-195; zero code/config/test changes) | 2026-04-24 |
-| Stage 9C | TEST-HYGIENE-01 (pytest date-decay fix: DEF-205 — 12 hardcoded date seeds → dynamic patterns) | ⏸ PENDING | TBD |
+| Stage 9C | TEST-HYGIENE-01 (pytest date-decay fix: DEF-205 — 2 seed-helpers converted to dynamic anchor 5 days back; +12 pytest 5,068 → 5,080) | ✅ CLEAR | 2026-04-24 |
 | Stage 9C | RETRO-FOLD (P1-P25 into workflow/) | ⏸ PENDING | TBD |
 | Stage 10 | SPRINT-CLOSE (summary + seal + archive + 3 DISCOVERY.md) | ⏸ PENDING | TBD |
 | **Sprint 31.9** | | ⏸ IN PROGRESS | |
@@ -233,7 +233,7 @@ Opened post-Apr-24 debrief:
 | DEF | Title | Target |
 |---|---|---|
 | DEF-204 | CRITICAL SAFETY — upstream cascade of unexpected shorts, independent of DEF-199. IMPROMPTU-11 diagnosis → post-31.9-reconciliation-drift fix | post-31.9-reconciliation-drift sprint (fix); IMPROMPTU-11 (diagnostic) |
-| DEF-205 | pytest date-decay (sibling of DEF-167); 12 failures, pre-existing on main | Next test-hygiene touch (LOW priority — cosmetic) |
+| ~~DEF-205~~ | ~~pytest date-decay (sibling of DEF-167); 12 failures, pre-existing on main~~ — **RESOLVED** TEST-HYGIENE-01 (2026-04-24); 2 seed-helpers converted to dynamic anchor; +12 pytest 5,068 → 5,080 | ~~LOW~~ — ✅ LANDED |
 
 These join the existing post-31.9 backlog: DEF-175 (Component Ownership Consolidation sprint), DEF-177 + DEF-184 coordination (RejectionStage split), DEF-178, DEF-183, DEF-185, DEF-186, DEF-187.
 

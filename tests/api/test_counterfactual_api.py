@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import AsyncGenerator
+from datetime import datetime, timedelta
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -53,12 +54,29 @@ async def client_with_cf(
         yield c
 
 
+def _seed_anchor() -> datetime:
+    """Return an anchor 5 days in the past, second-precision (DEF-205).
+
+    Within compute_filter_accuracy's rolling 30-day default window so the
+    accuracy endpoint includes seeded positions regardless of wall-clock date.
+    """
+    return (datetime.now() - timedelta(days=5)).replace(microsecond=0)
+
+
 async def _seed_cf_position(
     store: CounterfactualStore,
     position_id: str,
     theoretical_pnl: float = -2.0,
+    opened_at: str | None = None,
+    closed_at: str | None = None,
 ) -> None:
     """Insert a closed counterfactual position for API testing."""
+    if opened_at is None or closed_at is None:
+        anchor = _seed_anchor()
+        if opened_at is None:
+            opened_at = anchor.isoformat()
+        if closed_at is None:
+            closed_at = (anchor + timedelta(minutes=30)).isoformat()
     assert store._conn is not None
     await store._conn.execute(
         """INSERT INTO counterfactual_positions (
@@ -73,7 +91,7 @@ async def _seed_cf_position(
             position_id, "AAPL", "orb_breakout", 100.0, 95.0,
             110.0, None, "quality_filter", "grade too low",
             72.5, "B", None, "{}",
-            "2026-03-25T10:00:00", "2026-03-25T10:30:00",
+            opened_at, closed_at,
             98.0, "stopped_out",
             theoretical_pnl, theoretical_pnl / 5.0, 1800.0,
             2.0, 3.0, 10,
@@ -250,20 +268,25 @@ class TestCounterfactualPositionsEndpoint:
         """date_from and date_to query params filter by opened_at."""
         await _seed_cf_position(cf_store, "pos_date_1", theoretical_pnl=-1.0)
 
-        # Date range that includes the seeded position (opened_at = 2026-03-25)
+        # Date range that includes the seeded position (anchor = 5 days ago).
+        seed_day = _seed_anchor().date()
+        next_day = seed_day + timedelta(days=1)
         resp = await client_with_cf.get(
             "/api/v1/counterfactual/positions",
             headers=auth_headers,
-            params={"date_from": "2026-03-25T00:00:00", "date_to": "2026-03-25T23:59:59"},
+            params={
+                "date_from": f"{seed_day.isoformat()}T00:00:00",
+                "date_to": f"{seed_day.isoformat()}T23:59:59",
+            },
         )
         assert resp.status_code == 200
         assert resp.json()["total_count"] == 1
 
-        # Date range that excludes the position
+        # Date range that excludes the position (starts the day after the seed).
         resp2 = await client_with_cf.get(
             "/api/v1/counterfactual/positions",
             headers=auth_headers,
-            params={"date_from": "2026-03-26T00:00:00"},
+            params={"date_from": f"{next_day.isoformat()}T00:00:00"},
         )
         assert resp2.status_code == 200
         assert resp2.json()["total_count"] == 0

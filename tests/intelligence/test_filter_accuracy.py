@@ -33,10 +33,17 @@ async def _seed_position(
     quality_grade: str | None = "B",
     theoretical_pnl: float = -2.0,
     regime_snapshot: dict[str, object] | None = None,
-    opened_at: str = "2026-03-25T10:00:00",
-    closed_at: str = "2026-03-25T10:30:00",
+    opened_at: str | None = None,
+    closed_at: str | None = None,
 ) -> None:
     """Insert a closed counterfactual position directly into the store."""
+    if opened_at is None or closed_at is None:
+        # DEF-205: seed within compute_filter_accuracy's rolling 30-day window.
+        anchor = (datetime.now() - timedelta(days=5)).replace(microsecond=0)
+        if opened_at is None:
+            opened_at = anchor.isoformat()
+        if closed_at is None:
+            closed_at = (anchor + timedelta(minutes=30)).isoformat()
     assert store._conn is not None
     await store._conn.execute(
         """INSERT INTO counterfactual_positions (
