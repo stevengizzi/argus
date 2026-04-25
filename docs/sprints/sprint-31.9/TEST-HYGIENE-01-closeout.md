@@ -129,11 +129,22 @@ Vitest: 866 (unchanged — frontend not touched).
 
 `test_main.py` baseline tracked separately: 39 pass / 5 skip (unchanged).
 
-## 9 — Next Step
+## 9 — CI Verification (RULE-050)
+
+CI run on `1f9f61c` (barrier commit including the SHA backfill on top of the
+fix `6f6a72b`): **success** in 4m21s.
+URL: https://github.com/stevengizzi/argus/actions/runs/24918911450
+
+This restores green CI after a 6-commit red streak (per kickoff §Pre-Session
+Verification — Campaign HEAD note in `RUNNING-REGISTER.md`). All red CI
+runs in that streak were caused by the 12 DEF-205 failures, which this
+session resolved.
+
+## 10 — Next Step
 
 SPRINT-CLOSE — last remaining session in Sprint 31.9.
 
-## 10 — Tier 2 Review Profile
+## 11 — Tier 2 Review Profile
 
 Standard. The session-specific focus items in the kickoff §Tier 2 Review:
 
@@ -145,6 +156,6 @@ Standard. The session-specific focus items in the kickoff §Tier 2 Review:
 Test command: `python -m pytest --ignore=tests/test_main.py -n auto -q`
 Expected: `5080 passed`.
 
-## 11 — Operator Handoff
+## 12 — Operator Handoff
 
 `TEST-HYGIENE-01 complete. 12 dates converted (2 helper functions, 1 test query-param block). Test suite: 5,068 → 5,080 (DEF-205 closed). Commit: 6f6a72b.`
