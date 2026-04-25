@@ -641,12 +641,35 @@ Reconciliation redesign with broker-confirmed positions (DEC-369). Overflow rout
 - **DEF-151 fix (Apr 4):** `json.dumps(record.backtest_result, default=str)` in `store.py:193`. Root cause of Night 1 data loss (143 grid points computed, zero saved). +1 pytest. Commit: 3a48bcf.
 - **Sweep Impromptu (Apr 3–5):** Small-sample universe-aware sweeps (24–50 symbols per pattern) across 9 patterns. Key results: Micro Pullback — 2 promotable variants; PMH — conditional; Bull Flag + Flat-Top — confirmed dead on tested universes; Gap-and-Go — invalid (DEF-152); VWAP Bounce — wrong axes swept (DEF-154). DEF-152, DEF-153, DEF-154 opened. Full-universe re-sweeps pending Sweep Infrastructure Hardening.
 
-### Post-Sprint-31.9 (immediately following): Component Ownership Consolidation
+### Sprint 31.9 — Health & Hardening Campaign-Close (April 22 – April 24, 2026) — ✅ CLOSED
+
+11 named sessions + 3 paper-session debriefs. **A1 short-flip cascade fix (DEF-199) validated** in production via Apr 24 paper session (44/44 detected + refused, signature flipped 2.00× → 1.00×). **DEF-204 mechanism IDENTIFIED** by IMPROMPTU-11 — bracket children placed via `parentId` only without explicit `ocaGroup`, combined with redundant standalone SELL orders from trail/escalation paths sharing no OCA group with bracket children, account for ~98% of unexpected-short blast radius. P1–P25 lessons folded into `claude-workflow` metarepo via RETRO-FOLD; P26/P27 captured for the next campaign's RETRO-FOLD. 19 DEFs closed (DEF-048, 049, 164, 166, 168, 169, 176, 179, 180, 181, 185, 189, 191, 193, 197, 198, 199, 200, 205); 6 opened (DEF-201–206). 0 new DECs. Net test delta: +146 pytest, +20 Vitest. Final HEAD `0a25592` on `origin/main`. Canonical summary: `docs/sprints/sprint-31.9/SPRINT-31.9-SUMMARY.md`.
+
+### Post-31.9 named horizons (operator-decided ordering)
+
+Sprint 31.9's closure unblocks four post-31.9 horizons. The build-track queue position is operator-decided based on safety priority — DEF-204's CRITICAL safety classification likely takes precedence over Sprint 31B.
+
+#### post-31.9-reconciliation-drift (CRITICAL safety, mechanism IDENTIFIED)
+**Target:** 3 sessions, all-three-must-land-together. **Adversarial review REQUIRED at every session boundary.**
+
+Fix scope for DEF-204 — the upstream cascade mechanism that DEF-199's IMPROMPTU-04 fix had been masking. Three coordinated changes: (a) explicit `ocaGroup` + `ocaType=1` on bracket children + thread `oca_group_id` through `ManagedPosition` so trail/escalation/resubmit-stop SELLs share the bracket's OCA group; (b) side-aware reconciliation contract — change `dict[str, float]` to `dict[str, tuple[OrderSide, int]]` + handle broker-orphan direction with CRITICAL alert + entry gate; (c) side-aware DEF-158 retry path mirroring IMPROMPTU-04 EOD Pass 1/2 fix (3-branch BUY → flatten / SELL → log+skip / unknown → log+skip). Discovery: `docs/sprints/post-31.9-reconciliation-drift/DISCOVERY.md`. Operator mitigation in effect until this sprint lands: daily `scripts/ibkr_close_all_positions.py` at session close.
+
+#### post-31.9-component-ownership: Component Ownership Consolidation
 **Target:** 2–3 sessions
 
-Architectural refactor migrating component construction from `argus/api/server.py` `_init_*` lifespan phases into `argus/main.py` Phase 9.x so ArgusSystem becomes the sole owner of `CatalystStorage`, `SetupQualityEngine`, `DynamicPositionSizer`, `ExperimentStore`, and `LearningStore`. `argus/api/server.py` becomes a pure REST/WS adapter that reads pre-populated components from `AppState`. Resolves DEF-175 and structurally resolves DEF-172 (which was closed as RESOLVED-VERIFIED via behavioral proof; this sprint removes the duplication at the source). Relocates the DEF-173 `LearningStore.enforce_retention()` wiring next to the existing `ExperimentStore` retention call in `main.py`.
+Architectural refactor migrating component construction from `argus/api/server.py` `_init_*` lifespan phases into `argus/main.py` Phase 9.x so ArgusSystem becomes the sole owner of `CatalystStorage`, `SetupQualityEngine`, `DynamicPositionSizer`, `ExperimentStore`, and `LearningStore`. `argus/api/server.py` becomes a pure REST/WS adapter that reads pre-populated components from `AppState`. Resolves DEF-175 + DEF-182 + DEF-201 + DEF-202 and structurally resolves DEF-172 (which was closed as RESOLVED-VERIFIED via behavioral proof; this sprint removes the duplication at the source). Relocates the DEF-173 `LearningStore.enforce_retention()` wiring next to the existing `ExperimentStore` retention call in `main.py`.
 
-Pre-sprint discovery captured in `docs/sprints/post-31.9-component-ownership/DISCOVERY.md`. Entry criteria include Sprint 31.9 closure and stable baseline test suite. Follow sprint-planning protocol (Phase A deep-think → Phase B design summary → Phase C spec → Phase D execution) — do NOT execute as impromptus.
+Pre-sprint discovery captured in `docs/sprints/post-31.9-component-ownership/DISCOVERY.md`. **Entry criteria satisfied** by Sprint 31.9 closure (2026-04-24). Follow sprint-planning protocol (Phase A deep-think → Phase B design summary → Phase C spec → Phase D execution) — do NOT execute as impromptus.
+
+#### post-31.9-reconnect-recovery-and-rejectionstage
+**Target:** 3 sessions
+
+Reconnect-recovery work: DEF-194 (IBKR `ib_async` stale position cache after reconnect), DEF-195 (`max_concurrent_positions` count diverges from broker state after disconnect-recovery missed fill callbacks), DEF-196 (DEC-372 stop-retry-exhaustion cascade events). Plus RejectionStage enum split: DEF-177 (add `MARGIN_CIRCUIT`) and DEF-184 (split `RejectionStage` into rejections + `TrackingReason`). Plus DEF-014 IBKR emitter TODOs. Plus Apr 21 audit F-04. Adversarial review required for the reconnect-recovery sessions; standard Tier 2 for the RejectionStage enum work. Discovery: `docs/sprints/post-31.9-reconnect-recovery-and-rejectionstage/DISCOVERY.md`.
+
+#### post-31.9-alpaca-retirement
+**Target:** 1–2 sessions, mechanical refactor
+
+Full Alpaca incubator retirement — DEF-178 (move `alpaca-py` to `[project.optional-dependencies].incubator` + feature-detect at 4 import sites), DEF-183 (delete `argus/data/alpaca_data_service.py`, `argus/data/alpaca_scanner.py`, `argus/execution/alpaca_broker.py` + simplify `main.py:301-317` / `:339-346` to a single Databento+IBKR live path), DEF-014 Alpaca emitter TODO. DEC-086 demoted Alpaca to incubator during Sprint 21.6 pivot; no live use case remains. Discovery: `docs/sprints/post-31.9-alpaca-retirement/DISCOVERY.md`.
 
 ### Sprint 31B: Research Console / Variant Factory — Deferred post-31.75 (DEC-379)
 **Target:** ~3 days

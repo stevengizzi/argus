@@ -1034,4 +1034,38 @@ Things that could go wrong and how we'd respond. Each has severity, likelihood, 
 
 ---
 
+### RSK — Upstream Cascade Mechanism (DEF-204)
+
+| Field | Value |
+|-------|-------|
+| **ID** | RSK-DEF-204 |
+| **Date Identified** | 2026-04-24 |
+| **Category** | Operational Safety — Critical |
+| **Severity** | Critical |
+| **Likelihood** | Confirmed (3 successive paper-session debriefs Apr 22–24) |
+| **Description** | Bracket children placed via `parentId` only without explicit `ocaGroup`, combined with redundant standalone SELL orders from trail/escalation paths sharing no OCA group with bracket children, allow multi-leg fill races. ARGUS's exit-side accounting is also side-blind in 3 surfaces (reconcile orphan-loop one-direction-only; reconcile call site strips side info; DEF-158 retry path side-blind). On Apr 24 paper trading: 44 symbols / 14,249 shares of unintended short positions accumulated through gradual reconciliation-mismatch drift over a 6-hour session. Today's raw upstream cascade is ~2.0× worse than yesterday's pre-doubling magnitude despite the lightest network stimulus of the three debriefed days. |
+| **Mitigation (in effect)** | Operator runs `scripts/ibkr_close_all_positions.py` daily at session close. IMPROMPTU-04's A1 fix (DEF-199) correctly refuses to amplify these at EOD (1.00× signature, zero doubling) and escalates to operator with CRITICAL alert. `ArgusSystem._startup_flatten_disabled` invariant (`check_startup_position_invariant()` in `argus/main.py`) gates `OrderManager.reconstruct_from_broker()` on any non-BUY broker side at boot. |
+| **Owner** | post-31.9-reconciliation-drift sprint (3 sessions, all-three-must-land-together, adversarial review required at every session boundary). |
+| **Status** | **OPEN — mitigation in effect; fix scoped and scheduled.** Not safe for live trading until post-31.9-reconciliation-drift lands. |
+| **Cross-references** | DEF-204 (CLAUDE.md DEF table); IMPROMPTU-11 mechanism diagnostic (`docs/sprints/sprint-31.9/IMPROMPTU-11-mechanism-diagnostic.md`); Apr 24 debrief §A2/§C12 (`docs/sprints/sprint-31.9/debrief-2026-04-24-triage.md`); post-31.9-reconciliation-drift DISCOVERY (`docs/sprints/post-31.9-reconciliation-drift/DISCOVERY.md`). |
+
+---
+
+### RSK — Risk Manager WARNING-Spam Throttling Gap (DEF-203)
+
+| Field | Value |
+|-------|-------|
+| **ID** | RSK-DEF-203 |
+| **Date Identified** | 2026-04-24 |
+| **Category** | Operational Hygiene |
+| **Severity** | Low |
+| **Likelihood** | High (10,729 events on Apr 24, 8,996 on Apr 23 — confirmed pattern) |
+| **Description** | `max_concurrent_positions` WARNING spam not throttled. WARNING-level emit from `argus/core/risk_manager.py` does not wrap through `ThrottledLogger` (Sprint 27.75 / DEC-363) like other per-symbol high-volume sites. One of the larger non-`pattern_strategy` log-volume contributors during high-signal-velocity sessions. |
+| **Mitigation** | **MONITOR-only.** Fix queued for next `argus/core/risk_manager.py` touch (likely as part of post-31.9-reconnect-recovery-and-rejectionstage's DEF-195 work — that sprint will already be in `risk_manager.py` for the broker-state divergence count fix). Proposed change: ThrottledLogger at 60s/symbol, OR downgrade to DEBUG and rely on aggregate counters (Risk Manager already tracks rejection counts via SignalRejectedEvent). |
+| **Owner** | Next `argus/core/risk_manager.py` touch (most likely post-31.9-reconnect-recovery-and-rejectionstage). |
+| **Status** | **Open — MONITOR.** No immediate operational impact beyond log noise; cosmetic regression of the Sprint 27.75 throttling discipline. |
+| **Cross-references** | DEF-203 (CLAUDE.md DEF table); DEC-363 ThrottledLogger pattern; DEF-195 cross-reference (paired sprint candidate). |
+
+---
+
 *End of Risk & Assumptions Register v1.7*

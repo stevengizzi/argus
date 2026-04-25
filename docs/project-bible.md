@@ -116,7 +116,7 @@ Every strategy defines:
 20. **VWAP Bounce** — 10:30 AM–3:00 PM, bounce off rising VWAP (live; PROVISIONAL; DEF-154 parameter rework)
 21. **Narrow Range Breakout** — 10:00 AM–3:00 PM, volatility-compression breakout (live; PROVISIONAL)
 
-Not all Phase 2 patterns will prove to have a backtestable edge. Each goes through the full Incubator Pipeline. The goal is 10–12 validated patterns running simultaneously. As of Sprint 31.85, the live roster is 13 + 2 shadow (ABCD, Flat-Top Breakout demoted to shadow mode in Sprint 32.9 pending optimization).
+Not all Phase 2 patterns will prove to have a backtestable edge. Each goes through the full Incubator Pipeline. The goal is 10–12 validated patterns running simultaneously. As of Sprint 31.9 (post-campaign-close), the live roster is 13 + 2 shadow (ABCD, Flat-Top Breakout demoted to shadow mode in Sprint 32.9 pending optimization). Sprint 31.9 did not change the roster but did harden two safety surfaces relevant to live deployment: A1 short-flip cascade fixed and validated (DEF-199), and DEF-204 upstream cascade mechanism identified by IMPROMPTU-11 with fix scoped to `post-31.9-reconciliation-drift`.
 
 ### 4.3 Strategy Incubator Pipeline
 

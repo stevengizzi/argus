@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: April 20, 2026 (Sprint 31.85 doc sync — Parquet cache consolidation, DEF-161 resolved).*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: April 24, 2026 (Sprint 31.9 campaign-close — A1 short-flip fix validated, DEF-204 mechanism identified).*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -11,9 +11,9 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 4,934 pytest + 846 Vitest (3 pre-existing failures — 2 date-decay DEF-163 + 1 flaky DEF-150, all unrelated to current work)
-**Sprints completed:** 1 through 29 + 21.6 + 25.9 + 27.5 + 27.6 + 27.65 + 27.7 + 27.75 + 27.8 + 27.9 + 27.95 + 28.5 + 28.75 + 29.5 + 32 + 32.5 + 32.75 + 32.8 + 32.9 + 32.95 + impromptu hotfix Apr 3 + 31A + 31A.5 + 31A.75 + 31.5 + 31.75 + 31.8 + 31.85 (34 full sprints + 45 sub-sprints + 10 impromptus)
-**Active sprint:** Between sprints. 22 shadow variants collecting CounterfactualTracker data. Parquet consolidation script delivered (Sprint 31.85); operator repoint of `config/historical_query.yaml` pending. Next: Sprint 31B (Research Console / Variant Factory).
+**Tests:** 5,080 pytest (--ignore=tests/test_main.py) + 39 pass / 5 skip on tests/test_main.py + 866 Vitest. Sprint 31.9 net delta: +146 pytest, +20 Vitest. Known flakes: DEF-150 (time-of-day arithmetic, first 2 min of every hour) + DEF-167 (Vitest hardcoded-date scan) + DEF-171 (ibkr_broker xdist) + DEF-190 (pyarrow/xdist register_extension_type race) + DEF-192 (runtime warning cleanup debt, ~25–27 warnings, xdist-order-dependent within categories). DEF-205 (pytest date-decay sibling of DEF-167) RESOLVED by TEST-HYGIENE-01 on 2026-04-24. Treat all listed flakes as pre-existing.
+**Sprints completed:** 1 through 29 + 21.6 + 25.9 + 27.5 + 27.6 + 27.65 + 27.7 + 27.75 + 27.8 + 27.9 + 27.95 + 28.5 + 28.75 + 29.5 + 32 + 32.5 + 32.75 + 32.8 + 32.9 + 32.95 + impromptu hotfix Apr 3 + 31A + 31A.5 + 31A.75 + 31.5 + 31.75 + 31.8 + 31.85 + 31.9 (35 full sprints incl. campaign-close phase + 45 sub-sprints + 10 impromptus + 11 campaign-close sessions + 3 paper-session debriefs)
+**Active sprint:** Between sprints. **Sprint 31.9 (Health & Hardening campaign-close) sealed on 2026-04-24.** 22 shadow variants collecting CounterfactualTracker data. Parquet consolidation script delivered (Sprint 31.85); operator repoint of `config/historical_query.yaml` pending. **Next sprint:** operator-decided ordering between (a) `post-31.9-reconciliation-drift` (CRITICAL safety per DEF-204 mechanism identified by IMPROMPTU-11), (b) `post-31.9-component-ownership` (DEF-175/182/193/201/202), (c) `post-31.9-reconnect-recovery-and-rejectionstage` (DEF-194/195/196/177/184), (d) `post-31.9-alpaca-retirement` (DEF-178/183), (e) Sprint 31B (Research Console / Variant Factory). Operational mitigation in effect until DEF-204 lands: operator runs `scripts/ibkr_close_all_positions.py` daily.
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
 
 ### Sprint History (Summary)
@@ -42,6 +42,7 @@ Sprints 1–28 (Feb 14 – Mar 29): see `docs/sprint-history.md` for full detail
 | 31.8 | April 20 Impromptus (Lifespan + VACUUM + Dup-SELL + Recon-Trades) | 4919+846V | Apr 20 | — |
 | 31.85 | Parquet Cache Consolidation (DEF-161 resolved) | 4934+846V | Apr 20 | — |
 | (Audit Phase 3 in progress) | FIX-00/15/17/20/01/11/02/12/03/21/14 + IMPROMPTU-def172-173-175 | 4965+859V | Apr 21–22 | DEC-384 (FIX-01 standalone overlay registry) |
+| 31.9 | Health & Hardening Campaign-Close (A1 short-flip fix validated, DEF-204 mechanism identified, RETRO-FOLD P1–P25) | 5080+866V | Apr 22–24 | — (no new DECs) |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 

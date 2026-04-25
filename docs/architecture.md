@@ -582,6 +582,7 @@ Real-time and historical visibility into what every strategy evaluates on every 
 - `EvaluationEventStore` persists events to `data/evaluation.db` (separated from argus.db in Sprint 25.6, DEC-345)
 - 7-day retention with ET-date-based cleanup
 - Fire-and-forget async forwarding from buffer to store via `loop.create_task()`
+- **Periodic retention task (DEF-197, IMPROMPTU-10, Sprint 31.9):** the store now spawns `_run_periodic_retention()` from `EvaluationEventStore.initialize()` on a 4-hour cadence (`RETENTION_INTERVAL_SECONDS = 4 * 60 * 60` in `argus/strategies/telemetry_store.py`). Each iteration calls `cleanup_old_events()` and survives per-iteration exceptions; `close()` cancels and awaits the task. This handles the multi-day session case where the previous startup-only `cleanup_old_events()` call couldn't keep up with ~5 GB/day ingestion — a session running >24 h would cross the 7-day retention boundary and accumulate day-8+ rows until next reboot. `RETENTION_DAYS=7` unchanged; the operator one-shot to reclaim the existing 14.5 GB DB is documented in IMPROMPTU-10's closeout (not committed code).
 
 **REST Endpoint:**
 - `GET /api/v1/strategies/{id}/decisions` — JWT-protected
@@ -850,6 +851,8 @@ class OrderManager:
 ```
 
 **Sprint 28.75 flatten-pending timeout (DEF-112):** `flatten_pending_timeout_seconds` (default 120s) + `max_flatten_retries` (default 3) on OrderManagerConfig. Stale flatten orders cancelled and resubmitted. Exhausted retries removed from `_flatten_pending` (caught by EOD flatten). `_flatten_pending` type changed from `dict[str, str]` to `dict[str, tuple[str, float, int]]` (order_id, monotonic_time, retry_count). ThrottledLogger rate-limiting on "flatten already pending" (60s/symbol) and "IBKR portfolio snapshot missing" (600s/symbol).
+
+> **Known issue (DEF-204, identified Apr 24, 2026 — IMPROMPTU-11 mechanism diagnostic).** Bracket children are placed via `parentId` only without explicit `ocaGroup`; combined with standalone SELL orders from trail/escalation paths that share no OCA group with bracket children, this allows multi-leg fill races that produce ~98% of the unexpected-short blast radius observed during Apr 24 paper trading (44 symbols / 14,249 unintended short shares accumulated through gradual reconciliation-mismatch drift over a 6-hour session). ARGUS's exit-side accounting is also side-blind in three surfaces (reconcile orphan-loop one-direction-only; reconcile call site strips side info via `Position.shares = abs(int(ib_pos.position))`; DEF-158 retry path side-blind via `abs(int(getattr(bp, "shares", 0)))`). DEF-199's IMPROMPTU-04 fix correctly refuses to amplify these at EOD (1.00× signature, zero doubling) and escalates to operator with CRITICAL alert; the upstream mechanism remains. Fix is scoped to the `post-31.9-reconciliation-drift` named horizon (3 sessions, all-three-must-land-together, adversarial review required at every session boundary). See `docs/sprints/sprint-31.9/IMPROMPTU-11-mechanism-diagnostic.md` for the full forensic analysis and `docs/sprints/post-31.9-reconciliation-drift/DISCOVERY.md` for the concrete fix plan. Operator mitigation in effect: daily `scripts/ibkr_close_all_positions.py` at session close.
 
 #### ExecutionRecord Logging (`execution/execution_record.py`) — Sprint 21.6 ✅
 
@@ -1201,7 +1204,7 @@ Wires all components together. The live sequence today has 19 phases (12 primary
 
 1. Config + Clock + EventBus
 2. Database + TradeLogger (+ AI persistence tables: ConversationManager, UsageTracker, optional ActionManager)
-3. Broker connection (IBKR / Alpaca / Simulated — lazy-imported per selection)
+3. Broker connection (IBKR / Alpaca / Simulated — lazy-imported per selection). **Startup position invariant (DEF-199, IMPROMPTU-04, Sprint 31.9):** immediately after `broker.connect()`, `check_startup_position_invariant()` (defined in `argus/main.py`) audits `broker.get_positions()` and sets `ArgusSystem._startup_flatten_disabled` to `True` on any non-BUY broker side (or on exception — fails closed). When the flag is True, the Phase 10 `OrderManager.reconstruct_from_broker()` call is gated off and the operator is required to clear the unexpected short manually via `scripts/ibkr_close_all_positions.py`. ARGUS is long-only by design (DEC-166); a short on the broker side at boot indicates either prior-session DEF-199 doubling (now closed) or DEF-204 upstream cascade (mechanism identified, fix scoped to `post-31.9-reconciliation-drift`).
 4. HealthMonitor
 5. RiskManager (with state reconstruction)
 6. DataService (Databento or Alpaca)

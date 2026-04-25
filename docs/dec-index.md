@@ -504,4 +504,8 @@ No new DECs. DEF-161 resolved via one-time consolidation tooling; all design cho
 - **Atomic write order** (validate → `.tmp` write → `os.rename`) makes a consolidated file with a row-count mismatch physically unable to land on disk.
 - **Repointing `config/historical_query.yaml`** is an operator action (no in-sprint code change); `HistoricalQueryService`, `HistoricalQueryConfig`, and the config file are untouched.
 
+## Sprint 31.9 — Campaign-Close (April 22 – April 24, 2026)
+
+No new DECs across 11 named sessions + 3 paper-session debriefs. All design decisions followed established patterns. See `docs/decision-log.md` Sprint 31.9 entry for per-session rationale. Sprint outcomes summarized in `docs/sprints/sprint-31.9/SPRINT-31.9-SUMMARY.md`.
+
 Next DEC: 385.

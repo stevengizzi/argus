@@ -2053,6 +2053,19 @@ Additionally, review existing rules at each phase gate:
 
 ---
 
+## Sprint 31.9 — Campaign-Close Pattern Evolution
+
+Sprint 31.9 (April 22 – April 24, 2026) ran as a campaign-close, a multi-session bundle that:
+
+- Maintained `safe-during-trading` discipline across most sessions (only IMPROMPTU-04 + TEST-HYGIENE-01 touched runtime-relevant code; all others were pure docs/tests/diagnostic)
+- Used **3 paper-session debriefs** (Apr 22, 23, 24) as the primary evidence-gathering mechanism — each debrief drove subsequent session scope
+- Pioneered **IMPROMPTU-CI** as a mid-campaign session pattern: a focused fix dedicated to restoring CI-green when prior session(s) shipped CONCERNS verdicts that needed live-data validation
+- Demonstrated **mechanism-signature validation** through Apr 24 debrief (proving DEF-199 closed via 1.00× signature vs prior 2.00×, while simultaneously identifying DEF-204 as a different mechanism that A1 had been masking)
+
+Key operational insights captured as P26/P27 retrospective candidates for next campaign's RETRO-FOLD. See `docs/sprints/sprint-31.9/SPRINT-31.9-SUMMARY.md` and `docs/sprint-history.md` for details.
+
+---
+
 ## 14. Quick Reference: What Protocol, When
 
 | I need to... | Use | Type |

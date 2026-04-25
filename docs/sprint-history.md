@@ -2893,13 +2893,66 @@ The Tier 2 reviewer confirmed three pre-existing failures are unrelated to Sprin
 
 ---
 
+## Sprint 31.9 — Health & Hardening Campaign-Close (April 22 – April 24, 2026)
+
+**Type:** Campaign (11 named sessions + 3 paper-session debriefs across 3 calendar days) | **Tests:** +146 pytest (4,934 → 5,080), +20 Vitest (846 → 866) | **New DEFs:** 6 (DEF-201–206) | **DEFs resolved:** 19 (DEF-048, 049, 164, 166, 168, 169, 176, 179, 180, 181, 185, 189, 191, 193, 197, 198, 199, 200, 205) | **New DECs:** 0 (established-pattern campaign) | **All Tier 2 verdicts:** CLEAR (some with CONCERNS→resolved in-session)
+
+The campaign began as audit-2026-04-21 Phase 3 follow-on work + an Apr 22 paper-session post-mortem after a 51-symbol short-doubling cascade flipped the paper account at session close. Across the campaign, IMPROMPTU-04's A1 fix was implemented and validated through three successive paper-session debriefs (Apr 22, 23, 24); IMPROMPTU-11 then traced an upstream cascade mechanism (DEF-204) that A1 had been masking; and RETRO-FOLD captured 25 P-lessons into the `claude-workflow` metarepo.
+
+> **Closure-list note (verified at SPRINT-CLOSE-A by exact grep against CLAUDE.md):** the campaign-close kickoff cited an expected list of 24 closures. Five of those (DEF-152, 153, 154, 158, 161) were closed by earlier campaign sessions (Sprints 31.75 / 31.8 / 31.85) before IMPROMPTU-04 anchored the campaign-close window. The authoritative count is 19 — see [`SPRINT-31.9-SUMMARY.md`](sprints/sprint-31.9/SPRINT-31.9-SUMMARY.md) §DEF Register Delta.
+
+### Sessions
+
+11 named sessions:
+- **IMPROMPTU-04** (Apr 23) — A1 short-flip fix + C1 log downgrade + startup position invariant. Closed DEF-199.
+- **IMPROMPTU-CI** (Apr 22–23) — Observatory WebSocket teardown race fix; resolved IMPROMPTU-04's CONCERNS verdict via 3 consecutive green CI runs. Closed DEF-200, DEF-193.
+- **IMPROMPTU-05** (Apr 23) — Deps & infra: PyJWT migration from python-jose (DEF-179); uv-based lockfile (DEF-180); Node 24 readiness for GitHub Actions (DEF-181). Closed DEF-179, 180, 181.
+- **IMPROMPTU-06** (Apr 23) — Test-debt: legacy `auto_cleanup_orphans` kwarg removal (DEF-176), 5 type-guard tests (DEF-185), test_main.py xdist failures repaired (DEF-048/049, with DEF-192 PARTIAL extended). Closed DEF-048, 049, 166, 176, 185.
+- **IMPROMPTU-07** (Apr 23) — Doc-hygiene + UI: boot grace config (DEF-164), DEF-189 param-name-map, DEF-191 SQLite UTC NOTE, DEF-198 boot-phase-count correction, F-05/F-06/F-08 from Apr 21 audit. Closed DEF-164, 169, 189, 191, 198.
+- **IMPROMPTU-08** (Apr 23) — architecture.md API catalog regeneration via `scripts/generate_api_catalog.py` + 4 freshness tests. Closed DEF-168.
+- **IMPROMPTU-10** (Apr 23) — evaluation.db periodic 4-hour retention task (DEF-197 priority elevated MEDIUM→HIGH per Apr 23 trajectory; pulled forward from post-31.9-component-ownership). Closed DEF-197.
+- **RETRO-FOLD** (Apr 23) — P1–P25 metarepo fold-in across 5 metarepo files (13 RULE entries + close-out/review skills + sprint-planning protocol + implementation-prompt template). Cross-repo session: 4 argus commits + 3 metarepo commits.
+- **IMPROMPTU-11** (Apr 24) — A2/C12 cascade mechanism diagnostic (read-only). 8 hypotheses evaluated against 2,225 Apr 24 broker fills; IMSR forensic anchor traced through 3 brackets. DEF-204 mechanism IDENTIFIED; fix scope routed to new `post-31.9-reconciliation-drift` named horizon. P26 retrospective candidate captured.
+- **IMPROMPTU-09** (Apr 24) — Apr 22/23/24 verification sweep across 9 gaps. 6 CONFIRMED + 1 REFUTED (opens DEF-206 — catalyst-events blank-symbol upstream defect, NOT a FIX-01 regression) + 1 INCONCLUSIVE-but-code-correct + 1 cross-ref to DEF-195. DEF-206 opened.
+- **TEST-HYGIENE-01** (Apr 24) — Mechanical date-decay fix: `_seed_position()` and `_seed_cf_position()` converted to dynamic patterns. CI green restored after 6-commit red streak. Closed DEF-205.
+
+3 paper-session debriefs (each driving subsequent campaign work):
+- **Apr 22** debrief — Surfaced DEF-194/195/196/197/198/199 (the bucket from which IMPROMPTU-04 + IMPROMPTU-07 + IMPROMPTU-10 derived their scope).
+- **Apr 23** debrief — Reproduced A1 cascade with 51 symbols / 13,898 shares; routed to integration commit opening DEF-202/203 + annotating DEF-195/196/197.
+- **Apr 24** debrief — Validated A1 fix held (44/44 detected + refused, zero doublings); discovered upstream cascade independent of A1, opening DEF-204.
+
+### Strategic Outcomes
+
+- **A1 short-flip cascade fixed and validated** with mathematical signature: 2.00× doubling (DEF-199 days) → 1.00× (post-fix days).
+- **DEF-204 mechanism IDENTIFIED.** Bracket children placed via `parentId` only with no explicit `ocaGroup`, combined with redundant standalone SELL orders from trail/escalation paths sharing no OCA group with bracket children, account for ~98% of blast radius. Fix scope is 3 sessions, all-three-must-land-together.
+- **Mechanism-signature-vs-symptom-aggregate principle established** as P26 retrospective candidate (origin Apr 24 debrief).
+- **CI discipline restored** after 6-commit red streak (TEST-HYGIENE-01).
+
+### Sprint 31.9 Statistics
+
+- **Total sessions:** 11 named + 3 paper-session debriefs = 14 total
+- **Calendar days (active):** 3 (Apr 22 – Apr 24, 2026)
+- **Argus commits since IMPROMPTU-04:** 56 (`af7b899..0a25592`)
+- **Metarepo commits:** 3 (RETRO-FOLD: `63be1b6` + `ac3747a` + `edf69a5`)
+- **Submodule pointer advances on argus:** 3 (`aa952f9` → `204462e` → `ec7e795`)
+- **All Tier 2 verdicts:** CLEAR (some with CONCERNS→resolved in-session)
+
+### Retrospective Candidates for Next Campaign
+
+- **P26 candidate:** Validate fix against the mechanism signature (e.g., 2.00× doubling ratio), not the symptom aggregate (e.g., "shorts at EOD"). Origin: Apr 24 debrief discrimination of DEF-199 (closed) vs DEF-204 (new). Captured in IMPROMPTU-11 §Retrospective Candidate.
+- **P27 candidate:** When CI turns red for a known cosmetic reason, explicitly log that assumption at each subsequent commit rather than treating it as silent ambient noise. The test is "if a genuine regression slipped in, would I still notice?" Origin: 6-commit CI-red streak Apr 22–24.
+
+Both queued for next campaign's RETRO-FOLD.
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 34 full + 45 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5, 31.75) + 10 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3, DEF-151 Fix Apr 4, Sweep Impromptu Apr 3–5, Lifespan Hang Apr 20, Eval DB VACUUM Apr 20, DEF-158 Duplicate SELL Apr 20, DEF-159 Reconstruction Trade Fix Apr 20, Parquet Cache Consolidation Apr 20)
-- **Total sessions:** ~555+ Claude Code sessions
-- **Total tests:** 4,934 pytest + 846 Vitest = 5,780 total
-- **Total decisions:** 383 (DEC-001 through DEC-383; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, 31.5, DEF-151 fix, Sweep Impromptu, 31.8 impromptus, or 31.85 Parquet consolidation)
-- **Calendar days (active dev):** ~53 (Feb 14 – Apr 5, 2026 + Apr 14, Apr 20, 2026)
+- **Total sprints:** 35 full + 45 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5, 31.75) + 10 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3, DEF-151 Fix Apr 4, Sweep Impromptu Apr 3–5, Lifespan Hang Apr 20, Eval DB VACUUM Apr 20, DEF-158 Duplicate SELL Apr 20, DEF-159 Reconstruction Trade Fix Apr 20, Parquet Cache Consolidation Apr 20) + 1 campaign-close (Sprint 31.9: 11 named sessions + 3 paper-session debriefs)
+- **Total sessions:** ~569+ Claude Code sessions
+- **Total tests:** 5,080 pytest + 866 Vitest = 5,946 total
+- **Total decisions:** 384 (DEC-001 through DEC-384; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, 31.5, DEF-151 fix, Sweep Impromptu, 31.8 impromptus, 31.85 Parquet consolidation, or Sprint 31.9 campaign-close — campaign followed established patterns)
+- **Calendar days (active dev):** ~62 (Feb 14 – Apr 5, 2026 + Apr 14, Apr 20, 2026 + Apr 22 – Apr 24, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 28 (179 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05), Sprint 28.5 (110 new tests)

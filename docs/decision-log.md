@@ -4712,6 +4712,28 @@ DEC-382 range remains reserved but unused.
 
 ---
 
+## Sprint 31.9 — Campaign-Close: Health & Hardening (April 22 – April 24, 2026)
+
+No new DECs across the 11 named sessions and 3 paper-session debriefs. All design decisions followed established patterns:
+
+- **IMPROMPTU-04** A1 short-flip fix used the existing CRITICAL-alert + flatten-refusal pattern from earlier safety work (DEC-369 / DEC-370 broker-confirmed-positions framework).
+- **IMPROMPTU-CI** observatory WebSocket teardown followed the existing `_listener_task` cancel-await idiom from other WebSocket handlers.
+- **IMPROMPTU-05** lockfile work followed standard `uv pip compile` patterns; PyJWT migration was a like-for-like API replacement.
+- **IMPROMPTU-06** test-debt cleanup applied existing IMPROMPTU-04-style 3-branch type-guards.
+- **IMPROMPTU-07** boot grace config followed the standard `OrderManagerConfig` field-addition pattern.
+- **IMPROMPTU-08** architecture.md catalog regeneration is a new tool, but the implementation is standard FastAPI introspection — no novel decision required.
+- **IMPROMPTU-10** periodic retention task used the standard `asyncio.create_task` + `_shutdown` flag pattern (mirroring `_run_polling_loop` in `argus/main.py`).
+- **RETRO-FOLD** is the second campaign-close retro fold-in (first was post-Sprint-21 era); pattern was established earlier.
+- **IMPROMPTU-11** is read-only diagnostic; no design decisions made.
+- **IMPROMPTU-09** is read-only verification; no design decisions made.
+- **TEST-HYGIENE-01** mechanical date conversion followed the FIX-13a (DEF-167) Vitest-side precedent exactly.
+
+DEC range allocation: none reserved or consumed for Sprint 31.9. (Established-pattern campaign.)
+
+DEFs opened: DEF-201, 202, 203, 204, 205, 206 (now-closed: DEF-205). Routed to named horizons (DEF-201/202 → component-ownership; DEF-204 → reconciliation-drift; DEF-203 → MONITOR-only; DEF-206 → opportunistic catalyst-layer touch).
+
+---
+
 *End of Decision Log v1.0*
 *Next DEC: 385*
-*Last updated: 2026-04-21 (FIX-01 audit 2026-04-21 — DEC-384 load_config standalone overlay / Option B)*
+*Last updated: 2026-04-24 (Sprint 31.9 SPRINT-CLOSE-B — campaign-close no-new-DECs entry)*
