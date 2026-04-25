@@ -195,10 +195,14 @@ No CONCERNS-or-higher findings. Two MINOR notes for the operator:
 
 ## Step 4: CI Verification
 
-- **Commit `e095a39` CI status:** Pending push (commit is local-only at review time; no CI run on origin yet).
-- **Last green CI on remote:** `019f415` (run `24919625924`, "CI" workflow, success). The four prior commits (`3dd459c`, `75bc99c`, `1f9f61c`, `6f6a72b`) all green; one earlier commit (`6583216`) red — pre-TEST-HYGIENE-01 DEF-205 streak, expected and resolved.
-- **SPRINT-CLOSE-A's commit `e095a39` is documentation-only** (9 doc files in `docs/sprints/`, zero argus/tests/config touches). A CI run is procedural verification per RULE-050.
-- **Required before SPRINT-CLOSE-B opens:** push `e095a39`, capture green run URL, cite in closeout §7.
+- **Commit `e095a39` CI status:** Pre-existing CI status not separately captured — superseded by `0c47120` (review + SHA backfill) which was pushed and run as a single follow-up commit on top of `e095a39` and exercises the same documentation surface.
+- **Commit `0c47120` CI status:** ✅ **GREEN** — https://github.com/stevengizzi/argus/actions/runs/24920389589
+  - vitest (frontend): success, 1m16s
+  - pytest (backend): success, 3m41s (5,080 passed)
+  - Verified 2026-04-25 02:29 UTC
+- **Last green CI on remote (pre-this-session):** `019f415` (run `24919625924`, "CI" workflow, success). The four prior commits (`3dd459c`, `75bc99c`, `1f9f61c`, `6f6a72b`) all green; one earlier commit (`6583216`) red — pre-TEST-HYGIENE-01 DEF-205 streak, expected and resolved.
+- **SPRINT-CLOSE-A's commits are documentation-only** (12 doc files across `docs/sprints/`, zero argus/tests/config touches). The green CI confirms no incidental breakage from the docs reorganization.
+- **RULE-050 satisfied:** the campaign-close-A artifact bundle (commits `e095a39` + `0c47120`) terminates on a green CI run before SPRINT-CLOSE-B opens.
 
 ---
 
@@ -209,3 +213,5 @@ No CONCERNS-or-higher findings. Two MINOR notes for the operator:
 SPRINT-CLOSE-A executed exactly to spec. All 9 file modifications match the kickoff's expected manifest (5 added + 4 modified — note the kickoff's "6 new" includes this review file, which the reviewer agent produces). Three banners (SEAL × 2 + ARCHIVE × 1) are visible at the very top of their target files. The pre-existing 138-line component-ownership DISCOVERY is preserved with surgical 54-line additions only (zero deletions). The reconnect-recovery-and-rejectionstage path uses the canonical long name. All four DISCOVERY.md files contain real DEF clusters with accurate cross-references against CLAUDE.md. The closeout's RULE-038 grep-verify correction (24 → 19 DEFs closed) is exemplary practice. No core project doc, no argus/tests/config/workflow file, no CLAUDE.md, and no pre-existing close-out/review/debrief was touched. Pytest baseline re-verified at 5,080. The only outstanding item is the procedural CI URL for the SPRINT-CLOSE-A commit, which the closeout itself flags as pending — appropriate handling given the docs-only scope.
 
 No escalation criteria triggered. No concerns. Documentation is the canonical campaign-close artifact set, ready for SPRINT-CLOSE-B to consume `SPRINT-31.9-SUMMARY.md` as its reference for the 9 core-project-doc updates.
+
+**Post-review CI confirmation (2026-04-25):** the procedural CI URL for the closing commit (`0c47120`) is now green at https://github.com/stevengizzi/argus/actions/runs/24920389589. RULE-050 fully satisfied; SPRINT-CLOSE-B is unblocked.

@@ -97,10 +97,11 @@ placeholder:
 
 ## 7. Final Green CI URL
 
-To be cited after the SPRINT-CLOSE-A commit lands and CI completes. Operator
-should attach the green run URL here before SPRINT-CLOSE-B opens, per
-universal RULE-050. The pre-session CI baseline (commit `019f415`) was green —
-verified at session start.
+CI green on the final SPRINT-CLOSE-A commit `0c47120` (review + SHA backfill):
+**https://github.com/stevengizzi/argus/actions/runs/24920389589** — both jobs
+`success` (vitest 1m16s, pytest 3m41s). Verified 2026-04-25 02:29 UTC, satisfying
+universal RULE-050 (green CI before next session opens). The pre-session CI
+baseline (`019f415`) was also green, verified at session start.
 
 ## 8. Closing Statement
 
@@ -183,7 +184,8 @@ SPRINT-31.9-SUMMARY.md is the canonical reference SPRINT-CLOSE-B will cite.
    - `docs/sprints/post-31.9-alpaca-retirement/DISCOVERY.md` (new)
    - `docs/sprints/post-31.9-reconciliation-drift/DISCOVERY.md` (new)
 6. **SPRINT-CLOSE-B kickoff path:** `docs/sprints/sprint-31.9/SPRINT-CLOSE-B-core-doc-sync.md`
-7. **Final green CI URL** — pending post-commit run; operator attaches
+7. **Final green CI URL** — https://github.com/stevengizzi/argus/actions/runs/24920389589 (commit `0c47120`, vitest + pytest both `success`)
 8. **One-line summary:** Sprint 31.9 SPRINT-CLOSE-A complete. Campaign artifacts
    sealed. SPRINT-31.9-SUMMARY.md is canonical. 4 post-31.9 DISCOVERY stubs
-   ready. Next: SPRINT-CLOSE-B (core-doc sync). CI: pending.
+   ready. Next: SPRINT-CLOSE-B (core-doc sync). CI:
+   https://github.com/stevengizzi/argus/actions/runs/24920389589 (green).
