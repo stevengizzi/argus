@@ -3,7 +3,7 @@
 > **Session:** TEST-HYGIENE-01 (Sprint 31.9, Stage 9C)
 > **Date:** 2026-04-24
 > **Baseline commit (pre-session):** `6583216` (IMPROMPTU-09 post-session register cleanup)
-> **Session commit:** *pending this commit*
+> **Session commit:** `6f6a72b`
 > **Verdict (self-assessment):** **CLEAN** — mechanical 2-helper conversion, no production code touched, no scope creep, +12 pytest restoring pre-tipping-point baseline.
 > **Context state:** GREEN — no compaction; small focused session.
 
@@ -147,4 +147,4 @@ Expected: `5080 passed`.
 
 ## 11 — Operator Handoff
 
-`TEST-HYGIENE-01 complete. 12 dates converted (2 helper functions, 1 test query-param block). Test suite: 5,068 → 5,080 (DEF-205 closed). Commit: <pending>.`
+`TEST-HYGIENE-01 complete. 12 dates converted (2 helper functions, 1 test query-param block). Test suite: 5,068 → 5,080 (DEF-205 closed). Commit: 6f6a72b.`
