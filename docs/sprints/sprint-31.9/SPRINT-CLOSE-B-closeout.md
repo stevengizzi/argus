@@ -91,7 +91,12 @@ DEF-203 RSK entry (`RSK-DEF-203`) also appended per kickoff Requirement 10b — 
 
 ## 6. Final Green CI URL
 
-Pending — populated after commit + push. To be backfilled into this closeout per RULE-050 once the SPRINT-CLOSE-B commit's CI run reports green. (SPRINT-CLOSE-A established this backfill pattern; SPRINT-CLOSE-B follows it.)
+✅ Green — https://github.com/stevengizzi/argus/actions/runs/24920870349 (commit `97dcc61` on `main`, vitest + pytest both `success`).
+
+```
+$ gh run view 24920870349 --json status,conclusion,jobs --jq '{status, conclusion, jobs: [.jobs[] | {name, status, conclusion}]}'
+{"conclusion":"success","jobs":[{"conclusion":"success","name":"vitest (frontend)","status":"completed"},{"conclusion":"success","name":"pytest (backend)","status":"completed"}],"status":"completed"}
+```
 
 ## 7. Closing Statement
 
