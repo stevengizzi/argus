@@ -5,7 +5,7 @@
 ## Scope
 
 **Finding addressed:**
-Sprint 31.9 is a multi-month campaign with ~80+ FIX-NN/IMPROMPTU-NN sessions,
+Sprint 31.9 is a multi-day campaign with ~80+ FIX-NN/IMPROMPTU-NN sessions,
 ~45 closed DEFs, ~20 new DEFs opened and dispositioned, ~25 P-lessons, and
 3 post-31.9 sprints now queued. This session closes the sprint book and
 opens the next 3 sprint directories with discovery-grade stubs.
