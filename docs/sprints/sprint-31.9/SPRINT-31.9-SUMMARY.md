@@ -2,7 +2,7 @@
 
 **Campaign:** Sprint 31.9 (Health & Hardening — derived from audit-2026-04-21 + Apr 22 paper-session debrief)
 **Dates:** 2026-04-22 (Apr 22 paper-session that surfaced DEF-199) – 2026-04-24 (TEST-HYGIENE-01 + SPRINT-CLOSE-A)
-**Final HEAD:** `<filled in SPRINT-CLOSE-A-closeout.md after commit>` on `origin/main`
+**Final HEAD:** `e095a39` on `main` (post-SPRINT-CLOSE-A commit; pending push + green CI URL)
 **Final test state:** 5,080 pytest / 866 Vitest / CI green (URL cited in closeout)
 **Sessions run:** 11 named + 3 paper-session debriefs = 14 total
 

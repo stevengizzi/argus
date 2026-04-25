@@ -12,7 +12,8 @@
 
 | Metric | Value | Verification method |
 |---|---|---|
-| Final HEAD (pre-this-commit) | `019f415` | `git rev-parse HEAD` |
+| Pre-this-session HEAD | `019f415` | `git rev-parse HEAD` at session start |
+| Post-this-session HEAD | `e095a39` | SPRINT-CLOSE-A commit |
 | Campaign-close commits since IMPROMPTU-04 | 53 | `git log --oneline 0623801..HEAD \| wc -l` |
 | Pytest (`--ignore=tests/test_main.py`) | 5,080 passed | full suite `-n auto -q` (50.35s) |
 | Vitest | 866 (unchanged) | running register §Baseline progression |
