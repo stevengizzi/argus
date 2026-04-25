@@ -1,6 +1,9 @@
+<!-- ⛔ SEALED: Sprint 31.9 closed on 2026-04-24. All stages CLEAR.
+     Canonical summary: docs/sprints/sprint-31.9/SPRINT-31.9-SUMMARY.md -->
+
 # Sprint 31.9 + Post-31.9 Campaign — Completeness Tracker
 
-<!-- last-updated: 2026-04-23 (IMPROMPTU-04 landed: DEF-199 closed; pending Tier 2) -->
+<!-- last-updated: 2026-04-24 (SPRINT-CLOSE-A: campaign sealed; see SPRINT-31.9-SUMMARY.md) -->
 <!-- canonical-source: true — this is the single master tracker; hydrate new conversations from here -->
 <!-- companion doc: CAMPAIGN-CLOSE-PLAN.md (Loop-Closure Matrix + session plan + reboot instructions) -->
 
@@ -56,9 +59,10 @@ and this document can be archived to `docs/sprints/archive/`.
 | Stage 9C | IMPROMPTU-11 (A2/C12 cascade mechanism diagnostic: DEF-204 mechanism identification; fix to post-31.9-reconciliation-drift) | ✅ DIAGNOSTIC CLEAR (read-only; mechanism IDENTIFIED — H1+H7 missing `ocaGroup` on bracket children + standalone trail/escalation SELLs ~98% of blast radius; H2+H8 detection blindness allows accumulation; H5 DEF-158 retry side-blind doubles pre-existing shorts; report at `docs/sprints/sprint-31.9/IMPROMPTU-11-mechanism-diagnostic.md`; DEF-204 OPEN, fix routed to `post-31.9-reconciliation-drift`; P26 retrospective candidate captured) | 2026-04-24 |
 | Stage 9C | IMPROMPTU-09 (Apr 22+23+24 verification sweep, 9 gaps — read-only) | ✅ CLEAR (report at `docs/sprints/sprint-31.9/IMPROMPTU-09-verification-report.md`; 6 CONFIRMED / 1 INCONCLUSIVE-present / 1 REFUTED → NEW DEF-206 / 1 CONFIRMED-cross-ref DEF-195; zero code/config/test changes) | 2026-04-24 |
 | Stage 9C | TEST-HYGIENE-01 (pytest date-decay fix: DEF-205 — 2 seed-helpers converted to dynamic anchor 5 days back; +12 pytest 5,068 → 5,080) | ✅ CLEAR | 2026-04-24 |
-| Stage 9C | RETRO-FOLD (P1-P25 into workflow/) | ⏸ PENDING | TBD |
-| Stage 10 | SPRINT-CLOSE (summary + seal + archive + 3 DISCOVERY.md) | ⏸ PENDING | TBD |
-| **Sprint 31.9** | | ⏸ IN PROGRESS | |
+| Stage 9C | RETRO-FOLD (P1–P25 into workflow/) | ✅ CLEAR (metarepo `63be1b6` + `ac3747a` + `edf69a5`; argus submodule pointer `aa952f9` → `204462e` → `ec7e795`) | 2026-04-23 |
+| Stage 10 | SPRINT-CLOSE-A (campaign artifacts: SPRINT-31.9-SUMMARY.md + SEAL/ARCHIVE banners + 4 DISCOVERY stubs) | ✅ CLEAR | 2026-04-24 |
+| Stage 10 | SPRINT-CLOSE-B (core-doc sync: docs/architecture.md, docs/decision-log.md, docs/dec-index.md, docs/roadmap.md, docs/sprint-campaign.md, docs/sprint-history.md, docs/project-knowledge.md, docs/project-bible.md, docs/risk-register.md) | ⏸ PENDING (next session — kickoff: `docs/sprints/sprint-31.9/SPRINT-CLOSE-B-core-doc-sync.md`) | TBD |
+| **Sprint 31.9** | | ✅ COMPLETE (campaign-internal artifacts sealed; core-doc sync in SPRINT-CLOSE-B) | 2026-04-24 |
 | Post-31.9 | Component Ownership Consolidation (DEF-175 + DEF-182 + ~~DEF-193~~ [closed IMPROMPTU-CI] + DEF-197 + DEF-201 [residual observatory_service aiosqlite cross-loop; test-side band-aid in place] + DEF-014 HealthMonitor + C7) | ⏸ PLANNED | After 31.9 closes |
 | Post-31.9 | Reconnect-Recovery + RejectionStage (DEF-177 + DEF-184 + DEF-194 + DEF-195 + DEF-196 + DEF-014 IBKR TODOs + Apr 21 F-04) | ⏸ PLANNED (DISCOVERY.md drafted in SPRINT-CLOSE) | After 31.9 closes |
 | Post-31.9 | Alpaca Retirement (DEF-178 + DEF-183 + DEF-014 Alpaca TODO) | ⏸ PLANNED (DISCOVERY.md drafted in SPRINT-CLOSE) | After 31.9 closes |

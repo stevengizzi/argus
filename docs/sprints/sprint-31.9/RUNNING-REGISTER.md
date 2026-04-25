@@ -1,3 +1,7 @@
+<!-- ⛔ SEALED: Sprint 31.9 closed on 2026-04-24. This document is now read-only history.
+     Canonical summary: docs/sprints/sprint-31.9/SPRINT-31.9-SUMMARY.md
+     Do not update further. The next campaign's running register lives in its own directory. -->
+
 # Sprint 31.9 Running Register
 
 > Canonical snapshot of campaign state: session verdicts, DEF/DEC register,
@@ -5,8 +9,14 @@
 > at every stage barrier. Survives compaction — read this file to hydrate
 > a fresh Claude.ai conversation.
 >
-> **Last updated:** 2026-04-24 — TEST-HYGIENE-01 landed. DEF-205 closed via two-helper conversion: `_seed_position()` (`tests/intelligence/test_filter_accuracy.py:26-44`) and `_seed_cf_position()` (`tests/api/test_counterfactual_api.py:65-100`) now default `opened_at`/`closed_at` to `_seed_anchor()` = `(datetime.now() - timedelta(days=5)).replace(microsecond=0)`, with `closed_at = opened_at + 30min` — well within `compute_filter_accuracy()`'s rolling 30-day window regardless of wall-clock date. `test_date_range_filter` updated to derive `date_from`/`date_to` from the same anchor; `test_only_positions_in_range_included` left untouched (its hardcoded dates are explicit assertion targets, not seeds). Pytest delta: **5,068 → 5,080** (+12), back to pre-tipping-point baseline. Zero production code touched (`git diff argus/` empty), zero config touched. CI-red since `c655cb3` should clear on push.
-> **Campaign HEAD:** `6f6a72b` TEST-HYGIENE-01; prior: `6583216` IMPROMPTU-09 cleanup, `3a91e98` IMPROMPTU-09, `2d703ff` TEST-HYGIENE-01 kickoff insertion, `6d207c7` IMPROMPTU-11 cleanup. SPRINT-CLOSE is the next session.
+> **Last updated:** 2026-04-24 — SPRINT-CLOSE-A SEAL. Sprint 31.9 closed.
+> Final HEAD cited in `docs/sprints/sprint-31.9/SPRINT-CLOSE-A-closeout.md`.
+> Pytest 5,080 / Vitest 866 / CI green. 19 DEFs closed in the campaign-close
+> phase, 6 opened (4 deferred to named horizons, 1 MONITOR-only, 1 opportunistic).
+> 11 named sessions + 3 paper-session debriefs across 3 calendar days
+> (2026-04-22 → 2026-04-24). See `docs/sprints/sprint-31.9/SPRINT-31.9-SUMMARY.md`
+> for the canonical campaign summary; SPRINT-CLOSE-B handles core project-doc sync.
+> **Campaign HEAD:** `6f6a72b` TEST-HYGIENE-01; prior: `6583216` IMPROMPTU-09 cleanup, `3a91e98` IMPROMPTU-09, `2d703ff` TEST-HYGIENE-01 kickoff insertion, `6d207c7` IMPROMPTU-11 cleanup. SPRINT-CLOSE-A artifact-seal is the next session (this seal); SPRINT-CLOSE-B core-doc sync follows.
 > **Workflow submodule:** `edf69a5` (post-RETRO-FOLD principal fold + Origin-footnote normalization + RULE-042/045 footnote tightening; advanced via argus commits `aa952f9` → `204462e` → `ec7e795`)
 > **Baseline tests:** 5,073 pytest (--ignore=tests/test_main.py) + 39 pass / 5 skip on tests/test_main.py + 866 Vitest (prior: 5057 pass + 859 Vitest post-IMPROMPTU-06)
 > **Master plan:** `docs/sprints/sprint-31.9/CAMPAIGN-CLOSE-PLAN.md` — this is the canonical source of truth for Stage 9/10 execution. Read it before acting on any remaining session.

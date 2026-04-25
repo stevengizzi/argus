@@ -132,7 +132,61 @@ Risk: intelligence pipeline has a polling task that runs continuously. Moving it
 ## Exit criteria
 
 - DEF-172 and DEF-175 closed as RESOLVED (not RESOLVED-VERIFIED)
+- DEF-182 (weekly reconciliation full implementation) closed
+- DEF-201 (cross-loop aiosqlite fixture race in observatory_ws tests) closed via
+  `observatory_service` ownership refactor (per-caller-loop connection or
+  `asyncio.to_thread` wrapper); the IMPROMPTU-CI test-side band-aid removed
+- DEF-202 (post-shutdown 63-min hang + IBKR reconnect-after-STOPPED + task
+  destruction storm) closed via component-ownership audit ensuring every
+  long-lived `asyncio.Task` / `asyncio.to_thread` / native thread registers
+  with its owning component's shutdown contract; `disconnect()` / `stop()`
+  synchronously drains and cancels
+- DEF-014 HealthMonitor subscription wired (the SystemAlertEvent emitter is
+  already in place from FIX-06; this sprint adds the consumer side)
 - `api/server.py._init_*` phases reduced to API-adapter-only concerns
 - `main.py` Phase numbering updated and documented in architecture.md
 - Single CatalystStorage, single SetupQualityEngine, single LearningStore, single ExperimentStore instance at runtime
 - Test suite passes with no new flakes
+
+## Post-Sprint-31.9 Updates
+
+(2026-04-24, SPRINT-CLOSE-A.) Scope updates landed against this discovery doc as
+Sprint 31.9 closed:
+
+- **DEF-193** (Observatory WS push-only loop missing disconnect detection) —
+  RESOLVED in IMPROMPTU-CI (commit `a50ac8d`) via shared root cause with DEF-200.
+  No longer in this sprint's scope; listed here only for cross-reference.
+- **DEF-200** (`test_observatory_ws_sends_initial_state` xdist-worker crash on
+  Linux CI) — RESOLVED in IMPROMPTU-CI (commit `a50ac8d`). Same fix as DEF-193.
+  Cross-reference only.
+- **DEF-197** (`evaluation.db` retention task not running on the live cadence) —
+  RESOLVED in IMPROMPTU-10 (commit `8bdec82`) via periodic 4-hour retention task.
+  Was originally queued for this sprint per the 2026-04-23 campaign plan; pulled
+  forward when the +94.6% single-session DB-growth trajectory made it urgent.
+  Now closed; **not** in this sprint's scope.
+- **DEF-201** (cross-loop aiosqlite fixture race in observatory_ws tests) — NEW,
+  added per the 2026-04-23 IMPROMPTU-CI follow-on. The IMPROMPTU-CI test-side
+  band-aid (100ms `asyncio.sleep(0.1)` guard inside 4 observatory_ws tests) is
+  stable; structural fix lives here.
+- **DEF-202** (post-shutdown 63-min process hang on 2026-04-23, with IBKR
+  reconnect-after-STOPPED + Databento reader-thread overrun + 17 Task-destroyed
+  warnings + 2 Unclosed-client-session ERRORs) — NEW, added per 2026-04-23 and
+  2026-04-24 debriefs. **Subsumes** the original Apr 22 debrief §C7 framing.
+  Symptom is exactly the failure mode this sprint is designed to fix, at scale.
+- **DEF-182** (weekly reconciliation stub upgrade) — added as supplementary
+  scope; natural pairing with the broker-lifecycle ownership audit that DEF-202
+  forces.
+- **DEF-014 HealthMonitor consumer-side wiring** — added as supplementary scope.
+  The emitter side (`SystemAlertEvent`) was wired in FIX-06 (audit 2026-04-21);
+  the HealthMonitor subscription that consumes those events lives here. The IBKR
+  emitter TODOs (`ibkr_broker.py:453,531`) and the Alpaca emitter TODO
+  (`alpaca_data_service.py:593`) are out of scope for this sprint and live in
+  `post-31.9-reconnect-recovery-and-rejectionstage` and `post-31.9-alpaca-retirement`
+  respectively.
+
+The Recommended refactor approach above (Session 1/2/3) remains the working
+shape for this sprint; the new DEFs (DEF-182, DEF-201, DEF-202, DEF-014
+HealthMonitor) thread through Session 1 (intelligence pipeline + broker /
+data-service shutdown contract) and Session 3 (remaining phases + observatory
+service + validation). Sessions may need to be re-numbered when the planning
+conversation begins; ~3 sessions remains the right order-of-magnitude estimate.

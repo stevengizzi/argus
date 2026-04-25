@@ -1,3 +1,7 @@
+<!-- 📦 ARCHIVED: This plan document was the working master during Sprint 31.9 campaign-close.
+     It has been superseded by SPRINT-31.9-SUMMARY.md. Preserved here for historical reference.
+     Do not update further. -->
+
 # Sprint 31.9 Campaign-Close Plan
 
 <!-- last-updated: 2026-04-23 (Phase 2 drafted — IMPROMPTU-CI inserted + IMPROMPTU-09/RETRO-FOLD/SPRINT-CLOSE kickoffs landed) -->
