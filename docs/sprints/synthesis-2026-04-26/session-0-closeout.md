@@ -105,9 +105,10 @@ None. (No drift in CLAUDE.md observed during the targeted read; spec required lo
 
 ### CI Verification (per RULE-050 / close-out.md Step 4)
 
-- CI run URL: [to be filled after push]
-- CI status: [to be filled after push]
-- Note: This session's diff is doc-only (SPRINT-31.9-SUMMARY.md + CLAUDE.md). No test-affecting code paths touched. ARGUS CI is expected GREEN by construction; the URL is captured for the audit trail per RULE-050.
+- CI run URL: https://github.com/stevengizzi/argus/actions/runs/24963170905
+- CI status: GREEN (success — pytest + vitest both completed; vitest 1m9s)
+- Final commit covered: `b10b47f` (close-out report commit; the prior `c85e155` SUMMARY-backfill commit was effectively bundled into the same CI run because the close-out push followed within seconds).
+- Note: This session's diff is doc-only (SPRINT-31.9-SUMMARY.md + CLAUDE.md + close-out file). No test-affecting code paths touched. CI green by construction; URL captured for audit trail per RULE-050.
 
 ---END-CLOSE-OUT---
 
