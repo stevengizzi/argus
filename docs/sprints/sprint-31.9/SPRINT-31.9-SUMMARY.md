@@ -120,6 +120,32 @@ the next campaign's RETRO-FOLD pickup:
   noise. The test is: "if a genuine regression slipped in, would I still notice?"*
   Origin: Sprint 31.9's 6-commit CI-red streak (cosmetic-only, but masked any potential
   real regression for ~24 hours). To capture in next campaign's RETRO-FOLD scope.
+- **P28 candidate:** *Session implementers should treat kickoff statistics as
+  directional input requiring grep-verification, not ground truth. Closeouts
+  should explicitly disclose any kickoff-vs-actual discrepancies with attribution
+  rather than quietly conform to the kickoff's stated numbers.* Origin:
+  SPRINT-CLOSE-A-closeout's correction of the kickoff's "24 closed DEFs" figure
+  to the grep-verified 19 (5 of the 24 — DEF-152/153/154/158/161 — were closed
+  by earlier campaign sessions before IMPROMPTU-04 anchored the campaign-close
+  window). The implementer flagged the discrepancy in the closeout via RULE-038
+  grep-verify rather than silently propagating the wrong number to
+  SPRINT-31.9-SUMMARY.md. Generalization: this extends RULE-038's grep-verify
+  discipline into a closeout-level disclosure practice — distinct from RULE-038
+  itself because it covers what to do when a discrepancy is found (the closeout
+  reporting protocol), not just the verification step. To capture in next
+  campaign's RETRO-FOLD scope.
+
+- **P29 candidate:** *Architecturally-sealed documents (e.g.,
+  `process-evolution.md` FROZEN markers, sealed sprint folders, ARCHIVE-banner
+  files) require defensive verification at session start, not just trust in the
+  kickoff's instructions to avoid them.* Origin: SPRINT-CLOSE-B's pre-flight
+  check #5 explicitly grep-verified the FROZEN marker still existed before
+  allowing the session to proceed. If a future operator removes the freeze
+  marker, the kickoff's avoidance instruction would silently bypass an important
+  architectural decision. Generalization: any session that operates near
+  sealed/frozen documents should encode the seal as a verifiable assertion at
+  session start. The verification protects against the seal being silently
+  removed elsewhere. To capture in next campaign's RETRO-FOLD scope.
 
 ## Session Index
 

@@ -157,6 +157,12 @@ python scripts/run_learning_analysis.py --dry-run     # Analyze without persisti
 - Use dataclasses or Pydantic models for structured data, not raw dicts
 - Prefer explicit over implicit — no magic
 
+## Rules
+
+This project follows the universal rules in `.claude/rules/universal.md` (auto-loaded by Claude Code at session start per the implementation-prompt template's Pre-Flight step). Project-specific rules live alongside in `.claude/rules/` (e.g., `backtesting.md` for ARGUS-specific patterns).
+
+The keystone Pre-Flight wiring (in `templates/implementation-prompt.md` and `templates/review-prompt.md`) ensures every implementation and review session reads `universal.md` deterministically — universal RULEs apply regardless of whether they're inline-referenced in any specific prompt.
+
 ## Architectural Rules
 
 ### Event Bus
