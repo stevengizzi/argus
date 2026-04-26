@@ -80,8 +80,8 @@ None. All 4 sub-phases complete; all verification grep + body-diff commands pass
 7. **No scope creep** — exactly 7 metarepo files modified, all from the explicit allowlist; no ARGUS runtime files touched.
 
 ### CI Verification
-- CI run URL: [pending — will be recorded after push]
-- CI status: [pending]
+- CI run URL: https://github.com/stevengizzi/argus/actions/runs/24969427723
+- CI status: GREEN (covers head SHA `7b43b4a` — the session's final commit on argus `main`)
 
 ---END-CLOSE-OUT---
 
