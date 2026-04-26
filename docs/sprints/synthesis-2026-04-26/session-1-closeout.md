@@ -85,8 +85,8 @@ None. All 4 sub-phases complete; all verification grep commands pass.
 6. **CI URL** will be filled in below after the argus push completes and CI runs (per RULE-050).
 
 ### CI Verification (RULE-050)
-- CI run URL: _to be filled in after argus push completes_
-- CI status: _to be filled in_
+- CI run URL: https://github.com/stevengizzi/argus/actions/runs/24967866072
+- CI status: GREEN (success on commit c4b8cee — argus submodule pointer advance + close-out report)
 
 ---END-CLOSE-OUT---
 
