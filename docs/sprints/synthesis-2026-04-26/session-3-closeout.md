@@ -189,7 +189,11 @@ None. All 4 sub-phases complete. The forward dependency on `templates/scoping-se
 
 ## CI Verification
 
-To be filled in after push: CI run URL + status.
+- CI run URL: https://github.com/stevengizzi/argus/actions/runs/24969858132
+- CI status: GREEN
+- Final commit covered by this run: `703e496` (argus) — submodule pointer advances from `78572af` to `ee89a9d` (workflow)
+- pytest (backend): pass in 3m49s
+- vitest (frontend): pass in 1m28s
 
 ```json:structured-closeout
 {
