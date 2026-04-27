@@ -1,0 +1,66 @@
+{
+  "started_at_utc": "2026-04-27T14:47:11.731262+00:00",
+  "finished_at_utc": "2026-04-27T14:47:42.087772+00:00",
+  "symbol": "SPY",
+  "client_id": 99,
+  "port": 4002,
+  "ib_async_version": "2.1.0",
+  "trials": [
+    {
+      "delay_ms": 100,
+      "oca_group_id": "oca-spike-96c79e9898d2",
+      "order_a_id": 19,
+      "order_b_id": 20,
+      "order_c_id": 21,
+      "order_a_filled": true,
+      "order_b_status_after_a_fills": "Cancelled",
+      "order_c_initial_status": "Inactive",
+      "order_c_final_status": "Inactive",
+      "order_c_status_history": [
+        "1777301237647:Inactive"
+      ],
+      "order_c_error": null,
+      "outcome": "rejected_pre_submit",
+      "notes": [],
+      "elapsed_seconds": 6.04
+    },
+    {
+      "delay_ms": 500,
+      "oca_group_id": "oca-spike-631d10b1bbf5",
+      "order_a_id": 23,
+      "order_b_id": 24,
+      "order_c_id": 25,
+      "order_a_filled": true,
+      "order_b_status_after_a_fills": "Inactive",
+      "order_c_initial_status": "Inactive",
+      "order_c_final_status": "Inactive",
+      "order_c_status_history": [
+        "1777301245635:Inactive"
+      ],
+      "order_c_error": null,
+      "outcome": "rejected_pre_submit",
+      "notes": [],
+      "elapsed_seconds": 5.98
+    },
+    {
+      "delay_ms": 2000,
+      "oca_group_id": "oca-spike-232fd13df5f1",
+      "order_a_id": 27,
+      "order_b_id": 28,
+      "order_c_id": 29,
+      "order_a_filled": true,
+      "order_b_status_after_a_fills": "Inactive",
+      "order_c_initial_status": "Inactive",
+      "order_c_final_status": "Inactive",
+      "order_c_status_history": [
+        "1777301255067:Inactive"
+      ],
+      "order_c_error": null,
+      "outcome": "rejected_pre_submit",
+      "notes": [],
+      "elapsed_seconds": 7.43
+    }
+  ],
+  "overall_outcome": "PATH_1_SAFE",
+  "overall_interpretation": "All three delay variants showed Order C rejected pre-submit. IBKR enforces that an OCA group, once triggered, refuses new members. Sessions 1a+1b architecture is SOUND. Proceed with spec amendments per other findings."
+}
