@@ -758,7 +758,39 @@ class AlpacaBroker(Broker):
             logger.error(f"Failed to get open orders from Alpaca: {e}", exc_info=True)
             return []
 
-    async def cancel_all_orders(self) -> int:
+    async def cancel_all_orders(
+        self,
+        symbol: str | None = None,
+        *,
+        await_propagation: bool = False,
+    ) -> int:
+        """Cancel all open orders at Alpaca (ABC-compliance stub).
+
+        Sprint 31.91 Session 0 added ``symbol`` and ``await_propagation``
+        parameters to the ``Broker`` ABC. ``AlpacaBroker`` is queued for
+        retirement in Sprint 31.94 (DEF-178/183), so the new parameters
+        are NOT implemented for this broker. This method exists only to
+        satisfy the ABC and delegate to the legacy no-arg implementation.
+
+        Args:
+            symbol: Ignored.
+            await_propagation: Ignored.
+
+        Returns:
+            Number of orders cancelled by the legacy delegation.
+        """
+        import warnings
+
+        warnings.warn(
+            "AlpacaBroker.cancel_all_orders is queued for retirement "
+            "in Sprint 31.94 (DEF-178/183). Symbol filtering and "
+            "await_propagation are not implemented for this broker.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return await self._cancel_all_orders_legacy()
+
+    async def _cancel_all_orders_legacy(self) -> int:
         """Cancel all open orders at Alpaca.
 
         Returns:

@@ -29,7 +29,7 @@ from argus.core.events import (
     Side,
 )
 from argus.core.ids import generate_id
-from argus.execution.broker import Broker
+from argus.execution.broker import Broker, CancelPropagationTimeout
 from argus.execution.ibkr_contracts import IBKRContractResolver
 from argus.execution.ibkr_errors import (
     IBKRErrorSeverity,
@@ -1083,27 +1083,98 @@ class IBKRBroker(Broker):
         logger.info("Retrieved %d open orders from IBKR", len(orders))
         return orders
 
-    async def cancel_all_orders(self) -> int:
-        """Cancel all open orders at IBKR via reqGlobalCancel.
+    async def cancel_all_orders(
+        self,
+        symbol: str | None = None,
+        *,
+        await_propagation: bool = False,
+    ) -> int:
+        """Cancel working orders at IBKR.
 
-        Used during graceful shutdown to prevent orphaned orders.
+        With no args, preserves the DEC-364 contract: invoke
+        ``reqGlobalCancel`` to cancel every working order for the session.
+
+        With ``symbol`` set, filters ``ib_async``'s ``openTrades()`` cache by
+        ``trade.contract.symbol`` and issues per-order ``cancelOrder`` calls
+        for the filtered subset. Used by Session 1c's broker-only SELL paths
+        to clear stale OCA-group siblings before placing a follow-up SELL.
+
+        With ``await_propagation=True``, after issuing the cancellation(s)
+        polls the open-orders cache (filtered to the same scope) every
+        100ms and returns once empty. Raises ``CancelPropagationTimeout``
+        if the filtered scope is still non-empty after 2s.
+
+        Args:
+            symbol: If provided, cancel only orders for this symbol.
+                If None, cancel everything (DEC-364 contract).
+            await_propagation: If True, poll until the filtered open-orders
+                scope is empty. 2s timeout.
 
         Returns:
-            Number of open orders that were present before cancellation.
+            Count of orders for which a cancellation was issued.
+
+        Raises:
+            CancelPropagationTimeout: When ``await_propagation=True`` and
+                the filtered open-orders scope remains non-empty after 2s.
         """
         if not self.is_connected:
             logger.warning("cancel_all_orders: not connected to IB Gateway")
             return 0
 
         open_trades = self._ib.openTrades()
+        if symbol is not None:
+            open_trades = [
+                t
+                for t in open_trades
+                if t.contract is not None and t.contract.symbol == symbol
+            ]
+
         count = len(open_trades)
         if count > 0:
-            self._ib.reqGlobalCancel()
-            # Wait briefly for cancellation confirmations
-            await asyncio.sleep(min(5.0, max(1.0, count * 0.5)))
-            logger.info("Shutdown: cancelled %d open orders at IBKR", count)
+            if symbol is None:
+                self._ib.reqGlobalCancel()
+                # Wait briefly for cancellation confirmations
+                await asyncio.sleep(min(5.0, max(1.0, count * 0.5)))
+                logger.info("Shutdown: cancelled %d open orders at IBKR", count)
+            else:
+                for trade in open_trades:
+                    self._ib.cancelOrder(trade.order)
+                logger.info(
+                    "Cancelled %d open orders at IBKR for symbol %s",
+                    count,
+                    symbol,
+                )
         else:
-            logger.info("Shutdown: no open orders to cancel at IBKR")
+            if symbol is None:
+                logger.info("Shutdown: no open orders to cancel at IBKR")
+            else:
+                logger.debug(
+                    "cancel_all_orders: no open orders to cancel at IBKR for symbol %s",
+                    symbol,
+                )
+
+        if await_propagation:
+            timeout_seconds = 2.0
+            poll_interval_seconds = 0.1
+            deadline = asyncio.get_event_loop().time() + timeout_seconds
+            while True:
+                remaining = self._ib.openTrades()
+                if symbol is not None:
+                    remaining = [
+                        t
+                        for t in remaining
+                        if t.contract is not None and t.contract.symbol == symbol
+                    ]
+                if not remaining:
+                    break
+                if asyncio.get_event_loop().time() >= deadline:
+                    raise CancelPropagationTimeout(
+                        f"cancel_all_orders(symbol={symbol!r}) did not observe "
+                        f"broker-side empty open-orders state within "
+                        f"{timeout_seconds}s ({len(remaining)} order(s) remain)"
+                    )
+                await asyncio.sleep(poll_interval_seconds)
+
         return count
 
     async def flatten_all(self) -> list[OrderResult]:

@@ -626,14 +626,37 @@ class SimulatedBroker(Broker):
         logger.info("Retrieved %d open orders from SimulatedBroker", len(orders))
         return orders
 
-    async def cancel_all_orders(self) -> int:
-        """Cancel all open orders (SimulatedBroker no-op).
+    async def cancel_all_orders(
+        self,
+        symbol: str | None = None,
+        *,
+        await_propagation: bool = False,
+    ) -> int:
+        """Cancel working orders (SimulatedBroker — in-memory).
+
+        Cancellation is synchronous in ``SimulatedBroker`` (the in-memory
+        order list is mutated immediately), so ``await_propagation=True`` is
+        a no-op: by the time the caller observes the return value, the
+        filtered scope is already empty. ``CancelPropagationTimeout`` is
+        therefore never raised by this implementation.
+
+        Args:
+            symbol: If provided, cancel only pending bracket orders for
+                this symbol. If None, cancel everything (DEC-364 contract).
+            await_propagation: Accepted for API parity; cancellation is
+                synchronous so this flag has no effect.
 
         Returns:
-            Number of orders cancelled (always 0 for simulated).
+            Count of pending bracket orders that were removed.
         """
-        count = len(self._pending_brackets)
-        self._pending_brackets.clear()
+        if symbol is None:
+            count = len(self._pending_brackets)
+            self._pending_brackets.clear()
+            return count
+
+        retained = [b for b in self._pending_brackets if b.symbol != symbol]
+        count = len(self._pending_brackets) - len(retained)
+        self._pending_brackets = retained
         return count
 
     async def flatten_all(self) -> list[OrderResult]:

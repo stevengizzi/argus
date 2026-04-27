@@ -18,6 +18,13 @@ from argus.models.trading import (
 )
 
 
+class CancelPropagationTimeout(Exception):
+    """Raised when cancel_all_orders(await_propagation=True) does not
+    observe broker-side empty open-orders state within the timeout
+    window. Callers should abort any planned follow-up SELL placement
+    and emit a `cancel_propagation_timeout` SystemAlertEvent."""
+
+
 class Broker(ABC):
     """Abstract base class for all broker implementations.
 
@@ -140,13 +147,33 @@ class Broker(ABC):
         """
 
     @abstractmethod
-    async def cancel_all_orders(self) -> int:
-        """Cancel all open orders at the broker.
+    async def cancel_all_orders(
+        self,
+        symbol: str | None = None,
+        *,
+        await_propagation: bool = False,
+    ) -> int:
+        """Cancel working orders.
 
-        Used during graceful shutdown to prevent orphaned orders.
+        Used during graceful shutdown (no args) to prevent orphaned orders,
+        and during per-symbol cleanup (e.g., before placing a follow-up
+        broker-only SELL) to clear stale OCA-group siblings.
+
+        Args:
+            symbol: If provided, cancel only orders for this symbol.
+                If None, cancel all working orders (DEC-364 contract).
+            await_propagation: If True, after issuing cancellations,
+                poll broker open-orders for the filtered scope until
+                empty. Default 2s timeout. On timeout, raise
+                CancelPropagationTimeout.
 
         Returns:
-            Number of orders that were cancelled.
+            Count of orders for which a cancellation was issued.
+
+        Raises:
+            CancelPropagationTimeout: When ``await_propagation=True`` and
+                the broker-side open-orders state has not become empty for
+                the filtered scope within the implementation's timeout.
         """
 
     @abstractmethod
