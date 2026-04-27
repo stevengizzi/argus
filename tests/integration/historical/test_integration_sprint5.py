@@ -303,6 +303,7 @@ class TestOrderManagerIntegration:
 
         mock_broker.get_positions = AsyncMock(return_value=[pos1])
         mock_broker.get_open_orders = AsyncMock(return_value=[stop_order])
+        mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
         config = OrderManagerConfig()
 

@@ -87,6 +87,7 @@ def _make_broker(*, place_order_status: OrderStatus = OrderStatus.PENDING) -> Ma
 
     broker.place_bracket_order = AsyncMock(side_effect=_bracket)
     broker.cancel_order = AsyncMock(return_value=True)
+    broker.cancel_all_orders = AsyncMock(return_value=0)
     broker.place_order = AsyncMock(
         return_value=OrderResult(
             order_id="flatten-order-1",

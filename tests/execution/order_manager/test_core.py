@@ -105,6 +105,7 @@ def mock_broker() -> MagicMock:
     broker.place_order = AsyncMock(side_effect=make_order_result)
     broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     broker.cancel_order = AsyncMock(return_value=True)
+    broker.cancel_all_orders = AsyncMock(return_value=0)
     return broker
 
 
@@ -534,6 +535,7 @@ async def test_partial_entry_adjusts_t1_shares(
     """80 of 100 shares fill → T1 for 40."""
     # Create a custom mock broker that returns partial fill
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"count": 0}
 
     def make_order_result(order: MagicMock) -> OrderResult:
@@ -584,6 +586,7 @@ async def test_partial_entry_adjusts_t1_shares(
     mock_broker.place_order = AsyncMock(side_effect=make_order_result)
     mock_broker.place_bracket_order = AsyncMock(side_effect=make_partial_bracket_result)
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     om = OrderManager(
         event_bus=event_bus,
@@ -835,6 +838,7 @@ async def test_stop_to_breakeven_failure_after_retry_flattens(
     """If stop-to-breakeven retry also fails, emergency flatten (DEC-117)."""
     # Create a fresh mock broker with custom behavior
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
     placed_orders: list = []
 
@@ -891,6 +895,7 @@ async def test_stop_to_breakeven_failure_after_retry_flattens(
     mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     mock_broker.place_order = AsyncMock(side_effect=track_and_fail_stops)
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     config = OrderManagerConfig(stop_retry_max=1)
     om = OrderManager(
@@ -1188,6 +1193,7 @@ async def test_reconstruct_from_broker_recovers_positions(
 ) -> None:
     """Mock broker with open positions and orders → ManagedPositions created."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     # Create mock positions (use `shares` — the Position model attribute)
     pos1 = MagicMock()
@@ -1219,6 +1225,7 @@ async def test_reconstruct_from_broker_recovers_positions(
     mock_broker.get_open_orders = AsyncMock(return_value=[stop_order, limit_order])
     mock_broker.place_order = AsyncMock()
     mock_broker.cancel_order = AsyncMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     om = OrderManager(
         event_bus=event_bus,
@@ -1290,6 +1297,7 @@ async def test_startup_flatten_unknown_positions_enabled(
 ) -> None:
     """Unknown IBKR positions flattened when flatten_unknown_positions=True."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     zombie = MagicMock()
     zombie.symbol = "ZOMBIE"
@@ -1330,6 +1338,7 @@ async def test_startup_flatten_unknown_positions_disabled(
 ) -> None:
     """Unknown IBKR positions logged as warnings when flatten disabled."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     zombie = MagicMock()
     zombie.symbol = "ZOMBIE"
@@ -1367,6 +1376,7 @@ async def test_startup_empty_ibkr_portfolio(
 ) -> None:
     """Empty IBKR portfolio → no action, no crash."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     mock_broker.get_positions = AsyncMock(return_value=[])
     mock_broker.place_order = AsyncMock()
 
@@ -1391,6 +1401,7 @@ async def test_startup_only_known_positions(
 ) -> None:
     """Position with associated orders → reconstruct, no flatten."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     known = MagicMock()
     known.symbol = "AAPL"
@@ -1435,6 +1446,7 @@ async def test_startup_mix_known_and_unknown(
 ) -> None:
     """Position with orders → reconstruct; position without orders → flatten."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     known = MagicMock()
     known.symbol = "AAPL"
@@ -1489,6 +1501,7 @@ async def test_startup_portfolio_query_failure(
 ) -> None:
     """IBKR portfolio query failure → graceful skip, no crash."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     mock_broker.get_positions = AsyncMock(side_effect=ConnectionError("TWS offline"))
     mock_broker.place_order = AsyncMock()
 
@@ -1527,6 +1540,7 @@ async def test_startup_real_sequence_position_with_orders_not_flattened(
 ) -> None:
     """Real startup: empty _managed_positions + position with orders → reconstruct."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     # IBKR has a position with bracket orders (crash recovery scenario)
     pos = MagicMock()
@@ -1573,6 +1587,7 @@ async def test_startup_zero_qty_zombie_skips_flatten(
 ) -> None:
     """Zero-quantity zombie position skips flatten, emits DEBUG log."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     ghost = MagicMock()
     ghost.symbol = "GHOST"
@@ -1689,6 +1704,7 @@ async def test_stop_to_breakeven_does_not_corrupt_original_stop(
     """original_stop_price field persists unchanged after stop-to-breakeven."""
     # Create a custom mock broker with stop at 95.0
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_order_result(order: MagicMock) -> OrderResult:
@@ -1739,6 +1755,7 @@ async def test_stop_to_breakeven_does_not_corrupt_original_stop(
     mock_broker.place_order = AsyncMock(side_effect=make_order_result)
     mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     om = OrderManager(
         event_bus=event_bus,
@@ -1891,6 +1908,7 @@ async def test_exit_price_reflects_weighted_average_after_t1(
     """When T1 hits before stop, exit_price is weighted average, not last fill."""
     # Create a custom mock broker with fill at 100.0
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_order_result(order: MagicMock) -> OrderResult:
@@ -1941,6 +1959,7 @@ async def test_exit_price_reflects_weighted_average_after_t1(
     mock_broker.place_order = AsyncMock(side_effect=make_order_result)
     mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     om = OrderManager(
         event_bus=event_bus,
@@ -2030,6 +2049,7 @@ async def test_bracket_entry_rejected(
 ) -> None:
     """Broker rejects entry → stop/targets not tracked."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     async def fail_bracket_order(
         entry: MagicMock, stop: MagicMock, targets: list[MagicMock]
@@ -2039,6 +2059,7 @@ async def test_bracket_entry_rejected(
     mock_broker.place_bracket_order = AsyncMock(side_effect=fail_bracket_order)
     mock_broker.place_order = AsyncMock()
     mock_broker.cancel_order = AsyncMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     om = OrderManager(
         event_bus=event_bus,
@@ -2072,6 +2093,7 @@ async def test_bracket_with_t1_only_no_t2(
 ) -> None:
     """Single target signal → bracket with T1 only, no T2."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_bracket_result(
@@ -2114,6 +2136,7 @@ async def test_bracket_with_t1_only_no_t2(
     mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     mock_broker.place_order = AsyncMock()
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     om = OrderManager(
         event_bus=event_bus,
@@ -2452,6 +2475,7 @@ async def test_per_signal_time_stop_30_seconds(
     """Position with time_stop_seconds=30 flattened after 30s (DEC-122)."""
     fixed_clock = FixedClock(datetime(2026, 2, 16, 15, 0, 0, tzinfo=UTC))
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_bracket_result(
@@ -2486,6 +2510,7 @@ async def test_per_signal_time_stop_30_seconds(
         return_value=OrderResult(order_id="test", broker_order_id="b", status=OrderStatus.SUBMITTED)
     )
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     om = OrderManager(
         event_bus=event_bus,
@@ -2600,6 +2625,7 @@ async def test_per_signal_time_stop_fires_before_t1(
     """Time stop fires before T1 is hit (DEC-122)."""
     fixed_clock = FixedClock(datetime(2026, 2, 16, 15, 0, 0, tzinfo=UTC))
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_bracket_result(
@@ -2634,6 +2660,7 @@ async def test_per_signal_time_stop_fires_before_t1(
         return_value=OrderResult(order_id="test", broker_order_id="b", status=OrderStatus.SUBMITTED)
     )
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     closed_events: list[PositionClosedEvent] = []
 
@@ -2698,6 +2725,7 @@ async def test_t1_hit_before_time_stop(
     """T1 hit before time stop fires (DEC-122)."""
     fixed_clock = FixedClock(datetime(2026, 2, 16, 15, 0, 0, tzinfo=UTC))
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_bracket_result(
@@ -2738,6 +2766,7 @@ async def test_t1_hit_before_time_stop(
     mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     mock_broker.place_order = AsyncMock(side_effect=make_order_result)
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     om = OrderManager(
         event_bus=event_bus,
@@ -2801,6 +2830,7 @@ async def test_single_target_bracket_has_one_limit(
 ) -> None:
     """Signal with 1 target → bracket has stop + 1 limit only (DEC-122)."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_bracket_result(
@@ -2833,6 +2863,7 @@ async def test_single_target_bracket_has_one_limit(
     mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     mock_broker.place_order = AsyncMock()
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     om = OrderManager(
         event_bus=event_bus,
@@ -2874,6 +2905,7 @@ async def test_single_target_t1_closes_100_percent(
 ) -> None:
     """T1 fill on single-target closes 100% of position (DEC-122)."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_bracket_result(
@@ -2906,6 +2938,7 @@ async def test_single_target_t1_closes_100_percent(
     mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     mock_broker.place_order = AsyncMock()
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     closed_events: list[PositionClosedEvent] = []
 
@@ -2972,6 +3005,7 @@ async def test_single_target_no_t2_monitoring(
 ) -> None:
     """Single-target positions skip T2 monitoring in on_tick (DEC-122)."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_bracket_result(
@@ -3004,6 +3038,7 @@ async def test_single_target_no_t2_monitoring(
     mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     mock_broker.place_order = AsyncMock()
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     om = OrderManager(
         event_bus=event_bus,
@@ -3056,6 +3091,7 @@ async def test_single_target_no_stop_to_breakeven(
 ) -> None:
     """Single-target positions don't need stop-to-breakeven (T1 = 100%) (DEC-122)."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_bracket_result(
@@ -3088,6 +3124,7 @@ async def test_single_target_no_stop_to_breakeven(
     mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     mock_broker.place_order = AsyncMock()
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     om = OrderManager(
         event_bus=event_bus,
@@ -3146,6 +3183,7 @@ async def test_single_target_position_t1_shares_equals_total(
 ) -> None:
     """Single-target position has t1_shares == shares_total (DEC-122)."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_bracket_result(
@@ -3178,6 +3216,7 @@ async def test_single_target_position_t1_shares_equals_total(
     mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     mock_broker.place_order = AsyncMock()
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     om = OrderManager(
         event_bus=event_bus,
@@ -3218,6 +3257,7 @@ async def test_single_target_pnl_calculation(
 ) -> None:
     """Single-target P&L is (exit - entry) * 100% shares (DEC-122)."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_bracket_result(
@@ -3250,6 +3290,7 @@ async def test_single_target_pnl_calculation(
     mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     mock_broker.place_order = AsyncMock()
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     closed_events: list[PositionClosedEvent] = []
 
@@ -3309,6 +3350,7 @@ async def test_single_target_stop_hit_closes_position(
 ) -> None:
     """Single-target position stop hit closes 100% of position (DEC-122)."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_bracket_result(
@@ -3341,6 +3383,7 @@ async def test_single_target_stop_hit_closes_position(
     mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     mock_broker.place_order = AsyncMock()
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     closed_events: list[PositionClosedEvent] = []
 
@@ -3401,6 +3444,7 @@ async def test_single_target_time_stop_closes_position(
     """Single-target position time stop closes 100% of position (DEC-122)."""
     fixed_clock = FixedClock(datetime(2026, 2, 16, 15, 0, 0, tzinfo=UTC))
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_bracket_result(
@@ -3435,6 +3479,7 @@ async def test_single_target_time_stop_closes_position(
         return_value=OrderResult(order_id="test", broker_order_id="b", status=OrderStatus.SUBMITTED)
     )
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     om = OrderManager(
         event_bus=event_bus,
@@ -3527,6 +3572,7 @@ async def test_single_target_with_odd_share_count(
 ) -> None:
     """Single-target with odd share count still works (DEC-122)."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_bracket_result(
@@ -3559,6 +3605,7 @@ async def test_single_target_with_odd_share_count(
     mock_broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     mock_broker.place_order = AsyncMock()
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     om = OrderManager(
         event_bus=event_bus,
@@ -3609,6 +3656,7 @@ async def test_flatten_fill_routes_to_correct_strategy_when_multiple_positions(
 ) -> None:
     """Flatten fill routes to correct strategy when multiple positions exist on same symbol."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_bracket_result(
@@ -3647,6 +3695,7 @@ async def test_flatten_fill_routes_to_correct_strategy_when_multiple_positions(
         )
     )
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     closed_events: list[PositionClosedEvent] = []
 
@@ -3731,6 +3780,7 @@ async def test_flatten_fill_strategy_id_mismatch_hard_errors(
     pre-strategy_id positions that no longer exist in the codebase; a
     silent fallback let fills accrue to the wrong position's P&L."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_bracket_result(
@@ -3769,6 +3819,7 @@ async def test_flatten_fill_strategy_id_mismatch_hard_errors(
         )
     )
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     closed_events: list[PositionClosedEvent] = []
 
@@ -3834,6 +3885,7 @@ async def test_flatten_fill_single_position_unchanged_behavior(
 ) -> None:
     """Single position flatten behavior unchanged (regression test)."""
     mock_broker = MagicMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     order_counter = {"n": 0}
 
     def make_bracket_result(
@@ -3872,6 +3924,7 @@ async def test_flatten_fill_single_position_unchanged_behavior(
         )
     )
     mock_broker.cancel_order = AsyncMock(return_value=True)
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
 
     closed_events: list[PositionClosedEvent] = []
 
@@ -4115,6 +4168,7 @@ async def test_close_position_found_flattens(
     order_manager._managed_positions["AAPL"] = [position]
 
     mock_broker.cancel_order = AsyncMock()
+    mock_broker.cancel_all_orders = AsyncMock(return_value=0)
     mock_broker.place_order = AsyncMock(
         return_value=OrderResult(
             order_id="flatten-1", status=OrderStatus.FILLED, filled_qty=100, filled_price=150.0
@@ -4373,6 +4427,7 @@ async def test_reconstruct_reads_position_entry_price_field(
     )
 
     broker = MagicMock()
+    broker.cancel_all_orders = AsyncMock(return_value=0)
     broker.get_positions = AsyncMock(return_value=[real_pos])
     broker.get_open_orders = AsyncMock(return_value=[real_stop])
     broker.place_order = AsyncMock()
@@ -4418,6 +4473,7 @@ async def test_reconstruct_reco_path_reads_position_entry_price_field(
     )
 
     broker = MagicMock()
+    broker.cancel_all_orders = AsyncMock(return_value=0)
     broker.get_positions = AsyncMock(return_value=[real_pos])
     broker.get_open_orders = AsyncMock(return_value=[])
     broker.place_order = AsyncMock()
@@ -4469,6 +4525,7 @@ async def test_reconstruct_reads_order_quantity_field(
     )
 
     broker = MagicMock()
+    broker.cancel_all_orders = AsyncMock(return_value=0)
     broker.get_positions = AsyncMock(return_value=[real_pos])
     broker.get_open_orders = AsyncMock(return_value=[real_t1])
     broker.place_order = AsyncMock()
@@ -4528,6 +4585,7 @@ async def test_drain_startup_flatten_queue_cancels_brackets_first(
         placed.append(order)
 
     broker.cancel_order = AsyncMock(side_effect=_cancel)
+    broker.cancel_all_orders = AsyncMock(return_value=0)
     broker.place_order = AsyncMock(side_effect=_place)
 
     om = OrderManager(
@@ -4586,6 +4644,7 @@ async def test_reconstruct_biases_entry_time_earlier(
     )
 
     broker = MagicMock()
+    broker.cancel_all_orders = AsyncMock(return_value=0)
     broker.get_positions = AsyncMock(return_value=[real_pos])
     broker.get_open_orders = AsyncMock(return_value=[real_stop])
     broker.place_order = AsyncMock()

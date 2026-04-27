@@ -79,6 +79,7 @@ def _make_broker() -> MagicMock:
     broker.get_positions = AsyncMock(return_value=[])
     broker.get_open_orders = AsyncMock(return_value=[])
     broker.cancel_order = AsyncMock(return_value=True)
+    broker.cancel_all_orders = AsyncMock(return_value=0)
     return broker
 
 

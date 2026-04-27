@@ -51,10 +51,11 @@ from argus.core.events import (
     Side,
     SignalEvent,
     SignalRejectedEvent,
+    SystemAlertEvent,
     TickEvent,
 )
 from argus.core.ids import generate_id
-from argus.execution.broker import Broker
+from argus.execution.broker import Broker, CancelPropagationTimeout
 from argus.execution.ibkr_broker import _is_oca_already_filled_error
 from argus.models.trading import Order, OrderSide, OrderStatus
 from argus.utils.log_throttle import ThrottledLogger
@@ -1857,6 +1858,26 @@ class OrderManager:
     async def reconstruct_from_broker(self) -> None:
         """Reconstruct managed positions from broker state.
 
+        STARTUP-ONLY CONTRACT (added Sprint 31.91 Session 1c):
+
+        This function is currently STARTUP-ONLY and is called exactly once at
+        ARGUS boot via ``argus/main.py:1081`` (gated by
+        ``_startup_flatten_disabled``). The unconditional
+        ``cancel_all_orders(symbol)`` invocation is correct ONLY in this
+        startup context — it clears stale yesterday's OCA siblings before
+        today's session begins.
+
+        Future callers MUST add a context parameter (e.g.,
+        ``ReconstructContext``) distinguishing ``STARTUP_FRESH`` from
+        ``RECONNECT_MID_SESSION``. The ``RECONNECT_MID_SESSION`` path MUST
+        NOT invoke ``cancel_all_orders`` — yesterday's working bracket
+        children are LIVE this-session orders that must be preserved.
+
+        Sprint 31.93 (DEF-194/195/196 reconnect-recovery) is the natural
+        sprint to add this differentiation. Until then, ARGUS does not
+        support mid-session reconnect; operator daily-flatten remains the
+        safety net.
+
         Called at startup to recover any open positions that existed
         before a restart.
 
@@ -1924,6 +1945,34 @@ class OrderManager:
         for pos in positions:
             symbol = getattr(pos, "symbol", str(pos))
             qty = int(getattr(pos, "shares", 0))
+
+            # SAFETY: cancel stale yesterday OCA siblings BEFORE wiring this
+            # broker-confirmed position into _managed_positions. Sprint 31.91
+            # Session 1c (D4). See docstring re: STARTUP_ONLY contract — a
+            # mid-session reconnect would WIPE OUT today's working bracket
+            # children that must be preserved. On CancelPropagationTimeout,
+            # skip this symbol entirely (no wiring, no flatten, no RECO) and
+            # emit a critical alert; remaining symbols continue to be
+            # reconstructed.
+            try:
+                await self._broker.cancel_all_orders(
+                    symbol=symbol, await_propagation=True
+                )
+            except CancelPropagationTimeout:
+                logger.error(
+                    "Reconstruct ABORTED for %s: cancel propagation "
+                    "timeout — skipping reconstruction. Position remains "
+                    "at broker untouched. Operator should investigate "
+                    "before next session.",
+                    symbol,
+                )
+                await self._emit_cancel_propagation_timeout_alert(
+                    source="order_manager.reconstruct_from_broker",
+                    stage="reconstruct_from_broker",
+                    symbol=symbol,
+                    shares=abs(qty),
+                )
+                continue  # skip wiring this symbol; keep reconstructing rest
 
             has_orders = bool(orders_by_symbol.get(symbol, []))
             already_known = symbol in self._managed_positions
@@ -2006,6 +2055,34 @@ class OrderManager:
         # creating a short position.
         await self._cancel_open_orders_for_symbol(symbol)
 
+        # Sprint 31.91 Session 1c (D4): broker-only safety. Cancel stale
+        # yesterday OCA-group siblings BEFORE the flatten SELL with explicit
+        # propagation-await. Without propagation, a stale child could fill
+        # against the SELL and produce a phantom short (DEF-204 mechanism).
+        # On CancelPropagationTimeout, abort the SELL and emit a critical
+        # SystemAlertEvent — the leaked-long failure mode is the intended
+        # trade-off (bounded exposure preferable to an unbounded phantom
+        # short). See PHASE-D-OPEN-ITEMS Item 2 for the disposition.
+        try:
+            await self._broker.cancel_all_orders(
+                symbol=symbol, await_propagation=True
+            )
+        except CancelPropagationTimeout:
+            logger.error(
+                "EOD Pass 2 flatten ABORTED for %s: cancel propagation "
+                "timeout — phantom long remains at broker with no working "
+                "stop. Operator must run scripts/ibkr_close_all_positions.py "
+                "before next session.",
+                symbol,
+            )
+            await self._emit_cancel_propagation_timeout_alert(
+                source="order_manager._flatten_unknown_position",
+                stage="eod_pass2",
+                symbol=symbol,
+                shares=abs(qty),
+            )
+            return  # do NOT place SELL; abort cleanly
+
         try:
             sell_order = Order(
                 strategy_id="startup_cleanup",
@@ -2015,10 +2092,11 @@ class OrderManager:
                 quantity=abs(qty),
             )
             # OCA-EXEMPT: broker-only path (no ManagedPosition exists for
-            # the unknown/zombie symbol). Sprint 31.91 Session 1c will
-            # invoke ``broker.cancel_all_orders(symbol, await_propagation=True)``
-            # before this SELL to clear stale yesterday's OCA-group siblings;
-            # a per-Order ocaGroup decoration is not the right mechanism here.
+            # the unknown/zombie symbol). Safety comes from the
+            # ``cancel_all_orders(symbol, await_propagation=True)`` call
+            # immediately above (Sprint 31.91 Session 1c) which clears
+            # stale yesterday's OCA-group siblings before this SELL; a
+            # per-Order ocaGroup decoration is not the right mechanism here.
             await self._broker.place_order(sell_order)
             logger.info(
                 "Startup cleanup: flattened unknown position %s (%d shares)",
@@ -2031,6 +2109,46 @@ class OrderManager:
                 symbol,
                 abs(qty),
                 e,
+            )
+
+    async def _emit_cancel_propagation_timeout_alert(
+        self,
+        *,
+        source: str,
+        stage: str,
+        symbol: str,
+        shares: int,
+    ) -> None:
+        """Emit a critical SystemAlertEvent for a cancel-propagation timeout.
+
+        Sprint 31.91 Session 1c (D4) — shared emission helper for the three
+        broker-only safety paths (`_flatten_unknown_position`,
+        `_drain_startup_flatten_queue`, `reconstruct_from_broker`). The
+        operator response when this alert fires is to manually flatten via
+        ``scripts/ibkr_close_all_positions.py`` before the next session;
+        the leaked-long failure mode is the intended trade-off vs. an
+        incorrect SELL that would create an unbounded phantom short.
+        """
+        message = (
+            f"cancel_all_orders did not propagate within timeout for "
+            f"{symbol} (shares={shares}, stage={stage}). Position "
+            f"remains at broker untouched. Manual flatten required: "
+            f"scripts/ibkr_close_all_positions.py."
+        )
+        try:
+            await self._event_bus.publish(
+                SystemAlertEvent(
+                    source=source,
+                    alert_type="cancel_propagation_timeout",
+                    message=message,
+                    severity="critical",
+                )
+            )
+        except Exception:  # pragma: no cover - defensive
+            logger.exception(
+                "Failed to publish cancel_propagation_timeout "
+                "SystemAlertEvent for %s",
+                symbol,
             )
 
     async def _cancel_open_orders_for_symbol(self, symbol: str) -> None:
@@ -2087,6 +2205,32 @@ class OrderManager:
         )
         for symbol, qty in queue:
             await self._cancel_open_orders_for_symbol(symbol)
+
+            # Sprint 31.91 Session 1c (D4): broker-only safety. Cancel stale
+            # yesterday OCA-group siblings BEFORE the flatten SELL with
+            # explicit propagation-await. On timeout, log + emit alert and
+            # CONTINUE draining the queue for remaining symbols — do NOT
+            # halt the whole drain on one symbol's timeout.
+            try:
+                await self._broker.cancel_all_orders(
+                    symbol=symbol, await_propagation=True
+                )
+            except CancelPropagationTimeout:
+                logger.error(
+                    "Startup zombie flatten ABORTED for %s: cancel "
+                    "propagation timeout — phantom long remains at broker "
+                    "with no working stop. Operator must run "
+                    "scripts/ibkr_close_all_positions.py before next session.",
+                    symbol,
+                )
+                await self._emit_cancel_propagation_timeout_alert(
+                    source="order_manager._drain_startup_flatten_queue",
+                    stage="startup_zombie_flatten",
+                    symbol=symbol,
+                    shares=abs(qty),
+                )
+                continue  # skip this symbol; keep draining
+
             try:
                 sell_order = Order(
                     strategy_id="startup_cleanup",
@@ -2096,10 +2240,11 @@ class OrderManager:
                     quantity=abs(qty),
                 )
                 # OCA-EXEMPT: broker-only path (no ManagedPosition exists for
-                # queued startup zombies). Sprint 31.91 Session 1c will route
-                # this through ``cancel_all_orders(symbol, await_propagation=True)``
-                # to clear stale OCA-group siblings before placement; a
-                # per-Order ocaGroup decoration is not the right mechanism here.
+                # queued startup zombies). Safety comes from the
+                # ``cancel_all_orders(symbol, await_propagation=True)`` call
+                # immediately above (Sprint 31.91 Session 1c) which clears
+                # stale OCA-group siblings before placement; a per-Order
+                # ocaGroup decoration is not the right mechanism here.
                 await self._broker.place_order(sell_order)
                 logger.info(
                     "Startup queue: flattened %s (%d shares)", symbol, abs(qty)

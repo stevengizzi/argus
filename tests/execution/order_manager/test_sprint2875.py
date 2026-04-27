@@ -85,6 +85,7 @@ def mock_broker() -> MagicMock:
 
     broker.place_bracket_order = AsyncMock(side_effect=make_bracket_result)
     broker.cancel_order = AsyncMock(return_value=True)
+    broker.cancel_all_orders = AsyncMock(return_value=0)
     broker.place_order = AsyncMock(
         return_value=OrderResult(
             order_id="flatten-order-1",
