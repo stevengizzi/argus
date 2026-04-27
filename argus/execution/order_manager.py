@@ -55,6 +55,7 @@ from argus.core.events import (
 )
 from argus.core.ids import generate_id
 from argus.execution.broker import Broker
+from argus.execution.ibkr_broker import _is_oca_already_filled_error
 from argus.models.trading import Order, OrderSide, OrderStatus
 from argus.utils.log_throttle import ThrottledLogger
 from argus.models.trading import OrderType as TradingOrderType
@@ -63,6 +64,21 @@ if TYPE_CHECKING:
     from argus.core.clock import Clock
 
 logger = logging.getLogger(__name__)
+
+
+# Sprint 31.91 Session 1b: OCA type for standalone-SELL threading on
+# ManagedPosition-bound paths. Mirrors ``IBKRConfig.bracket_oca_type``
+# (default 1, constrained ``[0, 1]``); matches the value Session 1a uses
+# at ``IBKRBroker.place_bracket_order`` (line 764, ``oca_type =
+# self._config.bracket_oca_type``). OrderManager does not have access to
+# ``IBKRConfig`` (different config tree, and the do-not-modify list
+# forbids extending the OrderManager constructor at the
+# ``argus/main.py`` call site this session). A module constant is the
+# surgical choice — if the operator ever flips
+# ``IBKRConfig.bracket_oca_type`` to 0 (no OCA), this constant must be
+# updated in lock-step. The ``RESTART-REQUIRED`` note in the IBKRConfig
+# docstring already governs that flip; we add a paired pointer here.
+_OCA_TYPE_BRACKET: int = 1
 
 
 # ---------------------------------------------------------------------------
@@ -121,6 +137,17 @@ class ManagedPosition:
     # ``None`` for ``reconstruct_from_broker``-derived positions (no
     # parent ULID is recoverable from broker state).
     oca_group_id: str | None = None
+
+    # Sprint 31.91 Session 1b: marker that an OCA-grouped SELL placement
+    # raised IBKR Error 201 "OCA group is already filled" — meaning
+    # another OCA member (typically the bracket stop) already filled and
+    # the position is exiting via that member's fill callback. Used by
+    # the four standalone-SELL paths (``_trail_flatten``,
+    # ``_escalation_update_stop``, ``_submit_stop_order`` /
+    # ``_resubmit_stop_with_retry``, ``_flatten_position``) to
+    # short-circuit duplicate exits and DEF-158 retry, and to surface
+    # the SAFE outcome in post-mortem analysis.
+    redundant_exit_observed: bool = False
 
     @property
     def is_fully_closed(self) -> bool:
@@ -1987,6 +2014,11 @@ class OrderManager:
                 order_type=TradingOrderType.MARKET,
                 quantity=abs(qty),
             )
+            # OCA-EXEMPT: broker-only path (no ManagedPosition exists for
+            # the unknown/zombie symbol). Sprint 31.91 Session 1c will
+            # invoke ``broker.cancel_all_orders(symbol, await_propagation=True)``
+            # before this SELL to clear stale yesterday's OCA-group siblings;
+            # a per-Order ocaGroup decoration is not the right mechanism here.
             await self._broker.place_order(sell_order)
             logger.info(
                 "Startup cleanup: flattened unknown position %s (%d shares)",
@@ -2063,6 +2095,11 @@ class OrderManager:
                     order_type=TradingOrderType.MARKET,
                     quantity=abs(qty),
                 )
+                # OCA-EXEMPT: broker-only path (no ManagedPosition exists for
+                # queued startup zombies). Sprint 31.91 Session 1c will route
+                # this through ``cancel_all_orders(symbol, await_propagation=True)``
+                # to clear stale OCA-group siblings before placement; a
+                # per-Order ocaGroup decoration is not the right mechanism here.
                 await self._broker.place_order(sell_order)
                 logger.info(
                     "Startup queue: flattened %s (%d shares)", symbol, abs(qty)
@@ -2212,10 +2249,63 @@ class OrderManager:
     # Helper Methods
     # ---------------------------------------------------------------------------
 
+    def _handle_oca_already_filled(
+        self, position: ManagedPosition, *, where: str
+    ) -> None:
+        """Mark a position as a redundant exit and log INFO when an
+        OCA-grouped SELL placement raises IBKR Error 201 "OCA group is
+        already filled".
+
+        Used by all four standalone-SELL paths (``_trail_flatten``,
+        ``_escalation_update_stop``, ``_submit_stop_order`` /
+        ``_resubmit_stop_with_retry``, ``_flatten_position``). The
+        signature means another OCA member (typically the bracket stop)
+        already filled and the position is exiting via that member's
+        fill callback — so the redundant fresh-SELL is SAFE to skip.
+
+        Importantly, the caller MUST NOT add the order_id to
+        ``_flatten_pending``; this function deliberately leaves that
+        dict untouched to short-circuit the DEF-158 retry path. Session
+        3's side-aware ``_check_flatten_pending_timeouts`` would catch
+        the resulting zero-broker-position anyway, but the
+        short-circuit here is cleaner.
+
+        Args:
+            position: The ManagedPosition whose SELL placement was
+                rejected with the OCA-filled signature.
+            where: Caller name (for log clarity).
+        """
+        position.redundant_exit_observed = True
+        logger.info(
+            "OCA group already filled for %s in %s; redundant SELL skipped "
+            "— position is exiting via an already-filled OCA member "
+            "(oca_group=%s)",
+            position.symbol,
+            where,
+            position.oca_group_id,
+        )
+
     async def _submit_stop_order(
         self, position: ManagedPosition, shares: int, stop_price: float
     ) -> None:
-        """Submit a stop-loss order and track it."""
+        """Submit a stop-loss order and track it.
+
+        Sprint 31.91 Session 1b: threads ``ManagedPosition.oca_group_id``
+        onto the placed Order so the new stop joins the bracket's OCA
+        group. Covers ``_resubmit_stop_with_retry`` (DEC-372 retry-cap
+        path), stop-to-breakeven, MFE/MAE trail, and the
+        revision-rejected fresh-stop path. ``oca_group_id is None`` for
+        ``reconstruct_from_broker``-derived positions falls through to
+        legacy no-OCA behavior.
+
+        Sprint 31.91 Session 1b: also handles IBKR Error 201 "OCA group
+        is already filled" gracefully — that signature means the
+        original bracket stop already filled (the position is exiting
+        via that fill callback). The redundant fresh-stop submission is
+        logged INFO and the retry loop short-circuits to
+        ``_handle_oca_already_filled``; DEF-158 retry path is not
+        engaged.
+        """
         retry_count = 0
         order: Order | None = None
 
@@ -2229,6 +2319,13 @@ class OrderManager:
                     quantity=shares,
                     stop_price=stop_price,
                 )
+                # Sprint 31.91 Session 1b: thread bracket OCA group when
+                # present. ``oca_group_id`` is None for
+                # ``reconstruct_from_broker``-derived positions; legacy
+                # no-OCA behavior preserved by the conditional below.
+                if position.oca_group_id is not None:
+                    order.ocaGroup = position.oca_group_id
+                    order.ocaType = _OCA_TYPE_BRACKET
                 result = await self._broker.place_order(order)
                 position.stop_order_id = result.order_id
 
@@ -2241,7 +2338,15 @@ class OrderManager:
                 )
                 return
 
-            except Exception:
+            except Exception as exc:
+                if _is_oca_already_filled_error(exc):
+                    # SAFE outcome — original bracket stop already filled.
+                    # Position is exiting via that OCA member's callback.
+                    # Do NOT retry, do NOT emergency flatten.
+                    self._handle_oca_already_filled(
+                        position, where="_submit_stop_order"
+                    )
+                    return
                 retry_count += 1
                 if retry_count <= self._config.stop_retry_max:
                     logger.warning(
@@ -2270,6 +2375,14 @@ class OrderManager:
                 quantity=shares,
                 limit_price=limit_price,
             )
+            # OCA-EXEMPT: T1 limit replacement (called from
+            # ``_handle_revision_rejected`` and ``_amend_bracket_on_slippage``).
+            # The original T1 leg is a bracket child whose OCA membership is
+            # set in ``IBKRBroker.place_bracket_order`` (Session 1a). A
+            # revision-rejected fresh T1 resubmission was outside Sprint
+            # 31.91 Session 1b's spec §6 4-path scope; threading the
+            # replacement into the bracket OCA group is a follow-on (logged
+            # via the staged-flow report).
             result = await self._broker.place_order(order)
             position.t1_order_id = result.order_id
 
@@ -2300,6 +2413,12 @@ class OrderManager:
                 quantity=shares,
                 limit_price=limit_price,
             )
+            # OCA-EXEMPT: T2 limit replacement. Same reasoning as
+            # ``_submit_t1_order``: the original T2 leg is a bracket child
+            # whose OCA membership is set in
+            # ``IBKRBroker.place_bracket_order`` (Sprint 31.91 Session 1a).
+            # A revision-rejected fresh T2 resubmission was outside Session
+            # 1b's 4-path scope.
             result = await self._broker.place_order(order)
             position.t2_order_id = result.order_id
 
@@ -2437,6 +2556,12 @@ class OrderManager:
                     order_type=TradingOrderType.MARKET,
                     quantity=sell_qty,
                 )
+                # OCA-EXEMPT: Sprint 31.91 Session 3 scope (DEF-158 retry
+                # side-check). Session 1b only adds the SAFE-outcome
+                # short-circuit at the upstream ``_flatten_position`` site;
+                # the DEF-158 retry path here is intentionally untouched —
+                # Session 3 will branch this on ``side`` to reject
+                # broker-orphan SHORT mismatches before resubmission.
                 result = await self._broker.place_order(order)
                 new_pending = PendingManagedOrder(
                     order_id=result.order_id,
@@ -2510,6 +2635,12 @@ class OrderManager:
                 order_type=TradingOrderType.MARKET,
                 quantity=position.shares_remaining,
             )
+            # Sprint 31.91 Session 1b: thread bracket OCA group when present.
+            # ``oca_group_id`` is None for ``reconstruct_from_broker``-derived
+            # positions; legacy no-OCA behavior preserved.
+            if position.oca_group_id is not None:
+                order.ocaGroup = position.oca_group_id
+                order.ocaType = _OCA_TYPE_BRACKET
             result = await self._broker.place_order(order)
             flatten_order_id = result.order_id
 
@@ -2531,13 +2662,23 @@ class OrderManager:
                     fill_quantity=result.filled_quantity,
                 )
                 await self.on_fill(fill_event)
-        except Exception:
-            logger.exception(
-                "CRITICAL: Trail flatten sell failed for %s (%d shares unprotected)",
-                symbol,
-                position.shares_remaining,
-            )
-            return
+        except Exception as exc:
+            if _is_oca_already_filled_error(exc):
+                # Sprint 31.91 Session 1b: SAFE outcome — bracket stop or
+                # other OCA member already filled. Position is exiting via
+                # that member's fill callback. Do NOT add to
+                # ``_flatten_pending`` (DEF-158 retry path is short-
+                # circuited). Continue to Step 4 (sibling cancellation)
+                # since IBKR's OCA atomically cancelled them already, but
+                # ARGUS-side bookkeeping should still drop the order_ids.
+                self._handle_oca_already_filled(position, where="_trail_flatten")
+            else:
+                logger.exception(
+                    "CRITICAL: Trail flatten sell failed for %s (%d shares unprotected)",
+                    symbol,
+                    position.shares_remaining,
+                )
+                return
 
         # Step 4: Cancel broker safety stop SECOND (AMD-2)
         if position.stop_order_id:
@@ -2607,6 +2748,12 @@ class OrderManager:
                 quantity=position.shares_remaining,
                 stop_price=new_stop_price,
             )
+            # Sprint 31.91 Session 1b: thread bracket OCA group when present.
+            # ``oca_group_id`` is None for ``reconstruct_from_broker``-derived
+            # positions; legacy no-OCA behavior preserved.
+            if position.oca_group_id is not None:
+                order.ocaGroup = position.oca_group_id
+                order.ocaType = _OCA_TYPE_BRACKET
             result = await self._broker.place_order(order)
             position.stop_order_id = result.order_id
 
@@ -2624,7 +2771,16 @@ class OrderManager:
                 symbol,
                 new_stop_price,
             )
-        except Exception:
+        except Exception as exc:
+            if _is_oca_already_filled_error(exc):
+                # Sprint 31.91 Session 1b: SAFE outcome — bracket stop or
+                # other OCA member already filled. Position is exiting via
+                # that member's fill callback. Do NOT flatten or escalate
+                # further; do NOT add to ``_flatten_pending``.
+                self._handle_oca_already_filled(
+                    position, where="_escalation_update_stop"
+                )
+                return
             logger.error(
                 "Escalation stop submission failed for %s (attempted=%.2f) "
                 "— triggering flatten",
@@ -2699,6 +2855,13 @@ class OrderManager:
                     order_type=TradingOrderType.MARKET,
                     quantity=position.shares_remaining,
                 )
+                # Sprint 31.91 Session 1b: thread bracket OCA group when
+                # present. ``oca_group_id`` is None for
+                # ``reconstruct_from_broker``-derived positions; legacy
+                # no-OCA behavior preserved.
+                if position.oca_group_id is not None:
+                    order.ocaGroup = position.oca_group_id
+                    order.ocaType = _OCA_TYPE_BRACKET
                 result = await self._broker.place_order(order)
                 pending = PendingManagedOrder(
                     order_id=result.order_id,
@@ -2722,7 +2885,17 @@ class OrderManager:
                         fill_quantity=result.filled_quantity,
                     )
                     await self.on_fill(fill_event)
-            except Exception:
+            except Exception as exc:
+                if _is_oca_already_filled_error(exc):
+                    # Sprint 31.91 Session 1b: SAFE outcome — bracket stop
+                    # or other OCA member already filled. Position is
+                    # exiting via that member's fill callback. Do NOT add
+                    # to ``_flatten_pending`` (DEF-158 retry path is
+                    # short-circuited).
+                    self._handle_oca_already_filled(
+                        position, where="_flatten_position"
+                    )
+                    return
                 logger.exception(
                     "CRITICAL: Failed to flatten %s (%d shares remain unprotected)",
                     position.symbol,
