@@ -115,6 +115,13 @@ class ManagedPosition:
     mfe_time: datetime | None = None  # When MFE was reached
     mae_time: datetime | None = None  # When MAE was reached
 
+    # OCA grouping (Sprint 31.91 Session 1a, DEC-386 reserved). Set at
+    # bracket-confirmation time to ``f"oca_{parent_ulid}"`` so subsequent
+    # standalone-SELL paths (Session 1b) can thread the same group.
+    # ``None`` for ``reconstruct_from_broker``-derived positions (no
+    # parent ULID is recoverable from broker state).
+    oca_group_id: str | None = None
+
     @property
     def is_fully_closed(self) -> bool:
         """Return True if no shares remain."""
@@ -956,6 +963,15 @@ class OrderManager:
 
         # Use bracket order IDs from pending (DEC-117)
         entry_fill_time = self._clock.now()
+        # Sprint 31.91 Session 1a: derive the bracket's OCA group ID from
+        # the entry ULID using the same deterministic formula
+        # ``IBKRBroker.place_bracket_order`` uses (``f"oca_{parent_ulid}"``).
+        # ``pending.order_id`` is the entry ULID (the dict was keyed by it
+        # in ``on_approved``). Persisting this on ``ManagedPosition`` lets
+        # Session 1b's standalone-SELL paths thread the same OCA group.
+        # Re-entry on the same symbol generates a new ULID and therefore a
+        # new ``oca_group_id``.
+        oca_group_id = f"oca_{pending.order_id}" if pending.order_id else None
         position = ManagedPosition(
             symbol=pending.symbol,
             strategy_id=pending.strategy_id,
@@ -987,6 +1003,7 @@ class OrderManager:
             # in analytics.
             mfe_time=entry_fill_time,
             mae_time=entry_fill_time,
+            oca_group_id=oca_group_id,
         )
 
         # Add to managed positions

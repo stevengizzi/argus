@@ -33,6 +33,12 @@ ibkr:
   # Operational safety — IBKR limit is 50 orders/sec, leave headroom
   max_order_rate_per_second: 45.0
 
+  # Bracket OCA grouping (Sprint 31.91 Session 1a — DEF-204 fix).
+  # 1 = "Cancel with block" (atomic cancellation when one OCA member fills);
+  # 0 = no OCA (pre-Sprint-31.91 behavior). ocaType=2 is rejected by Pydantic.
+  # Switching from 1 to 0 is RESTART-REQUIRED — see live-operations.md.
+  bracket_oca_type: 1
+
 health:
   heartbeat_interval_seconds: 60
   heartbeat_url_env: "HEALTHCHECKS_PING_URL"  # Env var name (not the URL itself!)

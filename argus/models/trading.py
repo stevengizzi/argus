@@ -107,6 +107,23 @@ class Order(BaseModel):
     time_in_force: str = "day"  # 'day', 'gtc', 'ioc', 'fok'
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
+    # OCA grouping (Sprint 31.91 Session 1a, DEC-386 reserved). Optional
+    # per-order OCA decoration. ``ib_async``'s native ``Order`` object
+    # carries these as ``ocaGroup``/``ocaType`` fields; ARGUS mirrors
+    # them on the Pydantic model so the ARGUS Broker ABC can carry the
+    # decoration through ``place_order`` paths (Session 1b will thread
+    # standalone-SELL OCA via these fields). For native bracket
+    # placement (``IBKRBroker.place_bracket_order``) the bracket children
+    # get their OCA fields set on the ``ib_async`` Order objects directly,
+    # so the ARGUS ``Order`` ``ocaGroup``/``ocaType`` fields are typically
+    # ``None``/``0`` for the entry/stop/target inputs to that method.
+    # ``SimulatedBroker`` accepts these fields without crashing but does
+    # NOT implement OCA cancellation semantics (no-op acknowledgment per
+    # SbC §"Do NOT add"); the Phase A spike script is the live-IBKR
+    # regression check that mitigates the no-op gap.
+    ocaGroup: str | None = None
+    ocaType: int = 0
+
 
 class OrderResult(BaseModel):
     """Result from submitting an order to the broker."""

@@ -659,6 +659,26 @@ class IBKRConfig(BaseModel):
     # Operational safety
     max_order_rate_per_second: float = Field(default=45.0, gt=0)  # IBKR limit is 50/sec
 
+    # Bracket OCA grouping (Sprint 31.91 Session 1a, DEC-386 reserved).
+    # Children of native IBKR brackets (stop, T1, T2) are placed into a
+    # per-bracket OCA group derived from the parent ULID
+    # (``f"oca_{parent_ulid}"``). When one OCA member fills, IBKR atomically
+    # cancels the others — eliminating the bracket-internal fill races that
+    # caused DEF-204's phantom-short cascade.
+    bracket_oca_type: int = Field(
+        default=1,
+        ge=0,
+        le=1,
+        description=(
+            "OCA type for bracket children. 1 = 'Cancel with block' "
+            "(atomic cancellation when one OCA member fills); 0 = no OCA "
+            "(pre-Sprint-31.91 behavior). ocaType=2 is architecturally "
+            "wrong for ARGUS's bracket model — see Sprint 31.91 spec "
+            "Performance Considerations. Switching from 1 to 0 is "
+            "RESTART-REQUIRED — see live-operations.md runbook."
+        ),
+    )
+
 
 class BrokerConfig(BaseModel):
     """Broker routing and connection configuration."""

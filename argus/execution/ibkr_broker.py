@@ -61,6 +61,45 @@ logger = logging.getLogger(__name__)
 logging.getLogger("ib_async.wrapper").setLevel(logging.ERROR)
 
 
+# Sprint 31.91 Session 1a: substring fingerprint for IBKR Error 201
+# "OCA group is already filled". Lowercased once for case-insensitive
+# matching against ``str(error)`` payloads. Phase A spike
+# (``scripts/spike_ibkr_oca_late_add.py``, PATH_1_SAFE, 2026-04-27)
+# confirmed this is the exact success signature for late-add OCA
+# siblings — IBKR rejects pre-submit with this reason string when a
+# new order is added to an already-filled OCA group.
+_OCA_ALREADY_FILLED_FINGERPRINT = "oca group is already filled"
+
+
+def _is_oca_already_filled_error(error: BaseException) -> bool:
+    """Return True if ``error`` is an IBKR Error 201 with the OCA-filled
+    reason string.
+
+    Used by ``place_bracket_order``'s rollback path to distinguish a
+    SAFE outcome (the bracket stop fired in the placement micro-window
+    and the OCA group atomically cancelled the late T1/T2 add) from a
+    generic Error 201 (margin rejection, price-protection, etc.) which
+    is logged ERROR and unchanged in behavior.
+
+    The check is intentionally string-based against ``str(error)`` —
+    ``ib_async`` does not expose a stable typed exception class for the
+    OCA-filled reason; the spike script's classification path also
+    relies on ``str(e)`` matching. ``BaseException`` is accepted so the
+    helper composes with any caller-side ``except`` shape; the helper
+    short-circuits to False for non-exception inputs.
+
+    Args:
+        error: The exception caught in the rollback's ``except`` block.
+
+    Returns:
+        True iff ``str(error).lower()`` contains the OCA-filled
+        fingerprint (``"oca group is already filled"``); False otherwise.
+    """
+    if not isinstance(error, BaseException):
+        return False
+    return _OCA_ALREADY_FILLED_FINGERPRINT in str(error).lower()
+
+
 class IBKRBroker(Broker):
     """Production execution broker using Interactive Brokers via ib_async.
 
@@ -713,7 +752,21 @@ class IBKRBroker(Broker):
         entry_ulid = generate_id()
         parent.orderRef = entry_ulid
 
-        # Place parent first to get orderId
+        # Sprint 31.91 Session 1a (DEC-386 reserved): derive a deterministic
+        # OCA group ID from the parent ULID. ocaType=1 ("Cancel with block")
+        # ensures atomic cancellation of sibling children when one OCA
+        # member fills — the bracket-internal fill race that produced
+        # DEF-204's phantom-short cascade. Per M1 disposition: if for any
+        # reason the parent ULID is unavailable (defensive — should not
+        # occur in practice), fall back to a fresh ULID so the OCA group
+        # is still uniquely identified.
+        oca_group_id = f"oca_{entry_ulid}" if entry_ulid else f"oca_{generate_id()}"
+        oca_type = self._config.bracket_oca_type
+
+        # FIX-04 P1-C1-M01: if any leg fails below, cancel the parent so
+        # it doesn't sit at IBKR in PendingSubmit/transmit=False forever.
+        # Place parent first to get orderId — only AFTER the OCA group ID
+        # is derived above so the rollback path can include it in logs.
         parent_trade = self._ib.placeOrder(contract, parent)
         parent_id = parent_trade.order.orderId
         self._ulid_to_ibkr[entry_ulid] = parent_id
@@ -725,8 +778,6 @@ class IBKRBroker(Broker):
             status=OrderStatus.SUBMITTED,
         )
 
-        # FIX-04 P1-C1-M01: if any leg fails below, cancel the parent so
-        # it doesn't sit at IBKR in PendingSubmit/transmit=False forever.
         try:
             # --- Build stop-loss child ---
             stop_ulid = generate_id()
@@ -737,6 +788,13 @@ class IBKRBroker(Broker):
             stop_ib.tif = "DAY"
             stop_ib.outsideRth = False
             stop_ib.orderRef = stop_ulid
+            # OCA grouping (Sprint 31.91 Session 1a). The parent (entry)
+            # Order is intentionally NOT in the OCA group — only the
+            # children (stop, T1, T2) so that an entry-fill does not
+            # cancel its own protection legs. ``parentId`` linkage between
+            # parent and children is preserved (DEC-117 invariant).
+            stop_ib.ocaGroup = oca_group_id
+            stop_ib.ocaType = oca_type
 
             # Determine if stop is the last order (transmit=True) or not
             has_targets = len(targets) > 0
@@ -767,6 +825,9 @@ class IBKRBroker(Broker):
                 t_ib.outsideRth = False
                 t_ib.orderRef = t_ulid
                 t_ib.transmit = is_last  # Last child transmits the entire bracket
+                # OCA grouping — same group as the stop child.
+                t_ib.ocaGroup = oca_group_id
+                t_ib.ocaType = oca_type
 
                 t_trade = self._ib.placeOrder(contract, t_ib)
                 t_actual_id = t_trade.order.orderId
@@ -784,15 +845,38 @@ class IBKRBroker(Broker):
             # Rollback: cancel the untransmitted parent so it cannot be
             # left at IBKR as an orphan. Errors during cancel are logged
             # and swallowed so the original exception propagates.
+            #
+            # Sprint 31.91 Session 1a: distinguish IBKR Error 201 with reason
+            # "OCA group is already filled" from generic Error 201 (margin,
+            # price-protection, etc.). The OCA-filled case is a SAFE outcome
+            # — the bracket stop already filled in the placement micro-window
+            # and the OCA group bought us out. Phase A spike (PATH_1_SAFE,
+            # ``scripts/spike_ibkr_oca_late_add.py``, 2026-04-27) confirmed
+            # this is the success signature for late-add OCA siblings. The
+            # rollback STILL fires (cancel any partially-placed children) —
+            # only the log severity is reduced.
+            is_oca_safe = _is_oca_already_filled_error(e)
             try:
                 self._ib.cancelOrder(parent_trade.order)
-                logger.warning(
-                    "place_bracket_order failed after parent submit for %s "
-                    "(IBKR #%d); cancelled parent to avoid orphan: %s",
-                    entry.symbol,
-                    parent_id,
-                    e,
-                )
+                if is_oca_safe:
+                    logger.info(
+                        "place_bracket_order: OCA group already filled for %s "
+                        "(IBKR #%d, oca_group=%s); rollback fired to clear "
+                        "any partially-placed children. Position is exiting "
+                        "via the already-filled OCA member: %s",
+                        entry.symbol,
+                        parent_id,
+                        oca_group_id,
+                        e,
+                    )
+                else:
+                    logger.warning(
+                        "place_bracket_order failed after parent submit for %s "
+                        "(IBKR #%d); cancelled parent to avoid orphan: %s",
+                        entry.symbol,
+                        parent_id,
+                        e,
+                    )
             except Exception as cancel_err:
                 logger.error(
                     "place_bracket_order rollback FAILED for %s (IBKR #%d); "
