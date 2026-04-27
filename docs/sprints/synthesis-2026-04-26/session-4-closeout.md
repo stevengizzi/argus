@@ -3,6 +3,7 @@
 **Date:** 2026-04-26
 **Session scope:** `protocols/operational-debrief.md` (NEW) + bootstrap-index routing (Conversation Type entry + Protocol Index row).
 **Context State:** GREEN — short single-session metarepo doc work; no compaction risk.
+**Green CI on barrier commit (RULE-050):** parent commit `43aaaac` — https://github.com/stevengizzi/argus/actions/runs/24970249974 (success).
 
 ---
 
