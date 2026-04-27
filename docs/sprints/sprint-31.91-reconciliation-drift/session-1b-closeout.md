@@ -19,7 +19,7 @@
   "tests": {
     "scoped": "455 passed (tests/execution/ + tests/_regression_guards/)",
     "full": "5,121 passed (--ignore=tests/test_main.py -n auto -q)",
-    "delta_pytest": "+16 (12 standalone-sell OCA threading + 4 grep regression guard)",
+    "delta_pytest": "+15 (11 standalone-sell OCA threading + 4 grep regression guard) — corrected post-Tier-2 review (close-out originally said +16/12; actual file collects 11 tests)",
     "delta_vitest": 0,
     "baseline_full_suite": "5,080 → 5,096 expected; observed 5,121 (the additional 25 over expected reflect post-CLAUDE.md baseline drift, not Session-1b-introduced tests; verified by file-scoped diff)"
   }
@@ -101,7 +101,7 @@
 
 ### Tests
 
-`tests/execution/test_standalone_sell_oca_threading.py` (new, 515 lines, 12 tests):
+`tests/execution/test_standalone_sell_oca_threading.py` (new, 515 lines, 11 tests):
 
 - `TestThreadingPerPath` (4 tests):
   - `test_trail_flatten_threads_oca_group`
@@ -308,6 +308,34 @@ DEF-201) — none are introduced by Session 1b.
 one file (`argus/execution/order_manager.py`); two new test files; one
 documentation report; full suite green. No compaction during the session;
 all reads, edits, and verifications fit comfortably in context.
+
+## Post-Review Resolution
+
+Tier 2 reviewer @reviewer (commit `6009397` on `main`) returned **CLEAR**
+with two minor concerns. Verdict report at
+`docs/sprints/sprint-31.91-reconciliation-drift/session-1b-review.md`.
+
+### Concern 1 (cosmetic) — RESOLVED
+
+> Close-out reports +16 new tests / 12 standalone tests; actual is +15 / 11.
+
+Resolution: this close-out's `delta_pytest` line and the
+`test_standalone_sell_oca_threading.py` count are corrected to +15 / 11.
+The total suite count (5,121) was verified end-to-end and is unchanged.
+
+### Concern 2 (procedural) — OPERATOR ACTION REQUIRED
+
+> Commit `6009397` not yet pushed to origin; no CI run for the session.
+> RULE-050 requires green CI before next session.
+
+Resolution: this close-out's Self-Assessment already captured "[ ] CI green
+— pending push (operator action)". The operator must `git push origin main`
+and verify CI green before declaring Session 1b complete and proceeding to
+Session 1c.
+
+The verdict remains **CLEAR** (concerns are minor/procedural, not safety).
+Updating the verdict to `CONCERNS_RESOLVED` is not needed because the
+reviewer did not raise CONCERNS.
 
 ---
 
