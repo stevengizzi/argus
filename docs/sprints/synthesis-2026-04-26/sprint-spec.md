@@ -1,5 +1,7 @@
 # Sprint synthesis-2026-04-26: Metarepo Synthesis of Audit-Era Process Learnings + Keystone Rule-Loading Wiring
 
+> **Note on session count:** This spec was authored with a 3-session structure. Strict application of the compaction-risk scoring per `protocols/sprint-planning.md` Phase A produced a 6-session structure (Session 0 + Sessions 1–6). Deliverables in this spec retain the legacy 3-session tags (Session 0/1/2) for traceability against Phase A planning; the authoritative session structure is in `session-breakdown.md`. See that file's preamble for the trade-off rationale.
+
 ## Goal
 
 Fold the unsynthesized post-RETRO-FOLD process learnings (3 audit-era evolution notes from 2026-04-21 + 4 floating retrospective candidates P26–P29 + ~5 process patterns invented during Sprint 31.9 campaign-close) into the `claude-workflow` metarepo so that the patterns auto-fire on subsequent campaigns and sprints, not as documents that depend on operator memory. Land one keystone wiring change (`templates/implementation-prompt.md` + `templates/review-prompt.md` Pre-Flight step that loads `.claude/rules/universal.md`) that retroactively activates RETRO-FOLD's P1–P25 RULE coverage and ensures every future RULE auto-fires at session start.

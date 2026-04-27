@@ -198,7 +198,7 @@ No executable code, no tests. Verification was grep-based per kickoff §"Test Ta
 
 ## Structured Close-Out Appendix
 
-```json
+```json:structured-closeout
 {
   "session_id": "synthesis-2026-04-26-session-6",
   "status": "CLEAN",

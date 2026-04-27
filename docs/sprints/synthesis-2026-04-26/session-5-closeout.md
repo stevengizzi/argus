@@ -221,3 +221,51 @@ None observed. The session was tightly scoped (3 new files + 1 modified file) an
 **Tier 2 verdict:** CLEAR (`docs/sprints/synthesis-2026-04-26/session-5-review.md`). All 8 review-focus items PASS; B2/B3/C4 escalation criteria NOT_TRIGGERED. Reviewer dispositioned both MINOR_DEVIATIONS in the session's favor (B3 definitional intent met — tags appear only in rationale block, not validation logic).
 
 **CI verification (RULE-050):** Final commit `dd33146` — CI run https://github.com/stevengizzi/argus/actions/runs/24970660207 — completed `success` in 3m50s. Workflow submodule commit `c31fef7` rides under the same ARGUS-side push.
+
+---
+
+```json:structured-closeout
+{
+  "schema_version": "1.0",
+  "sprint": "synthesis-2026-04-26",
+  "session": "S5",
+  "verdict": "COMPLETE",
+  "tests": {
+    "before": 5080,
+    "after": 5080,
+    "new": 0,
+    "all_pass": true,
+    "note": "Metarepo-only session; no executable application code modified. Validator smoke-test exercised three exit-code paths (0/1/2) against synthetic CSV fixtures."
+  },
+  "files_created": [
+    "workflow/templates/stage-flow.md",
+    "workflow/templates/scoping-session-prompt.md",
+    "workflow/scripts/phase-2-validate.py",
+    "docs/sprints/synthesis-2026-04-26/session-5-closeout.md"
+  ],
+  "files_modified": [
+    "workflow/bootstrap-index.md"
+  ],
+  "files_should_not_have_modified": [],
+  "scope_additions": [],
+  "scope_gaps": [],
+  "prior_session_bugs": [],
+  "deferred_observations": [],
+  "doc_impacts": [
+    {
+      "document": "workflow/bootstrap-index.md",
+      "change_description": "Added 2 Template Index rows for the new templates (stage-flow.md, scoping-session-prompt.md). Existing entries preserved (zero deletions in diff). Used the existing 3-column table shape; see warnings for the column-count spec discrepancy."
+    },
+    {
+      "document": "workflow/protocols/impromptu-triage.md",
+      "change_description": "No edit required. Session 3's forward-dep on templates/scoping-session-prompt.md now resolves (file exists); the in-prose 'created in synthesis-2026-04-26 Session 5' note is now historically true."
+    }
+  ],
+  "dec_entries_needed": [],
+  "warnings": [
+    "Spec deviation 1: Sub-Phase 4's row example implied a 4-column Template Index (with a version column). The existing table is 3 columns and the sprint's explicit constraint forbids adding workflow-version headers to bootstrap-index.md. Resolved by following the existing 3-column shape; functional intent (route the new templates) preserved.",
+    "Spec deviation 2: The validator's literal docstring content includes the 4 rejected safety-tag names in its rationale block, while the spec's verification grep expected those tokens absent from the file. Functional intent (no validation logic for these tags) is honored; the tokens appear only in the rationale comment. Flagged so a follow-up can resolve the spec-vs-content tension; landed in post-sprint cleanup as N9."
+  ],
+  "implementation_notes": "MINOR_DEVIATIONS quality assessment with verdict=COMPLETE per schema's verdict-vs-quality split (verdict measures completion status, self-assessment measures implementation quality). Both spec inconsistencies were flagged with rationale rather than silently chosen. Validator smoke test ran against synthetic good/bad CSVs covering all 6 documented check classes plus the missing-file path; outputs captured verbatim in the human-readable close-out. Forward-dependency from Session 3 now resolves (templates/scoping-session-prompt.md exists). Tier 2 verdict CLEAR; reviewer dispositioned both warnings in the session's favor (B3 definitional intent met). CI verified green at run 24970660207."
+}
+```
