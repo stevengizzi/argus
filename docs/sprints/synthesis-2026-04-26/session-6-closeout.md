@@ -233,6 +233,15 @@ No executable code, no tests. Verification was grep-based per kickoff §"Test Ta
 
 ---
 
+## CI Verification (RULE-050)
+
+- **Submodule advance commit:** `1d4baa2` ("synthesis-2026-04-26 S6: advance workflow submodule + final close-out (sprint complete)")
+- **CI run:** https://github.com/stevengizzi/argus/actions/runs/24971111180 — **success** (completed 2026-04-27T00:35:13Z)
+
+The barrier commit for this session passed CI green. Per RULE-050, this URL is the load-bearing record that S6's final state is verified beyond local pytest/grep.
+
+---
+
 ## Sprint-Level Closure
 
 This is the final session of sprint synthesis-2026-04-26. The sprint's six sessions delivered:
