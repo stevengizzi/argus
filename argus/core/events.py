@@ -422,6 +422,16 @@ class SystemAlertEvent(Event):
     alert_type: str = ""  # "max_retries_exceeded", "auth_failure", etc.
     message: str = ""
     severity: str = "critical"  # "critical" | "error" | "warning"
+    # Sprint 31.91 Session 2b.1 (DEF-213 partial): optional structured payload
+    # for typed consumer access (HealthMonitor, Command Center alert pane).
+    # Emitters SHOULD populate this dict structurally rather than encoding
+    # fields into ``message``. ``message`` remains the human-readable form.
+    # Session 5a.1 owns the migration of pre-existing emitters (Databento
+    # dead-feed, ``_emit_cancel_propagation_timeout_alert``); 2b.1 emits new
+    # ``phantom_short`` / ``stranded_broker_long`` alerts populated from
+    # day one. Default ``None`` matches DEF-213's suggested shape so
+    # consumers can null-check before reading.
+    metadata: dict[str, Any] | None = None
 
 
 # ---------------------------------------------------------------------------

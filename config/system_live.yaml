@@ -189,6 +189,9 @@ reconciliation:
   auto_cleanup_orphans: true
   auto_cleanup_unconfirmed: true
   consecutive_miss_threshold: 3
+  # Sprint 31.91 Session 2b.1 (D5): emit phantom_short + stranded_broker_long
+  # alerts on broker-orphan detection. Always true in production.
+  broker_orphan_alert_enabled: true
 
 # Observatory (Sprint 25 — The Observatory)
 # Immersive pipeline visualization page for operational visibility.

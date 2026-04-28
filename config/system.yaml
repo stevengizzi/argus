@@ -55,6 +55,9 @@ reconciliation:
   auto_cleanup_orphans: false
   auto_cleanup_unconfirmed: false
   consecutive_miss_threshold: 3
+  # Sprint 31.91 Session 2b.1 (D5): emit phantom_short + stranded_broker_long
+  # alerts on broker-orphan detection. Always true in production.
+  broker_orphan_alert_enabled: true
 
 # Command Center API (Sprint 14 — DEC-099)
 api:

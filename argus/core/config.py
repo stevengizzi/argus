@@ -237,6 +237,14 @@ class ReconciliationConfig(BaseModel):
     auto_cleanup_unconfirmed: bool = False
     consecutive_miss_threshold: int = Field(default=3, ge=1)
 
+    # Sprint 31.91 Session 2b.1 (D5): gate the broker-orphan branch alert
+    # taxonomy. When True, the reconciliation loop's broker-orphan branch
+    # emits ``phantom_short`` (CRITICAL) on broker-orphan SHORT detection
+    # and ``stranded_broker_long`` (WARNING, exp-backoff) on cycle-3+ LONG
+    # orphans. Disable only for controlled testing — production should
+    # always be True (the alert is the DEF-204 detection signal).
+    broker_orphan_alert_enabled: bool = True
+
 
 class TrailingStopConfig(BaseModel):
     """Configuration for trailing stop behavior (Sprint 28.5).

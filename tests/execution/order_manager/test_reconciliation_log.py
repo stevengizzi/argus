@@ -51,13 +51,21 @@ async def test_reconciliation_summary_single_line(
 
     assert len(discrepancies) == 4
 
-    # Should be exactly one WARNING line (consolidated summary)
-    warning_messages = [r.message for r in caplog.records if r.levelno == logging.WARNING]
-    assert len(warning_messages) == 1
-    assert "4 mismatch(es)" in warning_messages[0]
-    assert "ARGUS vs IBKR" in warning_messages[0]
+    # Should be exactly one consolidated-summary WARNING line. Sprint 31.91
+    # Session 2b.1 added the broker-orphan branch which can emit additional
+    # cycle-1 long-orphan WARNINGs alongside the summary; filter to just
+    # the consolidated-summary prefix to preserve the original test intent
+    # (per-symbol mismatches collapse to one summary line).
+    summary_messages = [
+        r.message for r in caplog.records
+        if r.levelno == logging.WARNING
+        and r.message.startswith("Position reconciliation:")
+    ]
+    assert len(summary_messages) == 1
+    assert "4 mismatch(es)" in summary_messages[0]
+    assert "ARGUS vs IBKR" in summary_messages[0]
     # First 3 symbols shown, then "..."
-    assert "..." in warning_messages[0]
+    assert "..." in summary_messages[0]
 
 
 @pytest.mark.asyncio

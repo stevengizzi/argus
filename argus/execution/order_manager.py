@@ -361,6 +361,21 @@ class OrderManager:
         self.eod_flatten_pass2_count: int = 0
         self.signal_cutoff_skipped_count: int = 0
 
+        # Sprint 31.91 Session 2b.1 (D5): per-symbol consecutive-cycle counter
+        # for broker-orphan LONG positions. Used for cycle-3+ stranded_broker_long
+        # alert escalation with M2 exponential backoff. NOT persisted in 2b.1
+        # (Session 2c.1 adds SQLite persistence for the gate state, not this
+        # counter — counter is session-scoped per M2 disposition). Cleared on
+        # session reset (``reset_daily_state``) and per-symbol on broker-zero
+        # observation in ``reconcile_positions``.
+        self._broker_orphan_long_cycles: dict[str, int] = {}
+
+        # Sprint 31.91 Session 2b.1 (D5): tracks the last alert-cycle count for
+        # exponential-backoff re-alerting (3 → 6 → 12 → 24 → 48, then every 60
+        # cycles which is roughly hourly if reconciliation runs once per minute).
+        # Cleared alongside ``_broker_orphan_long_cycles``.
+        self._broker_orphan_last_alerted_cycle: dict[str, int] = {}
+
     async def start(self) -> None:
         """Start the Order Manager.
 
@@ -2185,6 +2200,138 @@ class OrderManager:
                 symbol,
             )
 
+    async def _handle_broker_orphan_short(
+        self, symbol: str, recon_pos: ReconciliationPosition
+    ) -> None:
+        """Emit a CRITICAL ``phantom_short`` alert.
+
+        Sprint 31.91 Session 2b.1 (D5) — DEF-204 detection signal. The
+        broker reports a SHORT position for which ARGUS has no
+        ``_managed_positions`` entry. ARGUS is long-only (DEC-011), so a
+        broker-side short is an OCA-leak signature or external/manual
+        intervention. The alert is the operator-page; the per-symbol
+        entry gate (preventing new entries on the gated symbol) is wired
+        in Session 2c.1 — 2b.1 is detection-only.
+        """
+        if not self._reconciliation_config.broker_orphan_alert_enabled:
+            return  # config-gated; allow operator to disable for testing
+
+        logger.critical(
+            "BROKER ORPHAN SHORT DETECTED: %s shares=%d. Broker reports short "
+            "position ARGUS has no managed_positions entry for. This is the "
+            "DEF-204 signature — investigate via "
+            "scripts/ibkr_close_all_positions.py and check Sprint 31.91 "
+            "runbook (live-operations.md Phantom-Short Gate Diagnosis).",
+            symbol,
+            recon_pos.shares,
+        )
+
+        message = (
+            f"Broker reports short position for {symbol} that ARGUS has "
+            f"no managed_positions entry for. Shares: {recon_pos.shares}."
+        )
+        try:
+            await self._event_bus.publish(
+                SystemAlertEvent(
+                    source="reconciliation",
+                    alert_type="phantom_short",
+                    message=message,
+                    severity="critical",
+                    metadata={
+                        "symbol": symbol,
+                        "shares": recon_pos.shares,
+                        "side": "SELL",
+                        "detection_source": "reconciliation.broker_orphan_branch",
+                    },
+                )
+            )
+        except Exception:  # pragma: no cover - defensive
+            logger.exception(
+                "Failed to publish phantom_short SystemAlertEvent for %s",
+                symbol,
+            )
+
+    async def _handle_broker_orphan_long(
+        self, symbol: str, recon_pos: ReconciliationPosition, cycle: int
+    ) -> None:
+        """Long-orphan handler with M2 exponential-backoff re-alert schedule.
+
+        Sprint 31.91 Session 2b.1 (D5, M2 lifecycle):
+        - cycle 1–2: WARNING log only (likely transient — eventual-consistency
+          lag from a recent fill ARGUS hasn't yet processed).
+        - cycle ≥ 3: emit ``stranded_broker_long`` alert (severity=warning)
+          on schedule [3, 6, 12, 24, 48], then every 60 cycles thereafter
+          (~hourly cap if reconciliation runs ~once per minute).
+
+        Counter cleanup on broker-zero observation and session reset is
+        handled by ``reconcile_positions`` and ``reset_daily_state``
+        respectively.
+        """
+        if not self._reconciliation_config.broker_orphan_alert_enabled:
+            return
+
+        if cycle < 3:
+            logger.warning(
+                "Broker-orphan LONG cycle %d for %s shares=%d. Likely "
+                "transient (eventual-consistency lag from a recent fill "
+                "ARGUS has not yet processed). Will alert at cycle 3.",
+                cycle,
+                symbol,
+                recon_pos.shares,
+            )
+            return
+
+        # Cycle >= 3: check exp-backoff schedule
+        last_alerted = self._broker_orphan_last_alerted_cycle.get(symbol, 0)
+        # M2 exponential backoff: alert at cycles 3, 6, 12, 24, 48, then every
+        # 60 cycles thereafter (60 ≈ hourly if recon runs ~once per minute).
+        schedule = [3, 6, 12, 24, 48]
+        if last_alerted == 0:
+            should_alert = cycle == 3
+        else:
+            next_in_schedule = next(
+                (c for c in schedule if c > last_alerted), None
+            )
+            if next_in_schedule is not None:
+                should_alert = cycle >= next_in_schedule
+            else:
+                # Past the schedule: hourly cap (every 60 cycles after last).
+                should_alert = (cycle - last_alerted) >= 60
+
+        if not should_alert:
+            return
+
+        self._broker_orphan_last_alerted_cycle[symbol] = cycle
+
+        message = (
+            f"Broker reports long position for {symbol} that ARGUS has "
+            f"no managed_positions entry for, persisting across {cycle} "
+            f"reconciliation cycles. Shares: {recon_pos.shares}. Operator "
+            f"should investigate (eventual-consistency window has elapsed)."
+        )
+        try:
+            await self._event_bus.publish(
+                SystemAlertEvent(
+                    source="reconciliation",
+                    alert_type="stranded_broker_long",
+                    message=message,
+                    severity="warning",
+                    metadata={
+                        "symbol": symbol,
+                        "shares": recon_pos.shares,
+                        "side": "BUY",
+                        "consecutive_cycles": cycle,
+                        "detection_source": "reconciliation.broker_orphan_branch",
+                    },
+                )
+            )
+        except Exception:  # pragma: no cover - defensive
+            logger.exception(
+                "Failed to publish stranded_broker_long "
+                "SystemAlertEvent for %s",
+                symbol,
+            )
+
     async def _cancel_open_orders_for_symbol(self, symbol: str) -> None:
         """Cancel any open broker-side orders for a given symbol.
 
@@ -3261,6 +3408,12 @@ class OrderManager:
         self.eod_flatten_pass1_count = 0
         self.eod_flatten_pass2_count = 0
         self.signal_cutoff_skipped_count = 0
+        # Sprint 31.91 Session 2b.1 (D5, M2): broker-orphan LONG cycle counters
+        # are session-scoped — clear on each session start. Restart-preservation
+        # of phantom-short gate state lands in Session 2c.1 (SQLite); the
+        # cycle counter itself is intentionally NOT persisted across restarts.
+        self._broker_orphan_long_cycles.clear()
+        self._broker_orphan_last_alerted_cycle.clear()
 
     def increment_signal_cutoff(self) -> None:
         """Increment the signal cutoff skip counter.
@@ -3489,6 +3642,55 @@ class OrderManager:
                     "Unconfirmed orphaned position %s — auto-cleanup disabled",
                     sym,
                 )
+
+        # Sprint 31.91 Session 2b.1 (D5): broker-orphan branch.
+        # Dispatch by side: SHORT → CRITICAL phantom_short alert (DEF-204
+        # detection signal); LONG → cycle-counter increment + cycle-1/2
+        # WARNING / cycle ≥3 stranded_broker_long alert with M2 exp-backoff.
+        # Branch-ordering note: SHORT branch fires before any state-pruning
+        # logic so the unbounded-risk path takes the alert-emission path
+        # regardless of counter state. Broker-confirmed positions are never
+        # in this branch by construction (they live in ``_managed_positions``,
+        # which the ``symbol in self._managed_positions: continue`` guard
+        # filters first), preserving DEC-369 / DEC-370 immunity.
+        for symbol, recon_pos in broker_positions.items():
+            if symbol in self._managed_positions:
+                continue  # not an orphan — managed position exists
+            if recon_pos.side == OrderSide.SELL:
+                await self._handle_broker_orphan_short(symbol, recon_pos)
+                # Reset the long counter for safety (symbol could flip in
+                # pathological cases).
+                self._broker_orphan_long_cycles.pop(symbol, None)
+                self._broker_orphan_last_alerted_cycle.pop(symbol, None)
+            elif recon_pos.side == OrderSide.BUY:
+                cycle = self._broker_orphan_long_cycles.get(symbol, 0) + 1
+                self._broker_orphan_long_cycles[symbol] = cycle
+                await self._handle_broker_orphan_long(symbol, recon_pos, cycle)
+            else:
+                # Defensive: ReconciliationPosition.__post_init__ rejects
+                # None, so this branch is unreachable in practice.
+                logger.error(
+                    "Broker-orphan with unrecognized side for %s: side=%r. "
+                    "ReconciliationPosition __post_init__ should have "
+                    "rejected this.",
+                    symbol,
+                    recon_pos.side,
+                )
+
+        # Cleanup on broker-zero (M2): clear long-cycle counters for
+        # symbols that are no longer in ``broker_positions`` (orphan
+        # resolved at broker side). This runs every reconciliation cycle.
+        resolved_symbols = (
+            set(self._broker_orphan_long_cycles.keys())
+            - set(broker_positions.keys())
+        )
+        for symbol in resolved_symbols:
+            self._broker_orphan_long_cycles.pop(symbol, None)
+            self._broker_orphan_last_alerted_cycle.pop(symbol, None)
+            logger.info(
+                "Broker-orphan LONG resolved (broker reports zero): %s",
+                symbol,
+            )
 
         self._last_reconciliation = ReconciliationResult(
             timestamp=self._clock.now().isoformat(),

@@ -506,8 +506,15 @@ def test_reconciliation_config_fields_recognized() -> None:
     assert config.auto_cleanup_unconfirmed is True
     assert config.consecutive_miss_threshold == 5
 
-    # Verify model_fields contains expected keys
-    expected_keys = {"auto_cleanup_orphans", "auto_cleanup_unconfirmed", "consecutive_miss_threshold"}
+    # Verify model_fields contains expected keys. Sprint 31.91 Session 2b.1
+    # adds ``broker_orphan_alert_enabled`` (default True) for the broker-orphan
+    # branch alert taxonomy.
+    expected_keys = {
+        "auto_cleanup_orphans",
+        "auto_cleanup_unconfirmed",
+        "consecutive_miss_threshold",
+        "broker_orphan_alert_enabled",
+    }
     assert expected_keys == set(ReconciliationConfig.model_fields.keys())
 
 
