@@ -225,7 +225,7 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 - DEC-025 (Event Bus FIFO) · DEC-027 (Risk Manager modifications — share/target only, never stops/entry) · DEC-028 (strategy daily-stateful, session-stateless)
 - DEC-029 (Event Bus sole streaming mechanism) · DEC-032 (Pydantic config, not BaseSettings) · DEC-047 (walk-forward validation mandatory, WFE > 0.3)
 - DEC-117 (atomic bracket orders) · DEC-248 (Databento EQUS.MINI primary) · DEC-345 (separate-DB pattern for telemetry stores)
-- DEC-383 (22 shadow variant fleet) · **DEC-384 (FIX-01: standalone overlay registry — `_STANDALONE_SYSTEM_OVERLAYS` extensible registry in `argus/core/config.py`, most recent)**
+- DEC-383 (22 shadow variant fleet) · DEC-384 (FIX-01: standalone overlay registry — `_STANDALONE_SYSTEM_OVERLAYS` extensible registry in `argus/core/config.py`) · **DEC-386 (Sprint 31.91 OCA-group threading + broker-only safety — 4-layer architecture closing ~98% of DEF-204's mechanism, Tier 3 verdict 2026-04-27, most recent)**
 
 **Superseded (do not use):** DEC-031 → DEC-083; DEC-089 → DEC-248; DEC-097 → DEC-143/161; DEC-165 → DEC-237; DEC-234 → DEC-248.
 
@@ -250,7 +250,7 @@ Three-tier architecture: Claude.ai (strategic + planning) → Autonomous Sprint 
 | `docs/architecture.md` | Technical blueprint — how |
 | `docs/roadmap.md` | Strategic vision + sprint queue (DEC-262) |
 | `docs/sprint-campaign.md` | Operational sprint choreography |
-| `docs/decision-log.md` | All DEC entries with full rationale. Latest: DEC-384 (FIX-01, standalone overlay registry). |
+| `docs/decision-log.md` | All DEC entries with full rationale. Latest: DEC-386 (Sprint 31.91 OCA-group threading + broker-only safety, Tier 3 verdict 2026-04-27). |
 | `docs/dec-index.md` | Quick-reference DEC index with status |
 | `docs/sprint-history.md` | Complete sprint history + per-sprint follow-on detail |
 | `docs/pre-live-transition-checklist.md` | Config + test values to restore before live trading |
