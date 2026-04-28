@@ -7,7 +7,7 @@
 > **Resolves:** DEF-217 (HIGH) + DEF-218 (MEDIUM) + DEF-219 (MEDIUM) + DEF-224 (LOW) + DEF-225 (LOW).
 > **Self-assessment:** **PROPOSED_CLEAR** with **MINOR_DEVIATIONS** flagged below.
 > **Mid-sprint doc-sync ref:** `docs/sprints/sprint-31.91-reconciliation-drift/pre-impromptu-doc-sync-manifest.md`.
-> **Anchor commit SHA:** `<filled at commit time>` (HITL-on-main; see §"Anchor commit" below).
+> **Anchor commit SHA:** `e78a994` on `main` (HITL-on-main; see §"Anchor commit" below).
 
 ---
 
@@ -342,10 +342,11 @@ strikethrough preserving historical context per
 
 | Field | Value |
 |---|---|
-| Anchor commit SHA | `<filled at commit time>` |
+| Anchor commit SHA | `e78a994` |
 | Branch | `main` (HITL on main per Sprint 31.91 mode) |
-| Commit subject pattern | `feat(sprint-31.91): Impromptu A — alert observability hardening (DEF-217/218/219/224/225)` |
-| Co-author | Claude (Anthropic) per project commit-style convention |
+| Commit subject | `feat(sprint-31.91): Impromptu A — alert observability hardening (DEF-217/218/219/224/225)` |
+| Co-author | Claude Opus 4.7 (1M context) per project commit-style convention |
+| Files changed | 9 files: 1,090 insertions, 35 deletions |
 
 The sprint-close doc-sync should read this SHA and propagate it to:
 
