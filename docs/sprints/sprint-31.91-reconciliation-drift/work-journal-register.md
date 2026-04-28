@@ -14,12 +14,12 @@
 
 | Field | Value |
 |---|---|
-| **Refreshed at** | 2026-04-28, post-Session-5c CLEAR_WITH_NOTES |
-| **Anchor commit** | `3197472` (S5c impl) + `41e49e7` (S5c Tier 2 review verdict); upstream `140ccd8` (post-Impromptu-B register refresh); CI run `25078777514` green on `3197472` |
-| **Sessions complete** | 0, 1a, 1b, 1c, 2a, 2b.1, 2b.2, 2c.1, 2c.2 (+ DEF-216 hotfix), 2d, 3, 4, 5a.1, 5a.2, 5b, Impromptu A, Impromptu B, **Session 5c** |
+| **Refreshed at** | 2026-04-28, post-Impromptu-C CLEAR_WITH_NOTES |
+| **Anchor commit** | `3fefda8` (Impromptu C impl); upstream `d4eff4d` (post-S5c register refresh) + `41e49e7` (S5c Tier 2 review) + `3197472` (S5c impl) |
+| **Sessions complete** | 0, 1a, 1b, 1c, 2a, 2b.1, 2b.2, 2c.1, 2c.2 (+ DEF-216 hotfix), 2d, 3, 4, 5a.1, 5a.2, 5b, Impromptu A, Impromptu B, Session 5c, **Impromptu C** |
 | **Tier 3 reviews complete** | #1 (PROCEED), #2 (PROCEED with conditions; AMENDED 2026-04-28) |
-| **Active session** | None — between sessions; **per sprint shape: Impromptu C OR Session 5d is next** (both unblocked; sprint-handoff order is Impromptu C → S5d → S5e → sprint-close) |
-| **Sprint phase** | Backend SEALED + Backend HARDENING (Impromptu A) + Producer Wiring (Impromptu B) + **Frontend Layer 1 (Session 5c — `useAlerts` hook + Dashboard banner) COMPLETE**; Frontend Layer 2 (S5d toast + ack-error modal) and Layer 3 (S5e Observatory + Layout relocation + DEF-014 closure) remain |
+| **Active session** | None — between sessions; **Session 5d is next** per sprint shape (sprint-handoff order: Impromptu C → S5d → S5e → sprint-close) |
+| **Sprint phase** | Backend SEALED + Backend HARDENING (Impromptu A) + Producer Wiring (Impromptu B) + Frontend Layer 1 (Session 5c) + **Migration Framework Adoption (Impromptu C — sprint-spec D16 fulfilled, all 8 ARGUS SQLite DBs framework-managed) COMPLETE**; Frontend Layer 2 (S5d toast + ack-error modal) and Layer 3 (S5e Observatory + Layout relocation + DEF-014 closure) remain |
 | **Workflow protocol version** | 1.3.0 (mid-sprint doc-sync protocol + structural anchors); `tier-3-review.md` independently at 1.0.2 |
 
 ---
@@ -83,15 +83,16 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | After S5b | 5,232 (+10) | 5,271 | 866 | +152 |
 | After Impromptu A | 5,237 (+5) | 5,276 | 866 | +157 |
 | After Impromptu B | 5,238 (+1) | 5,277 | 866 | +158 |
-| **After Session 5c** | **5,238 (+0)** | **5,277** | **886 (+20)** | **+158 pytest, +20 Vitest** |
+| After Session 5c | 5,238 (+0) | 5,277 | 886 (+20) | +158 pytest, +20 Vitest |
+| **After Impromptu C** | **5,266 (+28)** | **5,305** | **886** | **+186 pytest, +20 Vitest** |
 
-**Sprint cumulative delta:** +158 pytest (operator-local frame), **+20 Vitest** (first non-zero Vitest delta in sprint; previously zero through S0–Impromptu-B).
+**Sprint cumulative delta:** +186 pytest (operator-local frame), +20 Vitest.
 
-**Bookkeeping discipline note:** S5a.2 + S5b + Impromptu A + Impromptu B + S5c closeouts cited tests_added matching actual delta (5 consecutive sessions); S5a.1's +21 vs +18 cosmetic discrepancy was a one-off and the RULE-038 sub-bullet feedback was internalized cleanly. S5c was the first non-zero Vitest delta of the sprint (+20).
+**Bookkeeping discipline note:** S5a.2 + S5b + Impromptu A + Impromptu B + S5c + Impromptu C closeouts cited tests_added matching actual delta (6 consecutive sessions clean); S5a.1's +21 vs +18 cosmetic discrepancy was a one-off and the RULE-038 sub-bullet feedback was internalized cleanly. S5c was the first non-zero Vitest delta of the sprint (+20).
 
 **Test_main.py baseline drift:** Pre-existing 27 pass / 5 skip / 12 fail. Documented in CLAUDE.md DEF-048 lineage.
 
-**ADMINISTRATIVE NOTE:** CLAUDE.md test count baseline still cites `5,080`; actual operator-local now 5,238 pytest + 886 Vitest. Sprint-end doc-sync MUST refresh both baselines.
+**ADMINISTRATIVE NOTE:** CLAUDE.md test count baseline still cites `5,080`; actual operator-local now 5,266 pytest + 886 Vitest. Sprint-end doc-sync MUST refresh both baselines.
 
 ---
 
@@ -138,7 +139,7 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | **DEF-220** | Tier 3 #2 Concern C / Item 4 | `acknowledgment_required_severities` field has no consumer (wire vs remove disposition) | **RESOLVED-IN-SPRINT (Session 5c, anchor `3197472` — Option A: REMOVAL)** — claim applied at sprint-close per `pre-impromptu-doc-sync-manifest.md`. Field deleted from `AlertsConfig` + both YAML overlays; per-alert-type `PolicyEntry.operator_ack_required` is canonical home; matches Tier 3 #2 verdict line 142 pre-recommendation | Sprint 31.91 Session 5c (LANDED) |
 | **DEF-221** | Tier 3 #2 Concern F / Item 7 | `DatabentoHeartbeatEvent` producer wiring (data-layer health poller) | **RESOLVED-IN-SPRINT (Impromptu B, anchor `8efa72e`)** — claim applied at sprint-close per `pre-impromptu-doc-sync-manifest.md` | Sprint 31.91 Impromptu B (LANDED) |
 | **DEF-222** | Tier 3 #2 Item 2 | Predicate-handler subscribe-before-rehydrate audit when producers land | DEFERRED — sprint-gating | Producer-wiring sprint TBD |
-| **DEF-223** | Tier 3 #2 Item 8 | Migration framework adoption sweep across 7 other separate DBs | OPEN — Impromptu C | Sprint 31.91 Impromptu C |
+| **DEF-223** | Tier 3 #2 Item 8 | Migration framework adoption sweep across 7 other separate DBs | **RESOLVED-IN-SPRINT (Impromptu C, anchor `3fefda8`)** — claim applied at sprint-close per `pre-impromptu-doc-sync-manifest.md`. Sprint-spec D16 fulfilled; all 8 ARGUS SQLite DBs are now framework-managed | Sprint 31.91 Impromptu C (LANDED) |
 | **DEF-224** | Tier 3 #2 Concern E | Duplicate `_AUDIT_DDL` between routes layer and migration framework | **RESOLVED-IN-SPRINT (Impromptu A, anchor `e78a994`)** — claim applied at sprint-close | Sprint 31.91 Impromptu A (LANDED) |
 | **DEF-225** | Tier 3 #2 Item 1 | `ibkr_auth_failure` dedicated E2E auto-resolution test | **RESOLVED-IN-SPRINT (Impromptu A, anchor `e78a994`)** — claim applied at sprint-close | Sprint 31.91 Impromptu A (LANDED) |
 
@@ -238,6 +239,9 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | **S5c — `useAlerts` hook + AlertBanner on Dashboard** | S5c | First user-visible alert observability surface in the codebase; mirrors `useArenaWebSocket` precedent; reconnect-gated refetch via `wasDisconnectedRef`; full WS contract coverage (6 message types); 20 Vitest tests; CI green at run `25078777514` |
 | **S5c — Banner mount on `Dashboard.tsx` (5c)** | S5c | 5 mount sites covering pre-market desktop / pre-market non-desktop / phone single-column / desktop dense / tablet stacked branches. Cross-page relocation to `Layout.tsx` deferred to Session 5e per spec |
 | **S5c — Severity-rendering decision** | S5c | Banner displays `critical` only; `warning`/`info` are toast-only at S5d. Test #2 (`AlertBanner renders nothing when only non-critical alerts are active`) enforces this as regression guard |
+| **Impromptu C — DEF-223 (migration framework adoption sweep)** | Impromptu C | Migration framework now spans all 8 ARGUS SQLite DBs (operations + catalyst + evaluation + regime_history + learning + vix_landscape + counterfactual + experiments). 7 new migration modules + 7 owning-service `initialize()` modifications + 28 new tests (4 invariants × 7 DBs). Each DB's `schema_version` row records v1 codifying existing schema as-of Impromptu C |
+| **Impromptu C — sprint-spec D16 fulfilled** | Impromptu C | Migration framework adoption pattern complete; all 7 separate DBs other than `operations.db` adopted the framework |
+| **Migration framework adoption** for other separate DBs (was OPPORTUNISTIC at S5a.2) | Impromptu C | All 7 separate DBs adopted: catalyst.db, evaluation.db, regime_history.db, learning.db, vix_landscape.db, counterfactual.db, experiments.db |
 
 ---
 
@@ -302,6 +306,10 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | **NEW (S5c):** RULE-038 judgment call #1 — reconnect-gated refetch via `wasDisconnectedRef` | RULE-038 acknowledged (reviewer ACCEPTED) | S5c closeout JC1 | Improvement over spec sketch's unconditional `refetch()`; eliminates double-fetch on initial connect |
 | **NEW (S5c):** RULE-038 judgment call #2 — JWT auth on WS connection (not in spec sketch) | RULE-038 acknowledged (reviewer ACCEPTED) | S5c closeout JC2 | Backend `alerts_ws.py:75-86` requires `{type:"auth",token}` first frame; mirrors `useArenaWebSocket.ts:209-216` |
 | **NEW (S5c):** RULE-038 judgment call #3 — field-name alignment with backend wire format (`state`/`created_at_utc` not `status`/`emitted_at_utc`; dropped `auto_resolved` from `AlertState` union) | RULE-038 acknowledged (reviewer ACCEPTED) | S5c closeout JC3 | Backend's actual REST `AlertResponse` and WS `_alert_to_payload` use `state`/`created_at_utc`; spec sketch was illustrative |
+| **NEW (Impromptu C):** CounterfactualStore `variant_id` ALTER bare-except inconsistent with FIX-08's narrowed catch pattern | LOW (pre-existing) | Impromptu C closeout LOW #1 + reviewer Concern | Pre-existing code carried forward unchanged; Impromptu C did not introduce or worsen. Future hygiene pass to align both to FIX-08 pattern |
+| **NEW (Impromptu C):** 4 legacy ALTER fallback paths lack dedicated unit tests (`counterfactual_positions.variant_id`, `counterfactual_positions.scoring_fingerprint`, `variants.exit_overrides`, `regime_snapshots.vix_close`) | LOW (pre-existing gap unchanged by Impromptu C) | Impromptu C closeout LOW #2 + reviewer Concern | Functionally covered by production usage + end-to-end `initialize()` tests; future-sprint dedicated coverage |
+| **NEW (Impromptu C):** VIXDataService sync `_init_db()` + async `apply_migrations` test-API compromise | LOW | Impromptu C closeout LOW #3 + reviewer Concern B | A test process using ONLY the sync API would never write `schema_version`. Pure test-only scenario today; production always calls `await initialize()`. Future refactor candidate (async helper or sync-mode framework path) |
+| **NEW (Impromptu C):** Future migration v2 opportunity to retire post-`apply_migrations` legacy ALTER blocks via `ALTER TABLE ADD COLUMN IF NOT EXISTS` (PRAGMA `table_info` pre-check) | LOW (architectural cleanup) | Impromptu C reviewer Concern A | Follow-up sprint, not blocker; current legacy blocks are correctness-critical for in-place upgrade per reviewer's empirical verification |
 
 ---
 
@@ -332,7 +340,7 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | Original Pass 1 retry SELL consistency gap at `:1777` | OBSERVATIONAL | Future session |
 | Mass-balance script regex extension for trail/escalation paths | LOW priority | Future session |
 | Item 7 historical doc references in frozen artifacts | OBSERVATIONAL | Opportunistic doc-hygiene pass |
-| **CLAUDE.md test count baseline refresh** (currently `5,080`; actual operator-local 5,238 pytest + 886 Vitest) | ADMINISTRATIVE | Sprint-end doc-sync |
+| **CLAUDE.md test count baseline refresh** (currently `5,080`; actual operator-local 5,266 pytest + 886 Vitest) | ADMINISTRATIVE | Sprint-end doc-sync |
 | **`ReconciliationCompletedEvent` producer wiring** (deferred-emission) | DEFERRED | post-31.9 component-ownership sprint |
 | **`IBKRReconnectedEvent` producer wiring** (deferred-emission) | DEFERRED | `post-31.9-reconnect-recovery` sprint (DEF-194/195/196) |
 | **Doc-sync sweep check** for deferred-emission docstrings | LOW priority | Future tooling |
@@ -344,7 +352,7 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | **DEF-220** `acknowledgment_required_severities` disposition | ✅ **RESOLVED-IN-SPRINT (Session 5c, anchor `3197472` — Option A: REMOVAL)** | Sprint-close transitions claim |
 | **DEF-221** `DatabentoHeartbeatEvent` producer wiring | ✅ **RESOLVED-IN-SPRINT (Impromptu B, anchor `8efa72e`)** | Sprint-close transitions claim |
 | **DEF-222** Predicate-handler subscribe-before-rehydrate audit | DEFERRED — gated on future producers | Producer-wiring sprint TBD |
-| **DEF-223** Migration framework adoption sweep | OPEN — Impromptu C | Sprint 31.91 in-sprint resolution |
+| **DEF-223** Migration framework adoption sweep | ✅ **RESOLVED-IN-SPRINT (Impromptu C, anchor `3fefda8`)** | Sprint-close transitions claim |
 | **DEF-224** Duplicate `_AUDIT_DDL` cleanup | ✅ **RESOLVED-IN-SPRINT (Impromptu A, anchor `e78a994`)** | Sprint-close transitions claim |
 | **DEF-225** `ibkr_auth_failure` dedicated E2E test | ✅ **RESOLVED-IN-SPRINT (Impromptu A, anchor `e78a994`)** | Sprint-close transitions claim |
 | Workflow metarepo amendment v1.2.0 → v1.3.0 | ✅ COMPLETE 2026-04-28 | claude-workflow repo (separate flow) |
@@ -533,8 +541,8 @@ S5b zero `main.py` edits. S5c/d/e likely zero `main.py` edits (frontend layer). 
 20. ✅ **Impromptu A** (alert observability hardening: DEF-217 + DEF-218 + DEF-219 + DEF-224 + DEF-225) — CLEAR_WITH_NOTES, anchor commit `e78a994` + closeout-SHA-backfill `ad1e7ff`. **DEF-217 (HIGH) + DEF-218 + DEF-219 + DEF-224 + DEF-225 RESOLVED-IN-SPRINT** (transitions applied at sprint-close per `pre-impromptu-doc-sync-manifest.md`).
 21. ✅ **Impromptu B** (Databento heartbeat producer + DEF-217 end-to-end validation: DEF-221) — CLEAR, anchor commit `8efa72e`. **DEF-221 RESOLVED-IN-SPRINT** + DEF-217 cross-validated by production-path E2E (transitions applied at sprint-close per `pre-impromptu-doc-sync-manifest.md`).
 22. ✅ **Session 5c** (`useAlerts` hook + Dashboard banner + DEF-220 disposition) — CLEAR_WITH_NOTES, anchor commit `3197472` + review verdict `41e49e7`. **DEF-220 RESOLVED-IN-SPRINT (Option A: REMOVAL).** First non-zero Vitest delta in sprint (+20). CI green at run `25078777514`.
-23. ⏳ **Impromptu C** (migration framework adoption sweep: DEF-223) — Tier 2 inline. Impl prompt: `sprint-31.91-impromptu-c-migration-framework-sweep-impl.md`. ← **NEXT** per sprint shape (work-journal-handoff order: Impromptu C → S5d → S5e → sprint-close)
-24. ⏳ Session 5d (toast + acknowledgment UI flow) — unchanged.
+23. ✅ **Impromptu C** (migration framework adoption sweep: DEF-223) — CLEAR_WITH_NOTES, anchor commit `3fefda8`. **DEF-223 RESOLVED-IN-SPRINT** + sprint-spec D16 fulfilled (all 8 ARGUS SQLite DBs framework-managed). +28 pytest tests across 7 new test files. Three LOW deferred-fix carry-forwards (all pre-existing tech debt).
+24. ⏳ Session 5d (toast + acknowledgment UI flow) — Impl prompt: `sprint-31.91-session-5d-impl.md`. ← **NEXT**
 25. ⏳ Session 5e (Observatory alerts panel + cross-page integration) — unchanged. **DEF-014 closes here.**
 26. ⏳ Sprint-close doc-sync — reads `pre-impromptu-doc-sync-manifest.md` per `protocols/mid-sprint-doc-sync.md` v1.0.0; writes DEC-385 + DEC-388; transitions all RESOLVED-IN-SPRINT DEFs.
 
