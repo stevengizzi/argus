@@ -508,12 +508,15 @@ def test_reconciliation_config_fields_recognized() -> None:
 
     # Verify model_fields contains expected keys. Sprint 31.91 Session 2b.1
     # adds ``broker_orphan_alert_enabled`` (default True) for the broker-orphan
-    # branch alert taxonomy.
+    # branch alert taxonomy. Sprint 31.91 Session 2c.1 adds
+    # ``broker_orphan_entry_gate_enabled`` (default True) for the per-symbol
+    # entry gate engaged on phantom_short detection.
     expected_keys = {
         "auto_cleanup_orphans",
         "auto_cleanup_unconfirmed",
         "consecutive_miss_threshold",
         "broker_orphan_alert_enabled",
+        "broker_orphan_entry_gate_enabled",
     }
     assert expected_keys == set(ReconciliationConfig.model_fields.keys())
 

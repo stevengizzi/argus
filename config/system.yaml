@@ -58,6 +58,11 @@ reconciliation:
   # Sprint 31.91 Session 2b.1 (D5): emit phantom_short + stranded_broker_long
   # alerts on broker-orphan detection. Always true in production.
   broker_orphan_alert_enabled: true
+  # Sprint 31.91 Session 2c.1: per-symbol entry gate on phantom_short
+  # detection. State is persisted to data/operations.db and rehydrated
+  # on startup before OrderApprovedEvent subscription (M5 ordering).
+  # When False, the alert still fires but no entries are blocked.
+  broker_orphan_entry_gate_enabled: true
 
 # Command Center API (Sprint 14 — DEC-099)
 api:

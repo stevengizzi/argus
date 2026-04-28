@@ -1062,7 +1062,18 @@ class ArgusSystem:
             startup_config=startup_config,
             exit_config=exit_config,
             strategy_exit_overrides=strategy_exit_overrides,
+            operations_db_path=str(
+                Path(config.system.data_dir) / "operations.db"
+            ),
         )
+        # Sprint 31.91 Session 2c.1: M5 — rehydrate phantom-short gate
+        # state BEFORE the OrderManager subscribes to OrderApprovedEvent.
+        # Without this ordering, ~60s of unsafe entries on restart could
+        # land before the next reconciliation re-detects the phantom
+        # short and re-engages the gate. ``order_manager.start()`` is
+        # what subscribes to OrderApprovedEvent, so the rehydration must
+        # precede it.
+        await self._order_manager._rehydrate_gated_symbols_from_db()
         await self._order_manager.start()
         # Reconstruct open positions from broker — gated by the startup
         # invariant (DEF-199 defense). If any short was detected at connect

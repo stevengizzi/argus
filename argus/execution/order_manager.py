@@ -19,8 +19,11 @@ import logging
 import time as _time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, time, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
+
+import aiosqlite
 
 from argus.core.config import (
     BrokerSource,
@@ -65,6 +68,26 @@ if TYPE_CHECKING:
     from argus.core.clock import Clock
 
 logger = logging.getLogger(__name__)
+
+
+def _log_persist_task_exception(task: "asyncio.Task[None]", symbol: str) -> None:
+    """Done-callback for fire-and-forget gate-state persistence tasks.
+
+    Sprint 31.91 Session 2c.1: persistence of ``phantom_short_gated_symbols``
+    is fire-and-forget so the reconciliation cycle is not blocked. We still
+    surface failures via WARNING — DEC-345 fire-and-forget pattern requires
+    the failure to be visible. A broken DB cannot silently swallow.
+    """
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        logger.warning(
+            "Phantom-short gate persistence write failed for %s: %s",
+            symbol,
+            exc,
+            exc_info=exc,
+        )
 
 
 # Sprint 31.91 Session 1b: OCA type for standalone-SELL threading on
@@ -255,6 +278,7 @@ class OrderManager:
         startup_config: StartupConfig | None = None,
         exit_config: ExitManagementConfig | None = None,
         strategy_exit_overrides: dict[str, dict[str, Any]] | None = None,
+        operations_db_path: str | None = None,
     ) -> None:
         """Initialize the Order Manager.
 
@@ -271,6 +295,10 @@ class OrderManager:
             exit_config: Exit management config (trailing stops, escalation). Sprint 28.5.
             strategy_exit_overrides: Per-strategy exit_management YAML overrides
                 keyed by strategy_id. Deep-merged with global exit_config (AMD-1).
+            operations_db_path: Path to ``data/operations.db`` (Sprint 31.91
+                Session 2c.1). Used to persist + rehydrate the per-symbol
+                phantom-short entry gate. Defaults to ``"data/operations.db"``
+                — main.py may override based on ``config.system.data_dir``.
         """
         self._event_bus = event_bus
         self._broker = broker
@@ -376,6 +404,28 @@ class OrderManager:
         # Cleared alongside ``_broker_orphan_long_cycles``.
         self._broker_orphan_last_alerted_cycle: dict[str, int] = {}
 
+        # Sprint 31.91 Session 2c.1: per-symbol entry gate. Symbols in this
+        # set are blocked at the OrderApprovedEvent handler. Engagement:
+        # Session 2b.1's ``_handle_broker_orphan_short`` adds the symbol;
+        # auto-clear (5-cycle) lands in Session 2c.2; operator override
+        # lands in Session 2d. SQLite-persisted to ``data/operations.db``
+        # (M5 rehydration ordering).
+        self._phantom_short_gated_symbols: set[str] = set()
+
+        # Sprint 31.91 Session 2c.1: path to the operations.db file that
+        # backs the phantom-short entry-gate state. Default is
+        # ``data/operations.db``; main.py may override based on
+        # ``config.system.data_dir``. The file/parent dir is created
+        # lazily on first write (aiosqlite.connect creates the file).
+        self._operations_db_path: str = operations_db_path or "data/operations.db"
+
+        # Sprint 31.91 Session 2c.1: tracks fire-and-forget gate-state
+        # persistence tasks so they can be awaited (tests, future
+        # graceful shutdown) and so the GC doesn't reap a still-pending
+        # task before its done-callback runs. Task removes itself from
+        # this set in its done-callback.
+        self._pending_gate_persist_tasks: set[asyncio.Task[None]] = set()
+
     async def start(self) -> None:
         """Start the Order Manager.
 
@@ -464,6 +514,39 @@ class OrderManager:
         signal = event.signal
         if signal is None:
             logger.warning("OrderApprovedEvent with no signal, ignoring")
+            return
+
+        # Sprint 31.91 Session 2c.1: per-symbol phantom-short entry gate.
+        # If this symbol was previously detected as a broker-orphan SHORT
+        # (DEF-204 signature) and the entry gate is engaged, reject the
+        # OrderApprovedEvent before any broker submission. This is the
+        # first check — mirrors DEC-367 margin-circuit ordering. Operator
+        # must clear via Session 2d operator override or wait for
+        # Session 2c.2's 5-cycle auto-clear.
+        if signal.symbol in self._phantom_short_gated_symbols:
+            logger.critical(
+                "OrderApprovedEvent REJECTED for %s: symbol is in "
+                "phantom_short_gated_symbols. Operator must clear via "
+                "POST /api/v1/reconciliation/phantom-short-gate/clear "
+                "(Session 2d) or wait for 5-cycle auto-clear (Session 2c.2).",
+                signal.symbol,
+            )
+            await self._event_bus.publish(
+                SignalRejectedEvent(
+                    signal=signal,
+                    rejection_stage="risk_manager",
+                    rejection_reason="phantom_short_gate",
+                    metadata={
+                        "reason_detail": (
+                            f"Symbol {signal.symbol} is gated due to "
+                            f"phantom-short detection (DEF-204 signature). "
+                            f"Operator action required to clear."
+                        ),
+                        "gate": "phantom_short_gate",
+                        "symbol": signal.symbol,
+                    },
+                )
+            )
             return
 
         # Apply modifications if any (e.g., reduced share count)
@@ -2301,6 +2384,40 @@ class OrderManager:
                 symbol,
             )
 
+        # Sprint 31.91 Session 2c.1: engage per-symbol entry gate. The
+        # ``not in`` guard makes engagement idempotent — re-detection of a
+        # still-active phantom short does NOT produce duplicate persistence
+        # writes (INSERT OR REPLACE would also be idempotent on the SQL
+        # side, but skipping the write entirely avoids unnecessary I/O).
+        if (
+            self._reconciliation_config.broker_orphan_entry_gate_enabled
+            and symbol not in self._phantom_short_gated_symbols
+        ):
+            self._phantom_short_gated_symbols.add(symbol)
+            # Persist immediately. Fire-and-forget: if ARGUS crashes before
+            # the write completes, the next reconciliation cycle (~1 minute
+            # later) re-detects the phantom short and re-engages the gate.
+            # Making persistence synchronous would block reconciliation.
+            persist_task = asyncio.create_task(
+                self._persist_gated_symbol(
+                    symbol, "engaged", last_observed_short_shares=recon_pos.shares
+                )
+            )
+            self._pending_gate_persist_tasks.add(persist_task)
+
+            def _on_persist_done(t: "asyncio.Task[None]", _sym: str = symbol) -> None:
+                self._pending_gate_persist_tasks.discard(t)
+                _log_persist_task_exception(t, _sym)
+
+            persist_task.add_done_callback(_on_persist_done)
+            logger.critical(
+                "Phantom-short gate ENGAGED for %s. Future "
+                "OrderApprovedEvents for this symbol will be rejected "
+                "until gate clears (5 consecutive zero-shares cycles per "
+                "Session 2c.2 OR operator override per Session 2d).",
+                symbol,
+            )
+
     async def _handle_broker_orphan_long(
         self, symbol: str, recon_pos: ReconciliationPosition, cycle: int
     ) -> None:
@@ -2380,6 +2497,132 @@ class OrderManager:
                 "Failed to publish stranded_broker_long "
                 "SystemAlertEvent for %s",
                 symbol,
+            )
+
+    # ------------------------------------------------------------------
+    # Phantom-short entry-gate persistence (Sprint 31.91 Session 2c.1)
+    # ------------------------------------------------------------------
+    #
+    # State backing the per-symbol entry gate
+    # (``_phantom_short_gated_symbols``). The DDL is created idempotently
+    # on first read/write so the table exists in fresh and existing
+    # ``data/operations.db`` files. Per-write connection lifecycle
+    # mirrors ``argus.intelligence.experiments.store`` (the dominant
+    # aiosqlite pattern in the codebase).
+    #
+    # Schema:
+    #   CREATE TABLE phantom_short_gated_symbols (
+    #     symbol TEXT PRIMARY KEY,
+    #     engaged_at_utc TEXT NOT NULL,
+    #     engaged_at_et TEXT NOT NULL,
+    #     engagement_source TEXT NOT NULL,
+    #     last_observed_short_shares INTEGER
+    #   )
+    #
+    # M5 rehydration ordering: ``_rehydrate_gated_symbols_from_db()`` is
+    # called from ``argus/main.py`` BEFORE ``order_manager.start()``
+    # subscribes to ``OrderApprovedEvent``. Without this ordering a ~60s
+    # window of unsafe entries on restart could land before the next
+    # reconciliation re-detects the phantom short and re-engages the gate.
+
+    _PHANTOM_SHORT_GATED_SYMBOLS_DDL: str = (
+        "CREATE TABLE IF NOT EXISTS phantom_short_gated_symbols (\n"
+        "    symbol TEXT PRIMARY KEY,\n"
+        "    engaged_at_utc TEXT NOT NULL,\n"
+        "    engaged_at_et TEXT NOT NULL,\n"
+        "    engagement_source TEXT NOT NULL,\n"
+        "    last_observed_short_shares INTEGER\n"
+        ")"
+    )
+
+    def _ensure_operations_db_parent(self) -> None:
+        """Ensure the parent directory of ``operations.db`` exists.
+
+        ``aiosqlite.connect`` will create the DB file itself, but the
+        parent directory must already exist. Tests use ``tmp_path``;
+        production uses ``data/`` which is committed.
+        """
+        parent = Path(self._operations_db_path).parent
+        if str(parent) and not parent.exists():
+            parent.mkdir(parents=True, exist_ok=True)
+
+    async def _persist_gated_symbol(
+        self,
+        symbol: str,
+        source: str,
+        last_observed_short_shares: int | None = None,
+    ) -> None:
+        """Write/upsert a gated-symbol row to ``operations.db``.
+
+        Sprint 31.91 Session 2c.1. Uses ``INSERT OR REPLACE`` so
+        re-detection of an already-gated symbol updates the row in place
+        rather than producing a constraint error. Writes are atomic by
+        SQLite default; ``commit()`` runs on the success path.
+        """
+        self._ensure_operations_db_parent()
+        utcnow = datetime.now(UTC)
+        et_now = utcnow.astimezone(ZoneInfo("America/New_York"))
+        async with aiosqlite.connect(self._operations_db_path) as db:
+            await db.execute(self._PHANTOM_SHORT_GATED_SYMBOLS_DDL)
+            await db.execute(
+                "INSERT OR REPLACE INTO phantom_short_gated_symbols "
+                "(symbol, engaged_at_utc, engaged_at_et, engagement_source, "
+                "last_observed_short_shares) VALUES (?, ?, ?, ?, ?)",
+                (
+                    symbol,
+                    utcnow.isoformat(),
+                    et_now.isoformat(),
+                    source,
+                    last_observed_short_shares,
+                ),
+            )
+            await db.commit()
+
+    async def _remove_gated_symbol_from_db(self, symbol: str) -> None:
+        """Delete a gated-symbol row from ``operations.db``.
+
+        Sprint 31.91 Session 2c.1 stub; Session 2c.2 (5-cycle auto-clear)
+        and Session 2d (operator override) are the call sites. Implemented
+        in 2c.1 so the SQL surface is complete and 2c.2/2d don't need to
+        re-touch this region.
+        """
+        self._ensure_operations_db_parent()
+        async with aiosqlite.connect(self._operations_db_path) as db:
+            await db.execute(self._PHANTOM_SHORT_GATED_SYMBOLS_DDL)
+            await db.execute(
+                "DELETE FROM phantom_short_gated_symbols WHERE symbol = ?",
+                (symbol,),
+            )
+            await db.commit()
+
+    async def _rehydrate_gated_symbols_from_db(self) -> None:
+        """M5 rehydration: load gated symbols from ``operations.db`` into
+        the in-memory ``_phantom_short_gated_symbols`` set.
+
+        Sprint 31.91 Session 2c.1. Called from ``argus/main.py`` BEFORE
+        ``order_manager.start()`` subscribes to ``OrderApprovedEvent``.
+        On a fresh boot with no operations.db, the table is created
+        idempotently and zero rows are loaded — gate state is empty,
+        which is correct.
+
+        Logs CRITICAL when symbols are rehydrated so the operator sees
+        the persisted gate state on every restart and can investigate.
+        """
+        self._ensure_operations_db_parent()
+        async with aiosqlite.connect(self._operations_db_path) as db:
+            await db.execute(self._PHANTOM_SHORT_GATED_SYMBOLS_DDL)
+            await db.commit()
+            async with db.execute(
+                "SELECT symbol FROM phantom_short_gated_symbols"
+            ) as cursor:
+                rows = await cursor.fetchall()
+        for (symbol,) in rows:
+            self._phantom_short_gated_symbols.add(symbol)
+        if self._phantom_short_gated_symbols:
+            logger.critical(
+                "Phantom-short gate REHYDRATED on startup. Gated symbols: "
+                "%s. Operator must investigate (Sprint 31.91 runbook).",
+                sorted(self._phantom_short_gated_symbols),
             )
 
     async def _cancel_open_orders_for_symbol(self, symbol: str) -> None:

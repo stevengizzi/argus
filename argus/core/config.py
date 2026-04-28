@@ -245,6 +245,25 @@ class ReconciliationConfig(BaseModel):
     # always be True (the alert is the DEF-204 detection signal).
     broker_orphan_alert_enabled: bool = True
 
+    # Sprint 31.91 Session 2c.1: per-symbol entry gate on broker-orphan
+    # SHORT detection. When True, ``phantom_short`` detection adds the
+    # symbol to ``OrderManager._phantom_short_gated_symbols``; subsequent
+    # ``OrderApprovedEvent`` for that symbol is rejected with
+    # ``rejection_reason="phantom_short_gate"``. State is persisted to
+    # ``data/operations.db::phantom_short_gated_symbols`` and rehydrated
+    # on startup BEFORE the OrderManager subscribes to OrderApprovedEvent
+    # (M5 rehydration ordering). When False the alert still fires but no
+    # entries are blocked — operator-only mitigation mode.
+    broker_orphan_entry_gate_enabled: bool = Field(
+        default=True,
+        description=(
+            "When True, broker-orphan SHORT detection engages the per-symbol "
+            "entry gate (rejecting OrderApprovedEvents for the gated symbol). "
+            "When False, the alert still fires but no entries are blocked — "
+            "operator-only mitigation mode."
+        ),
+    )
+
 
 class TrailingStopConfig(BaseModel):
     """Configuration for trailing stop behavior (Sprint 28.5).
