@@ -12,12 +12,12 @@
 
 | Field | Value |
 |---|---|
-| **Refreshed at** | 2026-04-27, end-of-Session-2b.2 verdict |
-| **Anchor commit** | `3542a46` (S2b.2 Tier 2 review + impl `a6846c6`) |
-| **Sessions complete** | 0, 1a, 1b, 1c, 2a, 2b.1, 2b.2 |
+| **Refreshed at** | 2026-04-27, end-of-Session-2c.1 verdict |
+| **Anchor commit** | `6ec03ac` (S2c.1 Tier 2 review + impl `0c034b3`) |
+| **Sessions complete** | 0, 1a, 1b, 1c, 2a, 2b.1, 2b.2, 2c.1 |
 | **Tier 3 reviews complete** | #1 (PROCEED) |
-| **Active session** | None — between sessions; cleared to proceed to Session 2c.1 |
-| **Sprint phase** | Track A complete (OCA architecture); Track B detection + count-filter alignment + Health observability hybrid live; per-symbol entry gate + operator override pending |
+| **Active session** | None — between sessions; cleared to proceed to Session 2c.2 |
+| **Sprint phase** | Track A complete (OCA architecture); Track B detection + count-filter alignment + entry gate engagement live; auto-clear (2c.2) + operator override (2d) pending |
 | **Workflow protocol version** | 1.2.0 (per-session register discipline formalized) |
 
 ---
@@ -45,9 +45,10 @@
 | After Tier 3 #1 doc-sync | 5,128 (+0, doc-only) | 5,167 | 866 | +48 |
 | After S2a | 5,133 (+5) | 5,172 | 866 | +53 |
 | After S2b.1 | 5,139 (+6) | 5,178 | 866 | +59 |
-| **After S2b.2** | **5,153 (+14)** | **5,192** | **866** | **+73** |
+| After S2b.2 | 5,153 (+14) | 5,192 | 866 | +73 |
+| **After S2c.1** | **5,159 (+6)** | **5,198** | **866** | **+79** |
 
-**Sprint cumulative delta:** +73 pytest, 0 Vitest.
+**Sprint cumulative delta:** +79 pytest, 0 Vitest.
 
 **Test_main.py baseline:** 39 pass + 5 skip — unchanged across all sessions.
 
@@ -65,7 +66,7 @@
 
 | DEC | Description | Sessions | Materializes at |
 |---|---|---|---|
-| DEC-385 | Side-aware reconciliation contract | 2a (foundation) + 2b.1 (detection live) + 2b.2 (count-filter alignment + Health hybrid) → 2c.1/2c.2/2d (gate engagement + override) | Session 2d close-out |
+| DEC-385 | Side-aware reconciliation contract | 2a (foundation) + 2b.1 (detection live) + 2b.2 (count-filter alignment + Health hybrid) + 2c.1 (entry gate engagement + SQLite persistence + M5 rehydration) → 2c.2 (auto-clear) + 2d (operator override) | Session 2d close-out |
 | DEC-388 | Alert observability architecture (resolves DEF-014) | 5a.1/5a.2/5b/5c/5d/5e | Session 5e close-out |
 
 ### Freed
@@ -85,7 +86,7 @@
 | **DEF-209** (extended) | Tier 3 #1 Concern D | `Position.side` AND `ManagedPosition.redundant_exit_observed` persistence in historical-record writers | Sprint 35+ horizon | Sprint 35+ |
 | **DEF-211** (extended) | Pre-existing + Apr 27 Findings 3+4 | EXTENDED scope: D1+D2+D3 | Sprint 31.93 (sprint-gating) | Sprint 31.93 |
 | **DEF-212** | Tier 3 #1 Concern B | `_OCA_TYPE_BRACKET = 1` constant drift risk | Sprint 31.92 | Sprint 31.92 |
-| **DEF-213** | Tier 3 #1 Concern C | `SystemAlertEvent.metadata` schema gap. **PARTIAL-RESOLVED in S2b.1** — schema field added at `argus/core/events.py:425-433`. Atomic emitter migration of 2 pre-existing emitters remains S5a.1 scope | **Sprint 31.91 Session 5a.1 sprint-gating** (atomic-migration half only) | Sprint 31.91 Session 5a.1 |
+| **DEF-213** | Tier 3 #1 Concern C | `SystemAlertEvent.metadata` schema gap. **PARTIAL-RESOLVED in S2b.1** | **Sprint 31.91 Session 5a.1 sprint-gating** (atomic-migration half only) | Sprint 31.91 Session 5a.1 |
 | **DEF-214** | Apr 27 debrief Finding 1 | EOD verification timing race + side-blind classification | **Sprint 31.91 Session 5a.1 sprint-gating** — Requirement 0.5 | Sprint 31.91 Session 5a.1 |
 | **DEF-215** | Apr 27 debrief Finding 2 | Reconciliation per-cycle log spam | DEFERRED with sharp revisit trigger | Deferred |
 
@@ -93,16 +94,17 @@
 
 | DEF | Status |
 |---|---|
-| DEF-204 | Reconciliation drift / phantom-short mechanism — **detection layer + count-filter layer LIVE post-S2b.2**; per-symbol entry gate (2c.1), operator override (2d), DEF-158 retry-path side-check (3) still pending |
+| DEF-204 | Reconciliation drift / phantom-short mechanism — **detection layer + count-filter layer + entry-gate layer LIVE post-S2c.1**; auto-clear (2c.2), operator override (2d), DEF-158 retry-path side-check (3) still pending |
 | DEF-014 | Alert observability gap — RESOLVES at Session 5e |
 | DEF-158 | Flatten retry side-blindness — RESOLVES in Session 3 |
-| DEF-199 | EOD Pass 2 A1 fix preserved — UNCHANGED across S0–S2b.2 (byte-identical except documented appended alert emission inside SELL branch in S2b.2) |
+| DEF-177 | `RejectionStage` enum missing `MARGIN_CIRCUIT` and `phantom_short_gate` distinct values — S2c.1 judgment call #4 + review concern #3; cleanup gated to dedicated cross-domain session |
+| DEF-199 | EOD Pass 2 A1 fix preserved — UNCHANGED across S0–S2c.1 (byte-identical except documented appended alert emission inside SELL branch in S2b.2) |
 
 ### Anticipated but NOT filed
 
 | Anticipated DEF | Reason not filed |
 |---|---|
-| DEF-208 | No fresh evidence requiring filing through S2b.2 |
+| DEF-208 | No fresh evidence requiring filing through S2c.1 |
 | DEF-210 | Same — original anticipated routing not opened by any session in flight |
 
 ---
@@ -130,8 +132,8 @@
 | `_OCA_TYPE_BRACKET` doc-sync paragraph for `live-operations.md` | Tier 3 #1 doc-sync | LANDED via `df48e31` |
 | Per-session register discipline formalized in workflow metarepo | S2a | LANDED — workflow v1.2.0 |
 | **DEF-213 schema-extension half** | S2b.1 (PARTIAL — atomic emitter migration still S5a.1) | `SystemAlertEvent.metadata` field added |
-| **2b.2 cross-component coupling on `_broker_orphan_last_alerted_cycle`** | S2b.2 (read implementation complete; production wiring deferred to S5a.1+) | `HealthMonitor._order_manager` reads dict via `getattr` defensive pattern; Option C cross-reference verified by 3 tests |
-| **Spec invariant 8 wrong attribution** (Check 0 around `risk_manager.py:335` — actually max-concurrent) | S2b.2 | Disclosed and reconciled per RULE-038; Check 0 lives at `risk_manager.py:274-275`; max-concurrent at 337-356 |
+| **2b.2 cross-component coupling on `_broker_orphan_last_alerted_cycle`** | S2b.2 (read implementation complete; production wiring deferred to S5a.1+) | `HealthMonitor._order_manager` reads dict via `getattr` defensive pattern |
+| **Spec invariant 8 wrong attribution** (Check 0 around `risk_manager.py:335` — actually max-concurrent) | S2b.2 | Disclosed and reconciled per RULE-038 |
 
 ---
 
@@ -149,10 +151,13 @@
 | B5-MILD line shift — call site `:1505-1535` spec → `:1519-1553` post-edit | LOW (acceptable) | S2a | No spec adjustment needed |
 | EventBus dispatch async-via-`asyncio.create_task`; tests need `_reconcile_and_drain` helper | OBSERVATIONAL | S2b.1 | Pattern matches `test_broker_only_paths_safety.py` |
 | Cycle 1-2 WARNING is unthrottled but bounded | LOW (acceptable) | S2b.1 | ThrottledLogger compliance reviewed |
-| **NEW (S2b.2):** Pass 1 retry SELL detection at `order_manager.py:1777` is sibling to Pass 2 but NOT alerted with `phantom_short`. Per RULE-007, spec scoped Pattern B to Pass 2 only | LOW (consistency gap, not behavior bug) | S2b.2 Edge Case 3 | Future session can extend taxonomy. `logger.error` unchanged |
-| **NEW (S2b.2):** `HealthMonitor.set_order_manager()` production wiring at startup deferred — `main.py` is do-not-modify. Tests wire via setter; cross-reference no-op until S5a.1+ | RULE-007 deferral | S2b.2 Edge Case 1 | Inline TODO at `health.py:HealthMonitor.__init__` cites S5a.1+ migration |
-| **NEW (S2b.2):** Spec do-not-modify line range `:1670-1750` for `order_manager.py` does NOT actually contain SELL-detection branching it was meant to protect | LOW (spec-anchor discrepancy) | S2b.2 RULE-038 #3 | Canonical protected region: structural anchor `elif side == OrderSide.SELL:` branches at Pass 1 retry (`:1777-1810`) and Pass 2 (`:1813-1842`). Future impl prompts should reference structural anchor |
-| **NEW (S2b.2):** `logger.info` breakdown lines on margin reset site previously absent | INFORMATIONAL | S2b.2 Edge Case 4 | No existing log-line assertion picks them up |
+| Pass 1 retry SELL detection at `order_manager.py:1777` is sibling to Pass 2 but NOT alerted with `phantom_short` | LOW (consistency gap) | S2b.2 Edge Case 3 | Future session can extend taxonomy |
+| `HealthMonitor.set_order_manager()` production wiring at startup deferred — `main.py` is do-not-modify | RULE-007 deferral | S2b.2 Edge Case 1 | S5a.1+ migration |
+| Spec do-not-modify line range `:1670-1750` for `order_manager.py` does NOT actually contain SELL-detection branching | LOW (spec-anchor discrepancy) | S2b.2 RULE-038 #3 | Future impl prompts should reference structural anchor |
+| `logger.info` breakdown lines on margin reset site previously absent | INFORMATIONAL | S2b.2 Edge Case 4 | No existing log-line assertion picks them up |
+| **NEW (S2c.1):** Persistence failure leaves disk state stale until restart re-detection. In-memory state correct; done-callback logs WARNING; 60s reconciliation-cycle re-detection on restart bounds recovery | LOW (documented contract) | S2c.1 review concern #1 | DEC-345 fire-and-forget semantics |
+| **NEW (S2c.1):** `OrderManager.stop()` does not await `_pending_gate_persist_tasks` — same recovery path as above on graceful shutdown | LOW (same-family follow-on) | S2c.1 review concern #2 | Eligible for S2c.2 graceful-shutdown improvement |
+| **NEW (S2c.1):** `rejection_stage="risk_manager"` overload for `phantom_short_gate` mirrors margin-circuit pattern | LOW (DEF-177 covers split) | S2c.1 judgment call #4 + review concern #3 | When DEF-177 cross-domain `RejectionStage` enum work lands |
 
 ---
 
@@ -173,10 +178,13 @@
 | Tier 3 #1 Concern F (Test 4 `get_positions.side_effect` brittleness) | Test-hygiene backlog | Future test-hygiene session |
 | First OCA-effective paper session debrief | Watch | Apr 28 or later (first post-`bf7b869` session) |
 | Emitter-site line-number drift in `order_manager.py` | TRACKED | S5a.1 pre-flight grep canonical |
-| 4 emitter sites at S2b.2 close (all populate `metadata` from day one — zero S5a.1 migration burden): 2b.1's `_handle_broker_orphan_short` + `_handle_broker_orphan_long`; 2b.2's `health.py` integrity-check phantom_short + `order_manager.py` EOD Pass 2 phantom_short | TRACKED for S5a.1 grep | S5a.1 |
-| **NEW (S2b.2):** Pass 1 retry SELL `phantom_short` alert extension — consistency-gap follow-up | Future session | TBD |
-| **NEW (S2b.2):** `HealthMonitor.set_order_manager()` production wiring at startup | Watch | S5a.1+ (when `main.py` becomes editable). 5a.1 should invoke `health_monitor.set_order_manager(self.order_manager)` in addition to its consumer subscription wiring |
-| **NEW (S2b.2):** Spec do-not-modify anchor for `order_manager.py` should reference structural `elif side == OrderSide.SELL:` rather than line numbers | TRACKED | Future impl prompts |
+| 4 emitter sites at S2b.2 close (all populate `metadata` from day one — zero S5a.1 migration burden) | TRACKED for S5a.1 grep | S5a.1 |
+| Pass 1 retry SELL `phantom_short` alert extension — consistency-gap follow-up | Future session | TBD |
+| **`HealthMonitor.set_order_manager()` production wiring at startup** | Watch | S5a.1+ — 5a.1 should invoke alongside consumer subscription wiring |
+| Spec do-not-modify anchor for `order_manager.py` should reference structural `elif side == OrderSide.SELL:` rather than line numbers | TRACKED | Future impl prompts |
+| **NEW (S2c.1):** `OrderManager.stop()` graceful-shutdown await of `_pending_gate_persist_tasks` | Watch | Eligible for S2c.2 follow-on improvement |
+| **NEW (S2c.1):** `data/operations.db` is a NEW SQLite file introduced this sprint — must surface in sprint-end doc-sync for `architecture.md` storage table + `live-operations.md` operational reference | TRACKED | Sprint-end doc-sync |
+| **NEW (S2c.1):** `_phantom_short_gated_symbols` location on `OrderManager` is acceptable for Sprint 31.91 but eligible for relocation to a dedicated component per DEF-211 D2 IMPROMPTU-04 startup invariant gate refactor (Sprint 31.93) | OBSERVATIONAL | Sprint 31.93 |
 
 ---
 
@@ -185,7 +193,7 @@
 | # | Decision | Lands In |
 |---|---|---|
 | Phase D Item 2 | EOD Pass 2 cancel-timeout failure-mode docs + test 7 | Session 1c (RESOLVED) |
-| Phase D Item 3 | Health + broker-orphan double-fire dedup → Option C hybrid | Session 2b.2 (RESOLVED — Option C cross-reference live; production wiring deferred S5a.1+) |
+| Phase D Item 3 | Health + broker-orphan double-fire dedup → Option C hybrid | Session 2b.2 (RESOLVED — production wiring deferred S5a.1+) |
 | M4 cost-of-error asymmetry | Auto-clear threshold default = 5 | Session 2c.2 |
 | L3 always-fire-both-alerts | Aggregate at ≥10 + per-symbol always fire | Session 2d |
 | MEDIUM #13 Alpaca anti-regression | `inspect.getsource` check (not line-number-based) | Session 5b |
@@ -262,7 +270,19 @@ ARGUS register at `docs/sprints/sprint-31.91-reconciliation-drift/work-journal-r
 
 **Atomic-migration scope for S5a.1 (Requirement 0):** the 2 pre-existing emitters above (Databento dead-feed + `_emit_cancel_propagation_timeout_alert`).
 
-**Additional pre-flight responsibility for S5a.1:** invoke `health_monitor.set_order_manager(self.order_manager)` when wiring HealthMonitor at startup, to activate Option C cross-reference in production. The setter exists post-S2b.2; tests wire it explicitly; production wiring is deferred to S5a.1+.
+**Additional pre-flight responsibilities for S5a.1:**
+1. Invoke `health_monitor.set_order_manager(self.order_manager)` when wiring HealthMonitor at startup (Option C cross-reference production activation per S2b.2 carry-forward)
+2. Subscribe HealthMonitor to `SystemAlertEvent` per its own scope (Requirement 1)
+
+---
+
+## SQLite Storage (Sprint 31.91 New Surfaces)
+
+| File | Source session | Schema | Purpose |
+|---|---|---|---|
+| `data/operations.db` | S2c.1 (NEW) | `phantom_short_gated_symbols` table (5 columns: `symbol PRIMARY KEY`, `engaged_at_utc`, `engaged_at_et`, `engagement_source`, `last_observed_short_shares`) | Persists per-symbol entry-gate state across ARGUS restarts |
+
+Sprint-end doc-sync should add this to `architecture.md` storage table and `live-operations.md` operational reference.
 
 ---
 
@@ -276,8 +296,8 @@ ARGUS register at `docs/sprints/sprint-31.91-reconciliation-drift/work-journal-r
 6. ✅ Session 2a (typed reconciliation contract) — CLEAR, commit `813fc3c`
 7. ✅ Session 2b.1 (broker-orphan branch + `phantom_short` alert + cycle infrastructure) — CLEAR, commit `4119608`
 8. ✅ Session 2b.2 (4 count-filter sites + 1 alert-alignment site + Option C cross-reference) — CLEAR, commit `a6846c6`
-9. ⏳ **Session 2c.1 (per-symbol gate + handler + SQLite + M5 rehydration ordering)** ← NEXT
-10. Session 2c.2 (clear-threshold + auto-clear, default 5)
+9. ✅ Session 2c.1 (per-symbol entry gate + handler + SQLite + M5 rehydration ordering) — CLEAR, commit `0c034b3`
+10. ⏳ **Session 2c.2 (clear-threshold + auto-clear, default 5)** ← NEXT
 11. Session 2d (operator override API + audit-log + always-both-alerts + B22 runbook)
 12. Session 3 (DEF-158 retry side-check + severity fix)
 13. Session 4 (mass-balance categorized + IMSR replay + decomposed live-enable gate)
@@ -304,7 +324,8 @@ When Session 5e clears, the Work Journal produces the doc-sync handoff per `temp
 - DEF-213 final-resolved status (schema half S2b.1 + atomic-migration half S5a.1)
 - RSK-DEC-386-DOCSTRING in `risk-register.md`
 - Architecture.md §3.3 + §3.7 OCA architecture (already done; verify) + §14 alert observability (new)
-- `live-operations.md` updates: OCA architecture operations section (already done; verify), DEF-214 EOD verification fix runbook, DEF-215 deferred revisit trigger, **conservative daily-flatten cessation criteria + revisit decision**, alert observability acknowledgment runbook, broker-orphan-LONG M2 exp-backoff schedule documentation, **3-site phantom_short emission taxonomy** (reconciliation / health.integrity_check / eod_flatten — operator can route by `source` field; auto-resolution keys on `alert_type`)
+- **Architecture.md storage table:** add `data/operations.db` introduced by S2c.1 (`phantom_short_gated_symbols` schema)
+- `live-operations.md` updates: OCA architecture operations section (already done; verify), DEF-214 EOD verification fix runbook, DEF-215 deferred revisit trigger, **conservative daily-flatten cessation criteria + revisit decision**, alert observability acknowledgment runbook, broker-orphan-LONG M2 exp-backoff schedule documentation, **3-site phantom_short emission taxonomy** (reconciliation / health.integrity_check / eod_flatten), **`data/operations.db` operational reference + phantom-short gate clear procedure**
 - `pre-live-transition-checklist.md`: Session 5a.1 as HARD live-trading prerequisite (already done; verify)
 - Session 5a.1 amendment header documenting Tier 3 #1-driven additions (already done; verify)
 - Apr 27 debrief findings folded (already done; verify)
