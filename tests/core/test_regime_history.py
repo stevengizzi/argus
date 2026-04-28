@@ -156,27 +156,36 @@ class TestRegimeHistoryStore:
 
     @pytest.mark.asyncio
     async def test_get_regime_summary(self, store: RegimeHistoryStore) -> None:
-        """Summary returns dominant regime, transition count, avg confidence."""
-        now = datetime.now(UTC)
+        """Summary returns dominant regime, transition count, avg confidence.
 
-        # Write 3 snapshots: 2 bullish, 1 range_bound
+        DEF-216: anchor all snapshots to ET noon to avoid ET-midnight rollover
+        race. Test must never depend on wall-clock time of execution.
+        """
+        # Anchor to noon ET of "today" (in ET) so all three snapshots are
+        # guaranteed inside the same ET trading date regardless of when the
+        # test actually runs.
+        now_et = datetime.now(_ET)
+        anchor_et = now_et.replace(hour=12, minute=0, second=0, microsecond=0)
+        anchor_utc = anchor_et.astimezone(UTC)
+
+        # Write 3 snapshots: 2 bullish, 1 range_bound — all on same ET date
         await store.record(_make_vector(
             regime=MarketRegime.BULLISH_TRENDING,
             confidence=0.8,
-            computed_at=now - timedelta(minutes=10),
+            computed_at=anchor_utc - timedelta(minutes=10),
         ))
         await store.record(_make_vector(
             regime=MarketRegime.RANGE_BOUND,
             confidence=0.6,
-            computed_at=now - timedelta(minutes=5),
+            computed_at=anchor_utc - timedelta(minutes=5),
         ))
         await store.record(_make_vector(
             regime=MarketRegime.BULLISH_TRENDING,
             confidence=0.7,
-            computed_at=now,
+            computed_at=anchor_utc,
         ))
 
-        today_et = now.astimezone(_ET).strftime("%Y-%m-%d")
+        today_et = anchor_et.strftime("%Y-%m-%d")
         summary = await store.get_regime_summary(today_et)
 
         assert summary["dominant_regime"] == "bullish_trending"
