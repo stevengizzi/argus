@@ -840,8 +840,15 @@ async def test_concurrent_limit_still_works_when_set() -> None:
     account.cash = 80000.0
     account.buying_power = 200000.0
     broker.get_account = AsyncMock(return_value=account)
-    # Broker reports 5 positions — at limit
-    broker.get_positions = AsyncMock(return_value=[MagicMock()] * 5)
+    # Broker reports 5 positions — at limit. Sprint 31.91 S2b.2: side=BUY
+    # required so the side-aware filter counts these as longs against the cap.
+    long_positions = []
+    for i in range(5):
+        pos = MagicMock()
+        pos.side = OrderSide.BUY
+        pos.symbol = f"SYM{i}"
+        long_positions.append(pos)
+    broker.get_positions = AsyncMock(return_value=long_positions)
 
     event_bus = EventBus()
     rm = RiskManager(config=config, broker=broker, event_bus=event_bus)

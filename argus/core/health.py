@@ -19,12 +19,19 @@ import aiohttp
 
 from argus.core.config import HealthConfig
 from argus.core.event_bus import EventBus
-from argus.core.events import CircuitBreakerEvent, HeartbeatEvent, SystemStatus
+from argus.core.events import (
+    CircuitBreakerEvent,
+    HeartbeatEvent,
+    SystemAlertEvent,
+    SystemStatus,
+)
+from argus.models.trading import OrderSide
 
 if TYPE_CHECKING:
     from argus.analytics.trade_logger import TradeLogger
     from argus.core.clock import Clock
     from argus.execution.broker import Broker
+    from argus.execution.order_manager import OrderManager
     from argus.strategies.base_strategy import BaseStrategy
     from argus.strategies.telemetry_store import EvaluationEventStore
 
@@ -92,6 +99,14 @@ class HealthMonitor:
         self._config = config
         self._broker = broker
         self._trade_logger = trade_logger
+        # Sprint 31.91 S2b.2 (Pattern A.4 — Option C cross-reference, MEDIUM #8):
+        # Optional OrderManager handle so the daily integrity-check alert can
+        # cite an active ``stranded_broker_long`` alert (2b.1) for the same
+        # symbol. Wired via ``set_order_manager()``; unset → no cross-reference.
+        # TODO (Session 5a.1+): replace with HealthMonitor's queryable
+        # active-alert state once the consumer surface lands; main.py is on
+        # this session's do-not-modify list, so production wiring is deferred.
+        self._order_manager: OrderManager | None = None
 
         # Component health registry
         self._components: dict[str, ComponentHealth] = {}
@@ -400,13 +415,33 @@ class HealthMonitor:
             # Check every 60 seconds
             await asyncio.sleep(60)
 
+    def set_order_manager(self, order_manager: OrderManager) -> None:
+        """Wire the OrderManager handle for Pattern A.4 cross-reference.
+
+        Sprint 31.91 S2b.2 (Option C, MEDIUM #8): the daily integrity-check
+        alert appends a ``see also: stranded_broker_long ...`` line for any
+        long-orphan symbol with an active ``stranded_broker_long`` alert
+        already firing from 2b.1. This setter exists because main.py is on
+        S2b.2's do-not-modify list; tests wire this directly. Production
+        wiring is deferred to a future session (Session 5a.1+ migrates the
+        cross-reference to HealthMonitor's queryable active-alert state).
+        """
+        self._order_manager = order_manager
+
     async def _run_daily_integrity_check(self) -> None:
         """Verify all open positions have broker-side stop orders.
 
         1. Get all open positions from broker.
         2. Get all open orders from broker.
         3. For each position, verify there's a corresponding stop order.
-        4. If any position lacks a stop → ALERT.
+        4. If any LONG position lacks a stop → ALERT (with Option C
+           cross-reference if a ``stranded_broker_long`` alert is already
+           firing for the same symbol).
+        5. Any SHORT position is by-construction phantom (ARGUS is long-only,
+           DEC-011) → emit ``phantom_short`` SystemAlertEvent (2b.1 taxonomy).
+
+        Sprint 31.91 S2b.2 (Pattern A.4 hybrid + Pattern B coverage at
+        Health): side-aware count filter + alert-routing decision.
 
         Requires self._broker to be set.
         """
@@ -433,26 +468,103 @@ class HealthMonitor:
                     if symbol:
                         symbols_with_stops.add(symbol)
 
-            # Check each position
-            unprotected = []
-            for pos in positions:
-                symbol = getattr(pos, "symbol", str(pos))
-                if symbol not in symbols_with_stops:
-                    unprotected.append(symbol)
+            # Sprint 31.91 S2b.2 Pattern A.4: side-aware partition.
+            long_positions = [
+                p for p in positions if getattr(p, "side", None) == OrderSide.BUY
+            ]
+            short_positions = [
+                p for p in positions if getattr(p, "side", None) == OrderSide.SELL
+            ]
 
-            if unprotected:
-                msg = f"Positions WITHOUT stop orders: {', '.join(unprotected)}"
+            longs_without_stop = [
+                p for p in long_positions
+                if getattr(p, "symbol", str(p)) not in symbols_with_stops
+            ]
+
+            logger.info(
+                "Health integrity check: longs=%d (without_stop=%d), shorts=%d "
+                "(all phantom by long-only design), total_broker=%d",
+                len(long_positions),
+                len(longs_without_stop),
+                len(short_positions),
+                len(positions),
+            )
+
+            # Long-orphan branch: existing alert path + Option C cross-reference.
+            if longs_without_stop:
+                unprotected_symbols = [
+                    getattr(p, "symbol", str(p)) for p in longs_without_stop
+                ]
+                msg = f"Positions WITHOUT stop orders: {', '.join(unprotected_symbols)}"
                 logger.error(msg)
+
+                # Option C cross-reference (PHASE-D-OPEN-ITEMS Item 3):
+                # if 2b.1 has an active stranded_broker_long alert for this
+                # symbol, cite it so the operator sees the duplication intent.
+                cross_ref_lines: list[str] = []
+                if self._order_manager is not None:
+                    cycle_map = getattr(
+                        self._order_manager,
+                        "_broker_orphan_last_alerted_cycle",
+                        None,
+                    )
+                    if isinstance(cycle_map, dict):
+                        for symbol in unprotected_symbols:
+                            last_alerted_cycle = cycle_map.get(symbol)
+                            if last_alerted_cycle:
+                                cross_ref_lines.append(
+                                    f"  - {symbol}: see also stranded_broker_long "
+                                    f"alert (last alerted at cycle {last_alerted_cycle})"
+                                )
+
+                if cross_ref_lines:
+                    msg = (
+                        msg
+                        + "\n\nCross-reference (active stranded_broker_long alerts):\n"
+                        + "\n".join(cross_ref_lines)
+                    )
+
                 await self._send_alert(
                     title="Integrity Check FAILED",
                     body=msg,
                     severity="critical",
                 )
-            else:
+            elif not short_positions:
                 logger.info(
                     "Daily integrity check: All %d positions have stops. OK.",
                     len(positions),
                 )
+
+            # Phantom-short branch: ARGUS is long-only, so every broker-side
+            # SHORT is a phantom (DEF-204). Emit phantom_short alert per the
+            # 2b.1 taxonomy so Session 5a.2 auto-resolution can consume
+            # uniformly across all detection sites.
+            for pos in short_positions:
+                symbol = getattr(pos, "symbol", str(pos))
+                shares = int(getattr(pos, "shares", 0))
+                alert = SystemAlertEvent(
+                    severity="critical",
+                    source="health.integrity_check",
+                    alert_type="phantom_short",
+                    message=(
+                        f"Health integrity check found broker-side short position "
+                        f"for {symbol}: shares={shares}. ARGUS is long-only by design."
+                    ),
+                    metadata={
+                        "symbol": symbol,
+                        "shares": shares,
+                        "side": "SELL",
+                        "detection_source": "health.integrity_check",
+                    },
+                )
+                try:
+                    await self._event_bus.publish(alert)
+                except Exception:
+                    logger.exception(
+                        "Failed to publish phantom_short SystemAlertEvent for %s "
+                        "from Health integrity check",
+                        symbol,
+                    )
 
         except Exception as e:
             logger.error("Daily integrity check failed: %s", e)

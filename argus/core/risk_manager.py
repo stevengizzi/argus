@@ -53,6 +53,7 @@ from argus.core.events import (
     SignalEvent,
 )
 from argus.execution.broker import Broker
+from argus.models.trading import OrderSide
 from argus.utils.log_throttle import ThrottledLogger
 
 if TYPE_CHECKING:
@@ -332,9 +333,23 @@ class RiskManager:
             )
 
         # 4. Max concurrent positions check (0 = disabled)
+        # Sprint 31.91 S2b.2 (Pattern A.2): side-aware count filter.
+        # Phantom shorts (DEF-204) must not consume slots reserved for legitimate
+        # longs. ARGUS is long-only by design; only longs count toward the cap.
         positions = await self._broker.get_positions()
+        long_positions = [p for p in positions if getattr(p, "side", None) == OrderSide.BUY]
+        short_positions = [p for p in positions if getattr(p, "side", None) == OrderSide.SELL]
         max_pos = self._config.account.max_concurrent_positions
-        if max_pos > 0 and len(positions) >= max_pos:
+        would_reject = max_pos > 0 and len(long_positions) >= max_pos
+        logger.info(
+            "Risk Manager max-concurrent #1 (entry gate): longs=%d, shorts=%d, "
+            "max_concurrent=%d, would_reject=%s",
+            len(long_positions),
+            len(short_positions),
+            max_pos,
+            would_reject,
+        )
+        if would_reject:
             logger.warning(
                 "Signal rejected: max concurrent positions (%d) reached",
                 max_pos,

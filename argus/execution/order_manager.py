@@ -1560,19 +1560,37 @@ class OrderManager:
                         await self._drain_startup_flatten_queue()
 
                 # Margin circuit breaker auto-reset: check broker position count (Sprint 32.9 S2)
+                # Sprint 31.91 S2b.2 (Pattern A.1): side-aware count filter.
+                # Phantom shorts (DEF-204) must not inflate the count and block reset.
                 if self._margin_circuit_open:
                     try:
                         broker_positions = await self._broker.get_positions()
-                        position_count = len(broker_positions)
-                        if position_count < self._config.margin_circuit_reset_positions:
+                        long_positions = [
+                            p for p in broker_positions if getattr(p, "side", None) == OrderSide.BUY
+                        ]
+                        short_positions = [
+                            p for p in broker_positions if getattr(p, "side", None) == OrderSide.SELL
+                        ]
+                        position_count = len(long_positions)
+                        reset_threshold = self._config.margin_circuit_reset_positions
+                        will_reset = position_count < reset_threshold
+                        logger.info(
+                            "Margin circuit reset check: longs=%d, shorts=%d, "
+                            "reset_threshold=%d, will_reset=%s",
+                            len(long_positions),
+                            len(short_positions),
+                            reset_threshold,
+                            will_reset,
+                        )
+                        if will_reset:
                             self._margin_circuit_open = False
                             self._margin_rejection_count = 0
                             self.margin_circuit_breaker_reset_time = datetime.now(UTC)
                             logger.info(
-                                "Margin circuit breaker RESET — position count %d below "
+                                "Margin circuit breaker RESET — long position count %d below "
                                 "threshold %d",
                                 position_count,
-                                self._config.margin_circuit_reset_positions,
+                                reset_threshold,
                             )
                     except Exception:
                         logger.warning(
@@ -1833,6 +1851,38 @@ class OrderManager:
                             symbol,
                             qty,
                         )
+                        # Sprint 31.91 S2b.2 (Pattern B): emit phantom_short
+                        # SystemAlertEvent alongside the existing logger.error
+                        # so the alert taxonomy is consistent with 2b.1's
+                        # reconciliation broker-orphan branch and 2b.2's
+                        # Health integrity check. Detection logic (DEF-199 A1
+                        # fix) is unchanged — only observability is added.
+                        try:
+                            await self._event_bus.publish(
+                                SystemAlertEvent(
+                                    source="eod_flatten",
+                                    alert_type="phantom_short",
+                                    severity="critical",
+                                    message=(
+                                        f"EOD Pass 2 detected unexpected short "
+                                        f"position for {symbol}: shares={qty}. "
+                                        f"Will not place flatten SELL "
+                                        f"(DEF-199 A1 protected)."
+                                    ),
+                                    metadata={
+                                        "symbol": symbol,
+                                        "shares": qty,
+                                        "side": "SELL",
+                                        "detection_source": "eod_flatten.pass2",
+                                    },
+                                )
+                            )
+                        except Exception:  # pragma: no cover - defensive
+                            logger.exception(
+                                "Failed to publish phantom_short "
+                                "SystemAlertEvent for %s from EOD Pass 2",
+                                symbol,
+                            )
                     else:
                         logger.error(
                             "EOD flatten: position %s has unknown side "

@@ -14,6 +14,7 @@ from argus.core.config import HealthConfig
 from argus.core.event_bus import EventBus
 from argus.core.events import CircuitBreakerEvent, CircuitBreakerLevel, HeartbeatEvent
 from argus.core.health import ComponentStatus, HealthMonitor
+from argus.models.trading import OrderSide
 
 
 @pytest.fixture
@@ -360,6 +361,7 @@ class TestIntegrityChecks:
             mock_broker = AsyncMock()
             mock_position = MagicMock()
             mock_position.symbol = "AAPL"
+            mock_position.side = OrderSide.BUY  # Sprint 31.91 S2b.2: side-aware filter requires this
             mock_broker.get_positions.return_value = [mock_position]
             mock_broker.get_open_orders.return_value = []  # No stop orders
 
@@ -394,6 +396,7 @@ class TestIntegrityChecks:
         mock_broker = AsyncMock()
         mock_position = MagicMock()
         mock_position.symbol = "AAPL"
+        mock_position.side = OrderSide.BUY  # Sprint 31.91 S2b.2: side-aware filter requires this
         mock_broker.get_positions.return_value = [mock_position]
 
         mock_order = MagicMock()
