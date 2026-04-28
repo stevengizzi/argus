@@ -1,5 +1,13 @@
 """IMSR (Sprint 31.9 IMPROMPTU-11) replay regression test.
 
+This module is marked ``@pytest.mark.integration`` so CI's
+``-m "not integration"`` filter excludes it. The H4 disposition
+("errors not skips when log missing") is preserved: when the operator
+runs this test locally before sprint sign-off, the file MUST be
+present on disk; if it isn't, ``pytest.fail`` fires. CI doesn't have
+the operator's 29-MB Apr 24 paper-session log on its filesystem (and
+shouldn't — it's an operational artifact, not a committed fixture).
+
 Sprint 31.91 D7 / H4 disposition: replay the real Apr 24 2026 paper-trading
 session log and verify, under post-fix code on ``main``, that the IMSR EOD
 internal position would be 0 -- not the -200 phantom short the original
@@ -60,6 +68,13 @@ import pytest
 
 from argus.backtest.engine import BacktestEngine  # noqa: F401  (RULE-007: keep the import path in scope)
 from argus.models.trading import OrderSide  # noqa: F401  (referenced by Session 3 logic)
+
+# CI excludes this module via `-m "not integration"`; operator runs it
+# locally before sprint sign-off where logs/argus_20260424.jsonl is
+# present. The pytest.fail-on-missing contract (H4) still fires when
+# operator runs it without the file -- the marker only changes default
+# CI collection, not the in-test enforcement.
+pytestmark = pytest.mark.integration
 
 LOG_PATH = Path("logs/argus_20260424.jsonl")
 SYMBOL = "IMSR"
