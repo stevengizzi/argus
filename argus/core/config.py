@@ -217,6 +217,31 @@ class HealthConfig(BaseModel):
         return os.environ.get(self.alert_webhook_url_env, "")
 
 
+class AlertsConfig(BaseModel):
+    """Alert observability configuration (Sprint 31.91 D9a, DEF-014).
+
+    HealthMonitor subscribes to ``SystemAlertEvent`` and maintains an
+    in-memory active-alert state machine (``active`` → ``acknowledged`` →
+    ``archived``). The acknowledgment surface lives at
+    ``POST /api/v1/alerts/{alert_id}/acknowledge``. Session 5a.2 will add
+    auto-resolution policy + SQLite-backed persistence; 5a.1's state is
+    in-memory only.
+    """
+
+    acknowledgment_required_severities: list[str] = Field(
+        default_factory=lambda: ["critical"],
+        description=(
+            "Alert severities for which acknowledgment is required (alert "
+            "remains visible until operator acks). 'critical' alerts MUST "
+            "be acknowledged. 'warning' and 'info' auto-archive on "
+            "auto-resolution per the 5a.2 policy table."
+        ),
+    )
+    # Note: ``auto_resolve_on_condition_cleared``,
+    # ``audit_log_retention_days``, and ``archived_alert_retention_days``
+    # are added in Session 5a.2.
+
+
 class StartupConfig(BaseModel):
     """Configuration for startup behavior (Sprint 27.95 S4).
 
@@ -554,6 +579,8 @@ class SystemConfig(BaseModel):
     experiments: ExperimentConfig = Field(default_factory=ExperimentConfig)
     # Historical Query Service configuration (Sprint 31A.5 — DuckDB Parquet layer)
     historical_query: HistoricalQueryConfig = Field(default_factory=HistoricalQueryConfig)
+    # Alert observability configuration (Sprint 31.91 D9a, DEF-014)
+    alerts: AlertsConfig = Field(default_factory=AlertsConfig)
 
     @field_validator("timezone")
     @classmethod
@@ -1028,6 +1055,13 @@ class OrderManagerConfig(BaseModel):
     eod_flatten_timeout_seconds: int = Field(default=30, ge=1)
     # Retry timed-out/rejected EOD flattens once via broker re-query (Sprint 32.9)
     eod_flatten_retry_rejected: bool = True
+    # EOD post-flatten verification poll (Sprint 31.91 Session 5a.1, DEF-214):
+    # replaces the prior synchronous single-poll that fired false-positive
+    # CRITICAL before fills completed. The verification polls broker
+    # ``get_positions()`` every ``poll_interval_seconds`` until either no
+    # long flattens remain in flight or ``timeout_seconds`` elapses.
+    eod_verify_timeout_seconds: float = Field(default=30.0, ge=5.0, le=120.0)
+    eod_verify_poll_interval_seconds: float = Field(default=1.0, ge=0.5, le=5.0)
     # Margin circuit breaker: open after N IBKR margin rejections this session (Sprint 32.9 S2)
     margin_rejection_threshold: int = Field(default=10, ge=1)
     # Auto-reset margin circuit when broker position count drops below N (Sprint 32.9 S2)

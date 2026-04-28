@@ -1777,6 +1777,14 @@ All routes mount under the `/api/v1` prefix (see [argus/api/server.py](../argus/
 | `GET    /api/v1/ai/status` | Get AI service status and usage summary. |
 | `GET    /api/v1/ai/usage` | Get detailed usage statistics. |
 
+**alerts**
+
+| Endpoint | Summary |
+|----------|---------|
+| `GET    /api/v1/alerts/active` | Return alerts currently in ACTIVE or ACKNOWLEDGED state. |
+| `GET    /api/v1/alerts/history` | Return historical alerts within an optional ``since`` window. |
+| `POST   /api/v1/alerts/{alert_id}/acknowledge` | Atomic + idempotent acknowledgment (200/404/200-late-ack). |
+
 **arena**
 
 | Endpoint | Summary |

@@ -1992,18 +1992,90 @@ class OrderManager:
         except Exception as e:
             logger.error("EOD flatten: broker position query failed: %s", e)
 
-        # Post-flatten verification (Sprint 32.9)
+        # Post-flatten verification (Sprint 31.91 Session 5a.1, DEF-214):
+        # poll-until-flat-with-timeout + side-aware classification + distinct
+        # alert paths. Replaces the prior synchronous single-poll
+        # ``logger.critical("N positions remain after both passes")`` line,
+        # which polled at the same wall-clock second as flatten-order
+        # submission (BEFORE fills completed) and conflated broker-only
+        # SHORTs (intentionally not flattened — Sprint 30 deferred) with
+        # longs whose flatten was in flight.
         try:
-            remaining = await self._broker.get_positions()
-            if remaining:
-                remaining_syms = [getattr(p, "symbol", str(p)) for p in remaining]
-                logger.critical(
-                    "EOD flatten: %d positions remain after both passes: %s",
-                    len(remaining),
-                    remaining_syms,
-                )
+            residual_shorts, failed_longs = await self._verify_eod_flatten_complete()
         except Exception as e:
             logger.error("EOD flatten: post-verification query failed: %s", e)
+            residual_shorts, failed_longs = [], []
+
+        # Expected residue: residual shorts (Sprint 30 deferred). WARNING-level.
+        if residual_shorts:
+            try:
+                await self._event_bus.publish(
+                    SystemAlertEvent(
+                        source="OrderManager.eod_flatten",
+                        alert_type="eod_residual_shorts",
+                        message=(
+                            f"EOD flatten: {len(residual_shorts)} broker-only "
+                            f"short position(s) remain after Pass 2 "
+                            f"(intentional — Sprint 30 short-selling deferred). "
+                            f"Operator manual flatten via "
+                            f"scripts/ibkr_close_all_positions.py recommended."
+                        ),
+                        severity="warning",
+                        metadata={
+                            "residual_short_symbols": sorted(residual_shorts),
+                            "count": len(residual_shorts),
+                            "category": "expected_residue",
+                        },
+                    )
+                )
+            except Exception:  # pragma: no cover - defensive
+                logger.exception(
+                    "Failed to publish eod_residual_shorts SystemAlertEvent"
+                )
+
+        # Actual failure: longs that did NOT flatten within timeout. CRITICAL.
+        if failed_longs:
+            failed_long_symbols = sorted({mp.symbol for mp in failed_longs})
+            logger.critical(
+                "EOD flatten FAILURE: %d long position(s) did not close "
+                "within %.1fs timeout: %s",
+                len(failed_long_symbols),
+                self._config.eod_verify_timeout_seconds,
+                failed_long_symbols,
+            )
+            try:
+                await self._event_bus.publish(
+                    SystemAlertEvent(
+                        source="OrderManager.eod_flatten",
+                        alert_type="eod_flatten_failed",
+                        message=(
+                            f"EOD flatten FAILURE: {len(failed_long_symbols)} "
+                            f"long position(s) did not close within "
+                            f"{self._config.eod_verify_timeout_seconds:.1f}s "
+                            f"timeout. Manual intervention required: "
+                            f"scripts/ibkr_close_all_positions.py."
+                        ),
+                        severity="critical",
+                        metadata={
+                            "failed_long_symbols": failed_long_symbols,
+                            "count": len(failed_long_symbols),
+                            "timeout_seconds": (
+                                self._config.eod_verify_timeout_seconds
+                            ),
+                            "category": "actual_failure",
+                        },
+                    )
+                )
+            except Exception:  # pragma: no cover - defensive
+                logger.exception(
+                    "Failed to publish eod_flatten_failed SystemAlertEvent"
+                )
+
+        # Clean case: no failed longs, no residual shorts. INFO log only.
+        if not failed_longs and not residual_shorts:
+            logger.info(
+                "EOD flatten verification complete: all positions flat at broker."
+            )
 
         # Request auto-shutdown AFTER verification (Sprint 32.9: moved after verify)
         if self._config.auto_shutdown_after_eod:
@@ -2018,6 +2090,71 @@ class OrderManager:
                     delay_seconds=delay,
                 )
             )
+
+    async def _verify_eod_flatten_complete(
+        self,
+    ) -> tuple[list[str], list[ManagedPosition]]:
+        """Poll broker until long flattens settle or timeout (DEF-214).
+
+        Sprint 31.91 Session 5a.1 — replaces the prior synchronous
+        single-poll verification that fired false-positive CRITICAL before
+        fills completed. The two populations have distinct semantics:
+
+        - ``residual_shorts``: broker-only SHORT positions. EXPECTED —
+          ARGUS is long-only (DEC-011), Sprint 30 short-selling is
+          deferred, and current safety posture is alert-and-skip on shorts.
+          These should be flattened by the operator via
+          ``scripts/ibkr_close_all_positions.py``.
+        - ``failed_longs``: ``ManagedPosition`` entries whose symbol still
+          has a positive (long) broker position after the timeout window.
+          ACTUAL FAILURES — the bracket close-out did not propagate.
+
+        Returns:
+            ``(residual_short_symbols, failed_long_managed_positions)``.
+        """
+        timeout_s = float(self._config.eod_verify_timeout_seconds)
+        poll_interval_s = float(self._config.eod_verify_poll_interval_seconds)
+        deadline = _time.monotonic() + timeout_s
+        failed_longs: list[ManagedPosition] = []
+        residual_shorts: list[str] = []
+
+        while True:
+            broker_positions = await self._broker.get_positions()
+            broker_longs: dict[str, int] = {}
+            broker_shorts: list[str] = []
+            for bp in broker_positions:
+                bp_symbol = getattr(bp, "symbol", "")
+                bp_side = getattr(bp, "side", None)
+                bp_shares = int(getattr(bp, "shares", 0))
+                if not bp_symbol or bp_shares <= 0:
+                    continue
+                if bp_side == OrderSide.BUY:
+                    broker_longs[bp_symbol] = bp_shares
+                elif bp_side == OrderSide.SELL:
+                    broker_shorts.append(bp_symbol)
+
+            failed_longs = [
+                mp
+                for positions in self._managed_positions.values()
+                for mp in positions
+                if not mp.is_fully_closed
+                and mp.shares_remaining > 0
+                and mp.symbol in broker_longs
+            ]
+            residual_shorts = sorted(set(broker_shorts))
+
+            if not failed_longs:
+                # All long flattens confirmed. Only expected residue (if
+                # any) remains.
+                break
+
+            if _time.monotonic() >= deadline:
+                # Timeout — surface failed_longs to caller for CRITICAL.
+                break
+
+            await asyncio.sleep(poll_interval_s)
+
+        return residual_shorts, failed_longs
 
     async def emergency_flatten(self) -> None:
         """Close everything immediately. Used by circuit breakers.
@@ -2335,6 +2472,17 @@ class OrderManager:
                     alert_type="cancel_propagation_timeout",
                     message=message,
                     severity="critical",
+                    # Sprint 31.91 Session 5a.1 (DEF-213): structured
+                    # metadata for HealthMonitor consumer access. The three
+                    # call sites (``_flatten_unknown_position``,
+                    # ``_drain_startup_flatten_queue``,
+                    # ``reconstruct_from_broker``) pass ``stage`` as the
+                    # entry-point identifier.
+                    metadata={
+                        "symbol": symbol,
+                        "shares": shares,
+                        "stage": stage,
+                    },
                 )
             )
         except Exception:  # pragma: no cover - defensive

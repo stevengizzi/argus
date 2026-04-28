@@ -281,6 +281,14 @@ class DatabentoDataService(DataService):
                             alert_type="max_retries_exceeded",
                             message=message,
                             severity="critical",
+                            # Sprint 31.91 Session 5a.1 (DEF-213): structured
+                            # metadata for HealthMonitor consumer + Command
+                            # Center alert pane. ``message`` remains the
+                            # human-readable form.
+                            metadata={
+                                "max_retries": self._config.reconnect_max_retries,
+                                "detection_source": "databento_data_service.reconnect_loop",
+                            },
                         )
                     )
                 except Exception:

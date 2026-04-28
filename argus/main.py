@@ -411,6 +411,14 @@ class ArgusSystem:
             trade_logger=self._trade_logger,
         )
         await self._health_monitor.start()
+        # Sprint 31.91 Session 5a.1 (DEF-014, DEF-213): subscribe
+        # HealthMonitor to SystemAlertEvent so the in-memory active-alert
+        # state machine + REST surface (/api/v1/alerts/*) stay populated.
+        # Scoped exception per Sprint 31.91 invariant 15
+        # ("Session 5a.1 HealthMonitor consumer init").
+        self._event_bus.subscribe(
+            SystemAlertEvent, self._health_monitor.on_system_alert_event
+        )
         self._health_monitor.update_component("event_bus", ComponentStatus.HEALTHY)
         self._health_monitor.update_component("database", ComponentStatus.HEALTHY)
         self._health_monitor.update_component("broker", ComponentStatus.HEALTHY)

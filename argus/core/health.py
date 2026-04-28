@@ -9,8 +9,9 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, time
+from datetime import UTC, datetime, time
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
@@ -62,6 +63,49 @@ class ComponentHealth:
     last_updated: datetime
     message: str = ""
     details: dict[str, Any] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# Alert Lifecycle (Sprint 31.91 D9a, DEF-014)
+# ---------------------------------------------------------------------------
+
+
+class AlertLifecycleState(StrEnum):
+    """Lifecycle state of an alert tracked by HealthMonitor.
+
+    Sprint 31.91 D9a (DEF-014). Session 5a.1 supports
+    ``ACTIVE → ACKNOWLEDGED`` and ``ACTIVE → ARCHIVED`` (auto-resolved or
+    manually closed). Session 5a.2 will add transitions driven by
+    auto-resolution policy.
+    """
+
+    ACTIVE = "active"
+    ACKNOWLEDGED = "acknowledged"
+    ARCHIVED = "archived"
+
+
+@dataclass
+class ActiveAlert:
+    """Alert lifecycle record tracked in HealthMonitor.
+
+    Sprint 31.91 D9a (DEF-014). In-memory only in Session 5a.1; SQLite-
+    backed pruning + retention land in Session 5a.2.
+    """
+
+    alert_id: str
+    alert_type: str
+    severity: str
+    source: str
+    message: str
+    metadata: dict[str, Any]
+    state: AlertLifecycleState = AlertLifecycleState.ACTIVE
+    created_at_utc: datetime = field(
+        default_factory=lambda: datetime.now(UTC),
+    )
+    acknowledged_at_utc: datetime | None = None
+    acknowledged_by: str | None = None
+    archived_at_utc: datetime | None = None
+    acknowledgment_reason: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -119,6 +163,16 @@ class HealthMonitor:
         # Tracking
         self._last_daily_check: datetime | None = None
         self._last_weekly_check: datetime | None = None
+
+        # Sprint 31.91 D9a (DEF-014): SystemAlertEvent consumer state.
+        # ``_active_alerts`` indexes alerts currently in ACTIVE or
+        # ACKNOWLEDGED state; ``_alert_history`` is an append-only window
+        # of all alerts (ACTIVE + ACKNOWLEDGED + ARCHIVED) capped at
+        # ``_alert_history_max_size``. In-memory only — Session 5a.2
+        # replaces with SQLite-backed pruning + retention policy.
+        self._active_alerts: dict[str, ActiveAlert] = {}
+        self._alert_history: list[ActiveAlert] = []
+        self._alert_history_max_size: int = 1000
 
     async def start(self) -> None:
         """Start health monitoring.
@@ -358,6 +412,115 @@ class HealthMonitor:
             body=f"Level: {event.level.value}, Reason: {event.reason}",
             severity="critical",
         )
+
+    # --- SystemAlertEvent consumer (Sprint 31.91 D9a, DEF-014) ---
+
+    async def on_system_alert_event(self, event: SystemAlertEvent) -> None:
+        """Subscribe-handler for ``SystemAlertEvent`` (Sprint 31.91 D9a).
+
+        Captures every alert into the in-memory active-alert state machine
+        and the bounded history window. The acknowledgment surface lives
+        at ``POST /api/v1/alerts/{alert_id}/acknowledge``; auto-resolution
+        policy lands in Session 5a.2.
+
+        Args:
+            event: The system alert event consumed from the Event Bus.
+        """
+        alert_id = str(uuid.uuid4())
+        alert = ActiveAlert(
+            alert_id=alert_id,
+            alert_type=event.alert_type,
+            severity=event.severity,
+            source=event.source,
+            message=event.message,
+            metadata=dict(event.metadata) if event.metadata else {},
+        )
+        self._active_alerts[alert_id] = alert
+        self._alert_history.append(alert)
+        if len(self._alert_history) > self._alert_history_max_size:
+            # Cap history (Session 5a.2 replaces with SQLite-backed
+            # retention).
+            self._alert_history = self._alert_history[
+                -self._alert_history_max_size:
+            ]
+        logger.info(
+            "HealthMonitor consumed alert %s (type=%s severity=%s source=%s).",
+            alert_id,
+            event.alert_type,
+            event.severity,
+            event.source,
+        )
+
+    # --- Active-alert query surface (used by REST endpoints) ---
+
+    def get_active_alerts(self) -> list[ActiveAlert]:
+        """Return alerts currently in ACTIVE or ACKNOWLEDGED state.
+
+        Sprint 31.91 D9a — used by ``GET /api/v1/alerts/active``.
+        """
+        return [
+            a
+            for a in self._active_alerts.values()
+            if a.state
+            in (
+                AlertLifecycleState.ACTIVE,
+                AlertLifecycleState.ACKNOWLEDGED,
+            )
+        ]
+
+    def get_alert_history(
+        self, since: datetime | None = None
+    ) -> list[ActiveAlert]:
+        """Return historical alerts within an optional ``since`` window.
+
+        Sprint 31.91 D9a — used by ``GET /api/v1/alerts/history``.
+        """
+        if since is None:
+            return list(self._alert_history)
+        return [a for a in self._alert_history if a.created_at_utc >= since]
+
+    def get_alert_by_id(self, alert_id: str) -> ActiveAlert | None:
+        """Return an alert by id from active-alert state, or None.
+
+        Sprint 31.91 D9a — used by acknowledgment route to determine
+        404-vs-409-vs-200.
+        """
+        return self._active_alerts.get(alert_id)
+
+    def get_archived_alert_by_id(
+        self, alert_id: str
+    ) -> ActiveAlert | None:
+        """Return an alert by id from archived history, or None.
+
+        Sprint 31.91 D9a — late-ack 409 lookup.
+        """
+        for a in self._alert_history:
+            if (
+                a.alert_id == alert_id
+                and a.state == AlertLifecycleState.ARCHIVED
+            ):
+                return a
+        return None
+
+    def apply_acknowledgment(
+        self,
+        alert: ActiveAlert,
+        operator_id: str,
+        reason: str,
+        now_utc: datetime,
+    ) -> None:
+        """Apply an acknowledgment transition in-place (in-memory).
+
+        Sprint 31.91 D9a — invoked from inside the SQLite transaction in
+        the acknowledgment route. If the audit-log INSERT fails the route
+        rolls back the transaction; this method's mutation is reverted by
+        the caller via the "first take a snapshot" pattern (the route
+        captures the alert's pre-mutation state).
+        """
+        alert.state = AlertLifecycleState.ACKNOWLEDGED
+        alert.acknowledged_at_utc = now_utc
+        alert.acknowledged_by = operator_id
+        alert.acknowledgment_reason = reason
 
     # --- Integrity Checks ---
 

@@ -11,6 +11,7 @@ from fastapi import APIRouter
 
 from argus.api.routes.account import router as account_router
 from argus.api.routes.ai import router as ai_router
+from argus.api.routes.alerts import router as alerts_router
 from argus.api.routes.arena import router as arena_router
 from argus.api.routes.auth import router as auth_router
 from argus.api.routes.briefings import router as briefings_router
@@ -76,3 +77,4 @@ api_router.include_router(historical_router, prefix="/historical", tags=["histor
 api_router.include_router(
     reconciliation_router, prefix="/reconciliation", tags=["reconciliation"]
 )
+api_router.include_router(alerts_router, prefix="/alerts", tags=["alerts"])

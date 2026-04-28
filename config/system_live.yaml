@@ -225,3 +225,8 @@ observatory:
 # Authoritative config is config/historical_query.yaml (standalone overlay
 # via DEC-384 / FIX-16 audit 2026-04-21). Do NOT re-add a `historical_query:`
 # block here; it would diverge from the standalone file.
+
+# Alert Observability (Sprint 31.91 D9a — DEF-014)
+# HealthMonitor SystemAlertEvent consumer + REST surface.
+alerts:
+  acknowledgment_required_severities: ["critical"]

@@ -14,9 +14,45 @@ from argus.core.events import (
     QualitySignalEvent,
     Side,
     SignalEvent,
+    SystemAlertEvent,
     WatchlistEvent,
     WatchlistItem,
 )
+
+
+class TestSystemAlertEventMetadata:
+    """Sprint 31.91 Session 5a.1 (DEF-213) — metadata field contract."""
+
+    def test_system_alert_event_metadata_default_none(self) -> None:
+        """metadata defaults to None when not provided."""
+        evt = SystemAlertEvent(
+            source="test",
+            alert_type="test_alert",
+            message="test message",
+            severity="info",
+        )
+        assert evt.metadata is None
+
+    def test_system_alert_event_metadata_accepts_dict(self) -> None:
+        """metadata accepts a dict[str, Any] payload."""
+        evt = SystemAlertEvent(
+            source="reconciliation",
+            alert_type="phantom_short",
+            message="phantom short detected",
+            severity="critical",
+            metadata={
+                "symbol": "AAPL",
+                "shares": 100,
+                "side": "SELL",
+                "detection_source": "reconciliation",
+            },
+        )
+        assert evt.metadata == {
+            "symbol": "AAPL",
+            "shares": 100,
+            "side": "SELL",
+            "detection_source": "reconciliation",
+        }
 
 
 class TestEventDataclasses:
