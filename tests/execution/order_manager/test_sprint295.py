@@ -190,10 +190,14 @@ class TestFlattenError404:
         # Simulate error 404 flag on broker
         mock_broker.error_404_symbols = {"AAPL"}
 
-        # Broker reports different qty (e.g. 80 instead of position's 50)
+        # Broker reports different qty (e.g. 80 instead of position's 50).
+        # ``side=OrderSide.BUY`` required post-Sprint-31.91-Session-3:
+        # the retry path's 3-branch side gate refuses the resubmit when
+        # broker side is anything other than BUY.
         broker_pos = MagicMock()
         broker_pos.symbol = "AAPL"
         broker_pos.shares = 80
+        broker_pos.side = OrderSide.BUY
         mock_broker.get_positions = AsyncMock(return_value=[broker_pos])
 
         # Set up flatten pending with expired timeout

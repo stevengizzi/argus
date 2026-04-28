@@ -37,7 +37,12 @@ from argus.core.events import (
     TickEvent,
 )
 from argus.execution.order_manager import ManagedPosition, OrderManager
-from argus.models.trading import BracketOrderResult, OrderResult, OrderStatus
+from argus.models.trading import (
+    BracketOrderResult,
+    OrderResult,
+    OrderSide,
+    OrderStatus,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -212,9 +217,13 @@ async def test_flatten_timeout_does_resubmit_when_broker_position_exists(
         symbol="ARX", order_type="flatten", strategy_id="orb_breakout"
     )
 
-    # Broker reports position still open (103 shares — original hasn't filled)
+    # Broker reports position still open (103 shares — original hasn't filled).
+    # ``side=OrderSide.BUY`` is required after Sprint 31.91 Session 3:
+    # the retry path now gates on broker side; without an explicit BUY,
+    # MagicMock auto-creates a non-OrderSide attribute and the retry hits
+    # the unknown-side branch (refusing the resubmit).
     mock_broker.get_positions.return_value = [
-        MagicMock(symbol="ARX", shares=103)
+        MagicMock(symbol="ARX", shares=103, side=OrderSide.BUY)
     ]
 
     # Configure place_order to return a new order

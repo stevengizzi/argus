@@ -3255,9 +3255,15 @@ class OrderManager:
             try:
                 broker_positions = await self._broker.get_positions()
                 broker_qty = 0
+                broker_side: Any = None
                 for bp in broker_positions:
                     if getattr(bp, "symbol", "") == symbol:
                         broker_qty = abs(int(getattr(bp, "shares", 0)))
+                        # Sprint 31.91 Session 3 (DEF-158 retry side-check):
+                        # mirror IMPROMPTU-04 EOD A1 idiom at :1888-1904. ARGUS
+                        # is long-only; a broker-side SHORT must NOT be auto-
+                        # flattened — issuing SELL doubles the short (DEF-204).
+                        broker_side = getattr(bp, "side", None)
                         break
                 if broker_qty == 0:
                     logger.info(
@@ -3265,6 +3271,72 @@ class OrderManager:
                         "— original order likely filled (DEF-158 guard)",
                         symbol,
                     )
+                    self._flatten_pending.pop(symbol, None)
+                    continue
+                # Sprint 31.91 Session 3 (DEF-158 retry side-check): 3-branch
+                # gate before resubmission. Mirror of IMPROMPTU-04 EOD A1 at
+                # :1875-1904 — same cost-of-error asymmetry (unbounded short
+                # vs. bounded leaked long), same taxonomy (CRITICAL alert on
+                # phantom-short detection, ERROR log on unknown side, refuse
+                # the SELL in both cases). Branch 1 (BUY) falls through to
+                # the existing flatten-resubmit path below.
+                if broker_side == OrderSide.SELL:
+                    logger.critical(
+                        "Flatten retry refused for %s: broker reports SHORT "
+                        "position (shares=%d) but ARGUS expected long. Will "
+                        "NOT issue SELL (would double the short, DEF-204). "
+                        "Investigate via scripts/ibkr_close_all_positions.py.",
+                        symbol,
+                        broker_qty,
+                    )
+                    try:
+                        await self._event_bus.publish(
+                            SystemAlertEvent(
+                                source="order_manager._check_flatten_pending_timeouts",
+                                alert_type="phantom_short_retry_blocked",
+                                severity="critical",
+                                message=(
+                                    f"DEF-158 retry refused for {symbol}: "
+                                    f"broker reports SHORT position "
+                                    f"(shares={broker_qty}) but ARGUS "
+                                    f"expected long. SELL was NOT issued. "
+                                    f"Operator must investigate via "
+                                    f"scripts/ibkr_close_all_positions.py."
+                                ),
+                                metadata={
+                                    "symbol": symbol,
+                                    "broker_shares": broker_qty,
+                                    "broker_side": "SELL",
+                                    "expected_side": "BUY",
+                                    "detection_source": "def158_retry",
+                                },
+                            )
+                        )
+                    except Exception:  # pragma: no cover - defensive
+                        logger.exception(
+                            "Failed to publish phantom_short_retry_blocked "
+                            "SystemAlertEvent for %s",
+                            symbol,
+                        )
+                    # Clear pending so the next timeout cycle does not
+                    # re-emit the alert in an infinite loop.
+                    self._flatten_pending.pop(symbol, None)
+                    continue
+                if broker_side != OrderSide.BUY:
+                    logger.error(
+                        "Flatten retry refused for %s: broker side is %r "
+                        "(expected OrderSide.BUY or OrderSide.SELL); "
+                        "broker_qty=%d. Will NOT issue SELL. Investigate "
+                        "broker integration; check Position model for "
+                        "malformed `side` field.",
+                        symbol,
+                        broker_side,
+                        broker_qty,
+                    )
+                    # Defensive code path — structural bug in the broker
+                    # adapter or Position model. ERROR log is sufficient
+                    # observability; alert flooding on a structural defect
+                    # would not be useful. Clear pending to avoid loop.
                     self._flatten_pending.pop(symbol, None)
                     continue
                 if broker_qty != position.shares_remaining:
@@ -3292,12 +3364,14 @@ class OrderManager:
                     order_type=TradingOrderType.MARKET,
                     quantity=sell_qty,
                 )
-                # OCA-EXEMPT: Sprint 31.91 Session 3 scope (DEF-158 retry
-                # side-check). Session 1b only adds the SAFE-outcome
-                # short-circuit at the upstream ``_flatten_position`` site;
-                # the DEF-158 retry path here is intentionally untouched —
-                # Session 3 will branch this on ``side`` to reject
-                # broker-orphan SHORT mismatches before resubmission.
+                # OCA-EXEMPT: DEF-158 retry path. Sprint 31.91 Session 3
+                # added the upstream 3-branch side gate (BUY=resubmit /
+                # SELL=alert+halt / unknown=halt) so SELL-of-short is
+                # structurally prevented before this placement. OCA group
+                # threading on the retry SELL is not added here — the
+                # original flatten's OCA siblings were already drained at
+                # first dispatch by ``_flatten_position``; the retry is a
+                # fresh standalone SELL with no live OCA peers to bind to.
                 result = await self._broker.place_order(order)
                 new_pending = PendingManagedOrder(
                     order_id=result.order_id,
