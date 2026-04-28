@@ -21,6 +21,8 @@ from zoneinfo import ZoneInfo
 import aiosqlite
 
 from argus.core.ids import generate_id
+from argus.data.migrations import apply_migrations
+from argus.data.migrations.catalyst import MIGRATIONS, SCHEMA_NAME
 from argus.intelligence.models import (
     CatalystClassification,
     ClassifiedCatalyst,
@@ -49,69 +51,6 @@ class CatalystStorage:
 
         await storage.close()
     """
-
-    _CATALYST_EVENTS_TABLE_SQL = """
-        CREATE TABLE IF NOT EXISTS catalyst_events (
-            id TEXT PRIMARY KEY,
-            symbol TEXT NOT NULL,
-            catalyst_type TEXT NOT NULL,
-            quality_score REAL NOT NULL,
-            headline TEXT NOT NULL,
-            summary TEXT NOT NULL,
-            source TEXT NOT NULL,
-            source_url TEXT,
-            filing_type TEXT,
-            headline_hash TEXT NOT NULL,
-            published_at TEXT NOT NULL,
-            classified_at TEXT NOT NULL,
-            classified_by TEXT NOT NULL,
-            trading_relevance TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            fetched_at TEXT
-        )
-    """
-
-    _CATALYST_EVENTS_INDICES_SQL = [
-        "CREATE INDEX IF NOT EXISTS idx_catalyst_symbol ON catalyst_events(symbol)",
-        "CREATE INDEX IF NOT EXISTS idx_catalyst_type ON catalyst_events(catalyst_type)",
-        "CREATE INDEX IF NOT EXISTS idx_catalyst_headline_hash ON catalyst_events(headline_hash)",
-        "CREATE INDEX IF NOT EXISTS idx_catalyst_created_at ON catalyst_events(created_at)",
-    ]
-
-    _CACHE_TABLE_SQL = """
-        CREATE TABLE IF NOT EXISTS catalyst_classifications_cache (
-            headline_hash TEXT PRIMARY KEY,
-            category TEXT NOT NULL,
-            quality_score REAL NOT NULL,
-            summary TEXT NOT NULL,
-            trading_relevance TEXT NOT NULL,
-            classified_by TEXT NOT NULL,
-            cached_at TEXT NOT NULL
-        )
-    """
-
-    _CACHE_INDICES_SQL = [
-        "CREATE INDEX IF NOT EXISTS idx_cache_cached_at "
-        "ON catalyst_classifications_cache(cached_at)",
-    ]
-
-    _BRIEFS_TABLE_SQL = """
-        CREATE TABLE IF NOT EXISTS intelligence_briefs (
-            id TEXT PRIMARY KEY,
-            date TEXT NOT NULL,
-            brief_type TEXT NOT NULL,
-            content TEXT NOT NULL,
-            symbols_json TEXT NOT NULL,
-            catalyst_count INTEGER NOT NULL,
-            generated_at TEXT NOT NULL,
-            generation_cost_usd REAL NOT NULL
-        )
-    """
-
-    _BRIEFS_INDICES_SQL = [
-        "CREATE INDEX IF NOT EXISTS idx_briefs_date ON intelligence_briefs(date)",
-        "CREATE INDEX IF NOT EXISTS idx_briefs_type ON intelligence_briefs(brief_type)",
-    ]
 
     def __init__(self, db_path: str | Path) -> None:
         """Initialize the catalyst storage.
@@ -143,28 +82,24 @@ class CatalystStorage:
         await self._connection.execute("PRAGMA journal_mode = WAL")
         await self._connection.execute("PRAGMA foreign_keys = ON")
 
-        # Create tables
-        await self._connection.execute(self._CATALYST_EVENTS_TABLE_SQL)
-        for index_sql in self._CATALYST_EVENTS_INDICES_SQL:
-            await self._connection.execute(index_sql)
+        # Sprint 31.91 Impromptu C: schema managed by the migration framework.
+        # Migration v1 includes the ``fetched_at`` column previously added via
+        # in-place ALTER TABLE (Sprint 23.6); the legacy ALTER fallback below
+        # covers DBs that pre-date the framework adoption AND have a pre-23.6
+        # catalyst_events table missing the column.
+        await apply_migrations(
+            self._connection, schema_name=SCHEMA_NAME, migrations=MIGRATIONS
+        )
 
-        # Migration: Add fetched_at column to existing databases
-        # Suppress exception because ALTER TABLE fails if column already exists
-        # and there's no portable "ADD COLUMN IF NOT EXISTS" in SQLite
+        # Legacy compat: pre-Impromptu-C DBs whose catalyst_events table
+        # pre-dates Sprint 23.6's fetched_at column. New DBs already include
+        # it via migration v1.
         with contextlib.suppress(Exception):
             await self._connection.execute(
                 "ALTER TABLE catalyst_events ADD COLUMN fetched_at TEXT"
             )
+            await self._connection.commit()
 
-        await self._connection.execute(self._CACHE_TABLE_SQL)
-        for index_sql in self._CACHE_INDICES_SQL:
-            await self._connection.execute(index_sql)
-
-        await self._connection.execute(self._BRIEFS_TABLE_SQL)
-        for index_sql in self._BRIEFS_INDICES_SQL:
-            await self._connection.execute(index_sql)
-
-        await self._connection.commit()
         logger.info("Catalyst storage initialized: %s", self._db_path)
 
     async def close(self) -> None:

@@ -17,56 +17,13 @@ from zoneinfo import ZoneInfo
 
 import aiosqlite
 
+from argus.data.migrations import apply_migrations
+from argus.data.migrations.counterfactual import MIGRATIONS, SCHEMA_NAME
 from argus.intelligence.counterfactual import CounterfactualPosition
 
 logger = logging.getLogger(__name__)
 
 _ET = ZoneInfo("America/New_York")
-
-_CREATE_TABLE = """\
-CREATE TABLE IF NOT EXISTS counterfactual_positions (
-    position_id TEXT PRIMARY KEY,
-    symbol TEXT NOT NULL,
-    strategy_id TEXT NOT NULL,
-    entry_price REAL NOT NULL,
-    stop_price REAL NOT NULL,
-    target_price REAL NOT NULL,
-    time_stop_seconds INTEGER,
-    rejection_stage TEXT NOT NULL,
-    rejection_reason TEXT NOT NULL,
-    quality_score REAL,
-    quality_grade TEXT,
-    regime_vector_snapshot TEXT,
-    signal_metadata TEXT,
-    opened_at TEXT NOT NULL,
-    closed_at TEXT,
-    exit_price REAL,
-    exit_reason TEXT,
-    theoretical_pnl REAL,
-    theoretical_r_multiple REAL,
-    duration_seconds REAL,
-    max_adverse_excursion REAL DEFAULT 0.0,
-    max_favorable_excursion REAL DEFAULT 0.0,
-    bars_monitored INTEGER DEFAULT 0
-)
-"""
-
-_CREATE_IDX_OPENED_AT = (
-    "CREATE INDEX IF NOT EXISTS idx_cf_opened_at "
-    "ON counterfactual_positions(opened_at)"
-)
-_CREATE_IDX_STRATEGY = (
-    "CREATE INDEX IF NOT EXISTS idx_cf_strategy "
-    "ON counterfactual_positions(strategy_id)"
-)
-_CREATE_IDX_STAGE = (
-    "CREATE INDEX IF NOT EXISTS idx_cf_stage "
-    "ON counterfactual_positions(rejection_stage)"
-)
-_CREATE_IDX_SYMBOL = (
-    "CREATE INDEX IF NOT EXISTS idx_cf_symbol "
-    "ON counterfactual_positions(symbol)"
-)
 
 _INSERT_OPEN = """\
 INSERT INTO counterfactual_positions (
@@ -120,14 +77,20 @@ class CounterfactualStore:
         self._conn = await aiosqlite.connect(self._db_path)
         self._conn.row_factory = aiosqlite.Row
         await self._conn.execute("PRAGMA journal_mode = WAL")
-        await self._conn.execute(_CREATE_TABLE)
-        await self._conn.execute(_CREATE_IDX_OPENED_AT)
-        await self._conn.execute(_CREATE_IDX_STRATEGY)
-        await self._conn.execute(_CREATE_IDX_STAGE)
-        await self._conn.execute(_CREATE_IDX_SYMBOL)
-        await self._conn.commit()
+        # Sprint 31.91 Impromptu C: schema managed by the migration framework.
+        # Migration v1 includes both the variant_id column (Sprint 32.5 S5)
+        # and the scoring_fingerprint column (FIX-01) previously added via
+        # in-place ALTER TABLE; the legacy ALTER fallbacks below cover DBs
+        # that pre-date the framework adoption AND already have the v1 table
+        # rows in place — for those, the v1 migration's CREATE TABLE IF NOT
+        # EXISTS is a no-op and the columns must be added manually.
+        await apply_migrations(
+            self._conn, schema_name=SCHEMA_NAME, migrations=MIGRATIONS
+        )
 
-        # Migration: add variant_id column (Sprint 32.5 S5)
+        # Legacy compat: handle pre-Impromptu-C DBs that have an existing
+        # counterfactual_positions table missing variant_id / scoring_fingerprint.
+        # New DBs created by the framework already include both columns.
         try:
             await self._conn.execute(
                 "ALTER TABLE counterfactual_positions ADD COLUMN variant_id TEXT"
@@ -136,10 +99,6 @@ class CounterfactualStore:
         except Exception:
             pass  # Column already exists
 
-        # Migration: add scoring_fingerprint column (FIX-01 audit 2026-04-21).
-        # Pre-fix shadow rows retain NULL; post-fix rows carry the fingerprint
-        # of the active QualityEngineConfig at position-open time, letting
-        # PromotionEvaluator separate scoring contexts when the pipeline changes.
         async with self._conn.execute(
             "SELECT name FROM pragma_table_info('counterfactual_positions') "
             "WHERE name = 'scoring_fingerprint'"

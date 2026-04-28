@@ -20,41 +20,12 @@ from zoneinfo import ZoneInfo
 import aiosqlite
 
 from argus.core.regime import RegimeVector
+from argus.data.migrations import apply_migrations
+from argus.data.migrations.regime_history import MIGRATIONS, SCHEMA_NAME
 
 logger = logging.getLogger(__name__)
 
 _ET = ZoneInfo("America/New_York")
-
-_CREATE_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS regime_snapshots (
-    id TEXT PRIMARY KEY,
-    timestamp TEXT NOT NULL,
-    trading_date TEXT NOT NULL,
-    primary_regime TEXT NOT NULL,
-    regime_confidence REAL NOT NULL,
-    trend_score REAL NOT NULL,
-    trend_conviction REAL NOT NULL,
-    volatility_level REAL NOT NULL,
-    volatility_direction REAL NOT NULL,
-    universe_breadth_score REAL,
-    breadth_thrust INTEGER,
-    avg_correlation REAL,
-    correlation_regime TEXT,
-    sector_rotation_phase TEXT,
-    intraday_character TEXT,
-    regime_vector_json TEXT NOT NULL
-)
-"""
-
-_CREATE_IDX_DATE = """
-CREATE INDEX IF NOT EXISTS idx_regime_trading_date
-ON regime_snapshots (trading_date)
-"""
-
-_CREATE_IDX_REGIME_DATE = """
-CREATE INDEX IF NOT EXISTS idx_regime_primary_date
-ON regime_snapshots (primary_regime, trading_date)
-"""
 
 _RETENTION_DAYS = 7
 
@@ -89,12 +60,14 @@ class RegimeHistoryStore:
         self._db = await aiosqlite.connect(self._db_path)
         self._db.row_factory = aiosqlite.Row
 
-        await self._db.execute(_CREATE_TABLE_SQL)
-        await self._db.execute(_CREATE_IDX_DATE)
-        await self._db.execute(_CREATE_IDX_REGIME_DATE)
-        await self._db.commit()
-
-        # Schema migration: add vix_close column if missing (Sprint 27.9)
+        # Sprint 31.91 Impromptu C: schema managed by the migration framework.
+        # Migration v1 includes the vix_close column previously added by
+        # _migrate_add_vix_close() against pre-Sprint-27.9 DBs; the legacy
+        # helper is preserved below for safety on already-migrated DBs that
+        # pre-date the framework adoption.
+        await apply_migrations(
+            self._db, schema_name=SCHEMA_NAME, migrations=MIGRATIONS
+        )
         await self._migrate_add_vix_close()
 
         # 7-day retention cleanup

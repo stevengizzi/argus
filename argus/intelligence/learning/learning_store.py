@@ -15,6 +15,8 @@ from datetime import UTC, datetime, timedelta
 
 import aiosqlite
 
+from argus.data.migrations import apply_migrations
+from argus.data.migrations.learning import MIGRATIONS, SCHEMA_NAME
 from argus.intelligence.learning.models import (
     ConfigProposal,
     LearningReport,
@@ -25,67 +27,6 @@ logger = logging.getLogger(__name__)
 _DEFAULT_DB_PATH = "data/learning.db"
 
 _WARN_INTERVAL_SECONDS = 60.0
-
-_CREATE_REPORTS = """\
-CREATE TABLE IF NOT EXISTS learning_reports (
-    report_id TEXT PRIMARY KEY,
-    generated_at TEXT NOT NULL,
-    analysis_window_start TEXT NOT NULL,
-    analysis_window_end TEXT NOT NULL,
-    report_json TEXT NOT NULL,
-    version INTEGER NOT NULL DEFAULT 1
-)
-"""
-
-_CREATE_PROPOSALS = """\
-CREATE TABLE IF NOT EXISTS config_proposals (
-    proposal_id TEXT PRIMARY KEY,
-    report_id TEXT NOT NULL,
-    field_path TEXT NOT NULL,
-    current_value REAL NOT NULL,
-    proposed_value REAL NOT NULL,
-    rationale TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'PENDING',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    human_notes TEXT,
-    applied_at TEXT,
-    reverted_at TEXT,
-    FOREIGN KEY (report_id) REFERENCES learning_reports(report_id)
-)
-"""
-
-_CREATE_CHANGE_HISTORY = """\
-CREATE TABLE IF NOT EXISTS config_change_history (
-    change_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    proposal_id TEXT,
-    field_path TEXT NOT NULL,
-    old_value REAL NOT NULL,
-    new_value REAL NOT NULL,
-    source TEXT NOT NULL DEFAULT 'learning_loop',
-    applied_at TEXT NOT NULL,
-    report_id TEXT,
-    FOREIGN KEY (proposal_id) REFERENCES config_proposals(proposal_id)
-)
-"""
-
-_CREATE_IDX_REPORTS_GENERATED = (
-    "CREATE INDEX IF NOT EXISTS idx_reports_generated_at "
-    "ON learning_reports(generated_at)"
-)
-_CREATE_IDX_PROPOSALS_STATUS = (
-    "CREATE INDEX IF NOT EXISTS idx_proposals_status "
-    "ON config_proposals(status)"
-)
-_CREATE_IDX_PROPOSALS_REPORT = (
-    "CREATE INDEX IF NOT EXISTS idx_proposals_report_id "
-    "ON config_proposals(report_id)"
-)
-_CREATE_IDX_CHANGES_APPLIED = (
-    "CREATE INDEX IF NOT EXISTS idx_changes_applied_at "
-    "ON config_change_history(applied_at)"
-)
-
 
 class LearningStore:
     """SQLite store for learning reports, proposals, and change history.
@@ -102,14 +43,10 @@ class LearningStore:
         """Create tables and indexes if they don't exist."""
         async with aiosqlite.connect(self._db_path) as conn:
             await conn.execute("PRAGMA journal_mode=WAL")
-            await conn.execute(_CREATE_REPORTS)
-            await conn.execute(_CREATE_PROPOSALS)
-            await conn.execute(_CREATE_CHANGE_HISTORY)
-            await conn.execute(_CREATE_IDX_REPORTS_GENERATED)
-            await conn.execute(_CREATE_IDX_PROPOSALS_STATUS)
-            await conn.execute(_CREATE_IDX_PROPOSALS_REPORT)
-            await conn.execute(_CREATE_IDX_CHANGES_APPLIED)
-            await conn.commit()
+            # Sprint 31.91 Impromptu C: schema managed by the migration framework.
+            await apply_migrations(
+                conn, schema_name=SCHEMA_NAME, migrations=MIGRATIONS
+            )
 
     # --- Report methods ---
 

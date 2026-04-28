@@ -20,35 +20,13 @@ from zoneinfo import ZoneInfo
 
 import aiosqlite
 
+from argus.data.migrations import apply_migrations
+from argus.data.migrations.evaluation import MIGRATIONS, SCHEMA_NAME
 from argus.strategies.telemetry import EvaluationEvent
 
 logger = logging.getLogger(__name__)
 
 _ET = ZoneInfo("America/New_York")
-
-_CREATE_TABLE = """\
-CREATE TABLE IF NOT EXISTS evaluation_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    trading_date TEXT NOT NULL,
-    timestamp TEXT NOT NULL,
-    symbol TEXT NOT NULL,
-    strategy_id TEXT NOT NULL,
-    event_type TEXT NOT NULL,
-    result TEXT NOT NULL,
-    reason TEXT NOT NULL,
-    metadata_json TEXT DEFAULT '{}'
-)
-"""
-
-_CREATE_IDX_DATE_STRATEGY = (
-    "CREATE INDEX IF NOT EXISTS idx_eval_date_strategy "
-    "ON evaluation_events(trading_date, strategy_id)"
-)
-
-_CREATE_IDX_DATE_SYMBOL = (
-    "CREATE INDEX IF NOT EXISTS idx_eval_date_symbol "
-    "ON evaluation_events(trading_date, symbol)"
-)
 
 _INSERT_EVENT = """\
 INSERT INTO evaluation_events
@@ -102,10 +80,10 @@ class EvaluationEventStore:
         self._conn = await aiosqlite.connect(self._db_path)
         self._conn.row_factory = aiosqlite.Row
         await self._conn.execute("PRAGMA journal_mode = WAL")
-        await self._conn.execute(_CREATE_TABLE)
-        await self._conn.execute(_CREATE_IDX_DATE_STRATEGY)
-        await self._conn.execute(_CREATE_IDX_DATE_SYMBOL)
-        await self._conn.commit()
+        # Sprint 31.91 Impromptu C: schema managed by the migration framework.
+        await apply_migrations(
+            self._conn, schema_name=SCHEMA_NAME, migrations=MIGRATIONS
+        )
 
         # Observability: log DB size and freelist ratio at startup
         size_mb = self._get_db_size_mb()

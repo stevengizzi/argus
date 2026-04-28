@@ -17,11 +17,14 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
+import aiosqlite
 import numpy as np
 import pandas as pd
 import yfinance as yf
 from scipy.stats import percentileofscore
 
+from argus.data.migrations import apply_migrations
+from argus.data.migrations.vix_landscape import MIGRATIONS, SCHEMA_NAME
 from argus.data.vix_config import VixRegimeConfig
 
 logger = logging.getLogger(__name__)
@@ -562,6 +565,14 @@ class VIXDataService:
         Trust-cache-on-startup pattern: loads existing DB data first, then
         determines how much new data to fetch based on staleness.
         """
+        # Sprint 31.91 Impromptu C: schema managed by the migration framework.
+        # Sync ``_init_db()`` already created the table via CREATE TABLE IF NOT
+        # EXISTS so applying v1 here only records schema_version=1.
+        async with aiosqlite.connect(self._db_path) as conn:
+            await apply_migrations(
+                conn, schema_name=SCHEMA_NAME, migrations=MIGRATIONS
+            )
+
         # Step 1: Load from SQLite (trust cache)
         df = self.load_from_db()
         last_date: date | None = None

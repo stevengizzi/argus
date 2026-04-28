@@ -16,6 +16,8 @@ from datetime import UTC, datetime, timedelta
 
 import aiosqlite
 
+from argus.data.migrations import apply_migrations
+from argus.data.migrations.experiments import MIGRATIONS, SCHEMA_NAME
 from argus.intelligence.experiments.models import (
     ExperimentRecord,
     ExperimentStatus,
@@ -31,83 +33,6 @@ _WARN_INTERVAL_SECONDS = 60.0
 # ---------------------------------------------------------------------------
 # DDL
 # ---------------------------------------------------------------------------
-
-_CREATE_EXPERIMENTS = """\
-CREATE TABLE IF NOT EXISTS experiments (
-    experiment_id TEXT PRIMARY KEY,
-    pattern_name TEXT NOT NULL,
-    parameter_fingerprint TEXT NOT NULL,
-    parameters_json TEXT NOT NULL,
-    status TEXT NOT NULL,
-    backtest_result_json TEXT,
-    shadow_trades INTEGER NOT NULL DEFAULT 0,
-    shadow_expectancy REAL,
-    is_baseline INTEGER NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
-)
-"""
-
-_CREATE_VARIANTS = """\
-CREATE TABLE IF NOT EXISTS variants (
-    variant_id TEXT PRIMARY KEY,
-    base_pattern TEXT NOT NULL,
-    parameter_fingerprint TEXT NOT NULL,
-    parameters_json TEXT NOT NULL,
-    mode TEXT NOT NULL,
-    source TEXT NOT NULL,
-    created_at TEXT NOT NULL
-)
-"""
-
-_CREATE_PROMOTION_EVENTS = """\
-CREATE TABLE IF NOT EXISTS promotion_events (
-    event_id TEXT PRIMARY KEY,
-    variant_id TEXT NOT NULL,
-    action TEXT NOT NULL,
-    previous_mode TEXT NOT NULL,
-    new_mode TEXT NOT NULL,
-    reason TEXT NOT NULL,
-    comparison_verdict_json TEXT,
-    shadow_trades INTEGER NOT NULL DEFAULT 0,
-    shadow_expectancy REAL,
-    timestamp TEXT NOT NULL
-)
-"""
-
-_CREATE_IDX_EXP_PATTERN = (
-    "CREATE INDEX IF NOT EXISTS idx_exp_pattern_name "
-    "ON experiments(pattern_name)"
-)
-_CREATE_IDX_EXP_STATUS = (
-    "CREATE INDEX IF NOT EXISTS idx_exp_status "
-    "ON experiments(status)"
-)
-_CREATE_IDX_EXP_CREATED = (
-    "CREATE INDEX IF NOT EXISTS idx_exp_created_at "
-    "ON experiments(created_at)"
-)
-_CREATE_IDX_EXP_FINGERPRINT = (
-    "CREATE INDEX IF NOT EXISTS idx_exp_pattern_fingerprint "
-    "ON experiments(pattern_name, parameter_fingerprint)"
-)
-_CREATE_IDX_VAR_PATTERN = (
-    "CREATE INDEX IF NOT EXISTS idx_var_base_pattern "
-    "ON variants(base_pattern)"
-)
-_CREATE_IDX_VAR_CREATED = (
-    "CREATE INDEX IF NOT EXISTS idx_var_created_at "
-    "ON variants(created_at)"
-)
-_CREATE_IDX_PROMO_VARIANT = (
-    "CREATE INDEX IF NOT EXISTS idx_promo_variant_id "
-    "ON promotion_events(variant_id)"
-)
-_CREATE_IDX_PROMO_TS = (
-    "CREATE INDEX IF NOT EXISTS idx_promo_timestamp "
-    "ON promotion_events(timestamp)"
-)
-
 
 class ExperimentStore:
     """SQLite-backed store for variants, experiments, and promotion events.
@@ -134,24 +59,17 @@ class ExperimentStore:
         """
         async with aiosqlite.connect(self._db_path) as conn:
             await conn.execute("PRAGMA journal_mode=WAL")
-            await conn.execute(_CREATE_EXPERIMENTS)
-            await conn.execute(_CREATE_VARIANTS)
-            await conn.execute(_CREATE_PROMOTION_EVENTS)
-            await conn.execute(_CREATE_IDX_EXP_PATTERN)
-            await conn.execute(_CREATE_IDX_EXP_STATUS)
-            await conn.execute(_CREATE_IDX_EXP_CREATED)
-            await conn.execute(_CREATE_IDX_EXP_FINGERPRINT)
-            await conn.execute(_CREATE_IDX_VAR_PATTERN)
-            await conn.execute(_CREATE_IDX_VAR_CREATED)
-            await conn.execute(_CREATE_IDX_PROMO_VARIANT)
-            await conn.execute(_CREATE_IDX_PROMO_TS)
-            await conn.commit()
+            # Sprint 31.91 Impromptu C: schema managed by the migration
+            # framework. Migration v1 includes the exit_overrides column on
+            # variants (Sprint 32.5 S1) previously added via in-place ALTER.
+            # The legacy ALTER fallback below covers DBs that pre-date the
+            # framework adoption AND have variants table without the column.
+            await apply_migrations(
+                conn, schema_name=SCHEMA_NAME, migrations=MIGRATIONS
+            )
 
-            # Migration: add exit_overrides column to variants (Sprint 32.5 S1).
-            # P1-D2-C06 (FIX-08): narrow the catch from bare Exception to the
-            # specific aiosqlite error and message we expect when the column
-            # already exists. Pre-FIX-08 the bare except hid permissions /
-            # disk-full / locked-DB failures behind a "column exists" no-op.
+            # Legacy compat: pre-Impromptu-C DBs whose variants table
+            # pre-dates Sprint 32.5 S1. New DBs already include exit_overrides.
             try:
                 await conn.execute(
                     "ALTER TABLE variants ADD COLUMN exit_overrides TEXT"
