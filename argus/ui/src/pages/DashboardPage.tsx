@@ -37,6 +37,7 @@ import {
 } from '../features/dashboard';
 import { LearningDashboardCard } from '../components/learning/LearningDashboardCard';
 import { AlertBanner } from '../components/AlertBanner';
+import { AlertToastStack } from '../components/AlertToast';
 import { WatchlistSidebar } from '../features/watchlist';
 import { staggerContainer, staggerItem } from '../utils/motion';
 import { useIsMultiColumn, useMediaQuery } from '../hooks/useMediaQuery';
@@ -73,6 +74,7 @@ export function DashboardPage() {
         <div className="flex gap-6 -mr-6 -mb-6">
           <div className="flex-1 min-w-0 flex flex-col gap-3">
             <AlertBanner />
+            <AlertToastStack />
             <PreMarketLayout />
           </div>
           <WatchlistSidebar className="sticky top-0 h-[calc(100vh-3rem)] flex-shrink-0" />
@@ -83,6 +85,7 @@ export function DashboardPage() {
     return (
       <>
         <div className="mb-3"><AlertBanner /></div>
+        <AlertToastStack />
         <PreMarketLayout />
         <WatchlistSidebar />
       </>
@@ -103,6 +106,7 @@ export function DashboardPage() {
           <motion.div variants={staggerItem}>
             <AlertBanner />
           </motion.div>
+          <AlertToastStack />
 
           <motion.div variants={staggerItem}>
             <OrchestratorStatusStrip />
@@ -150,6 +154,8 @@ export function DashboardPage() {
           <motion.div variants={staggerItem}>
             <AlertBanner />
           </motion.div>
+          <AlertToastStack />
+
 
           {/* Row 1: VitalsStrip — full width */}
           <motion.div variants={staggerItem}>
@@ -217,6 +223,7 @@ export function DashboardPage() {
         <motion.div variants={staggerItem}>
           <AlertBanner />
         </motion.div>
+        <AlertToastStack />
 
         <motion.div variants={staggerItem}>
           <OrchestratorStatusStrip />
