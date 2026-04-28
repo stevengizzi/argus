@@ -33,8 +33,12 @@ from argus.core.events import (
     SignalEvent,
     TickEvent,
 )
-from argus.execution.order_manager import ManagedPosition, OrderManager
-from argus.models.trading import BracketOrderResult, OrderResult, OrderStatus
+from argus.execution.order_manager import (
+    ManagedPosition,
+    OrderManager,
+    ReconciliationPosition,
+)
+from argus.models.trading import BracketOrderResult, OrderResult, OrderSide, OrderStatus
 
 
 # ---------------------------------------------------------------------------
@@ -516,7 +520,7 @@ class TestThrottledReconciliationLog:
         om._broker_confirmed["AAPL"] = True
 
         # Broker reports no positions (AAPL "missing" from snapshot)
-        empty_broker_positions: dict[str, float] = {}
+        empty_broker_positions: dict[str, ReconciliationPosition] = {}
 
         caplog.clear()
         with caplog.at_level(logging.WARNING, logger="argus.execution.order_manager"):

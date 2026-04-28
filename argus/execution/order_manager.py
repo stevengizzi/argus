@@ -168,6 +168,40 @@ class ReconciliationResult:
     discrepancies: list[dict[str, object]]
 
 
+@dataclass(frozen=True)
+class ReconciliationPosition:
+    """Typed broker-position contract for reconciliation.
+
+    Frozen to prevent mutation in transit between the ``main.py`` call
+    site and ``OrderManager.reconcile_positions``.
+
+    Sprint 31.91 Session 2a (DEC-385 reserved): replaces the side-stripped
+    ``dict[str, float]`` contract that was the structural cause of DEF-204
+    (phantom-short blindness). The broker reports the absolute position
+    size in ``shares`` and the direction in ``side``; this dataclass
+    preserves both end-to-end through the reconciliation path.
+    """
+
+    symbol: str
+    side: OrderSide
+    shares: int
+
+    def __post_init__(self) -> None:
+        # Defensive: shares must be positive (the broker reports the
+        # absolute size; direction is in `side`). A zero or negative
+        # shares value indicates a caller-side bug; fail closed so it
+        # cannot silently drift through the reconciliation pipeline.
+        if self.shares <= 0:
+            raise ValueError(
+                f"ReconciliationPosition.shares must be positive; "
+                f"got {self.shares} for {self.symbol}"
+            )
+        if self.side is None:
+            raise ValueError(
+                f"ReconciliationPosition.side must be set; got None for {self.symbol}"
+            )
+
+
 @dataclass
 class PendingManagedOrder:
     """Tracks an order awaiting fill confirmation from the broker.
@@ -3309,7 +3343,7 @@ class OrderManager:
         return result
 
     async def reconcile_positions(
-        self, broker_positions: dict[str, float]
+        self, broker_positions: dict[str, ReconciliationPosition]
     ) -> list[dict[str, object]]:
         """Compare internal positions against broker-reported positions.
 
@@ -3318,8 +3352,17 @@ class OrderManager:
         are cleaned up only after consecutive_miss_threshold consecutive
         snapshot misses when auto_cleanup_unconfirmed is True.
 
+        Sprint 31.91 Session 2a (DEC-385 reserved): the ``broker_positions``
+        contract is now ``dict[str, ReconciliationPosition]``. Both the
+        absolute share count and the side travel end-to-end. Session 2a
+        does NOT add side-aware orphan-detection branches — that lands in
+        Session 2b.1; this session is the typed-contract refactor only.
+        The existing ARGUS-orphan branch (internal > 0, broker == 0)
+        behavior is preserved.
+
         Args:
-            broker_positions: Dict of {symbol: quantity} from broker.
+            broker_positions: Dict of {symbol: ReconciliationPosition} from
+                the broker (built at the call site in ``main.py``).
 
         Returns:
             List of discrepancy dicts with symbol, internal_qty, broker_qty.
@@ -3336,14 +3379,16 @@ class OrderManager:
 
         # Reset miss counters for symbols found in broker snapshot
         for symbol in internal_positions:
-            if int(broker_positions.get(symbol, 0)) > 0:
+            broker_pos = broker_positions.get(symbol)
+            if broker_pos is not None and broker_pos.shares > 0:
                 self._reconciliation_miss_count[symbol] = 0
 
         # Check all symbols in either set
         all_symbols = set(internal_positions.keys()) | set(broker_positions.keys())
         for symbol in sorted(all_symbols):
             internal_qty = internal_positions.get(symbol, 0)
-            broker_qty = int(broker_positions.get(symbol, 0))
+            broker_pos = broker_positions.get(symbol)
+            broker_qty = broker_pos.shares if broker_pos is not None else 0
             if internal_qty != broker_qty:
                 logger.debug(
                     "Position mismatch detail: %s — ARGUS=%d, IBKR=%d",

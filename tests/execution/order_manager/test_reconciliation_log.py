@@ -10,7 +10,8 @@ import pytest
 from argus.core.clock import Clock
 from argus.core.config import BrokerSource, OrderManagerConfig
 from argus.core.event_bus import EventBus
-from argus.execution.order_manager import OrderManager
+from argus.execution.order_manager import OrderManager, ReconciliationPosition
+from argus.models.trading import OrderSide
 
 
 @pytest.fixture()
@@ -38,7 +39,12 @@ async def test_reconciliation_summary_single_line(
 ) -> None:
     """Multiple mismatches produce a single consolidated WARNING."""
     # Broker reports positions that ARGUS doesn't have
-    broker_positions = {"AAPL": 100.0, "TSLA": 50.0, "NVDA": 25.0, "AMD": 10.0}
+    broker_positions = {
+        "AAPL": ReconciliationPosition(symbol="AAPL", side=OrderSide.BUY, shares=100),
+        "TSLA": ReconciliationPosition(symbol="TSLA", side=OrderSide.BUY, shares=50),
+        "NVDA": ReconciliationPosition(symbol="NVDA", side=OrderSide.BUY, shares=25),
+        "AMD": ReconciliationPosition(symbol="AMD", side=OrderSide.BUY, shares=10),
+    }
 
     with caplog.at_level(logging.WARNING):
         discrepancies = await order_manager.reconcile_positions(broker_positions)
@@ -59,7 +65,10 @@ async def test_reconciliation_detail_at_debug(
     order_manager: OrderManager, caplog: pytest.LogCaptureFixture
 ) -> None:
     """Per-symbol mismatch detail is logged at DEBUG level."""
-    broker_positions = {"AAPL": 100.0, "TSLA": 50.0}
+    broker_positions = {
+        "AAPL": ReconciliationPosition(symbol="AAPL", side=OrderSide.BUY, shares=100),
+        "TSLA": ReconciliationPosition(symbol="TSLA", side=OrderSide.BUY, shares=50),
+    }
 
     with caplog.at_level(logging.DEBUG):
         discrepancies = await order_manager.reconcile_positions(broker_positions)

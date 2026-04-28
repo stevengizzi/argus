@@ -27,9 +27,10 @@ from argus.core.events import (
 from argus.execution.order_manager import (
     ManagedPosition,
     OrderManager,
+    ReconciliationPosition,
     ReconciliationResult,
 )
-from argus.models.trading import BracketOrderResult, OrderResult, OrderStatus
+from argus.models.trading import BracketOrderResult, OrderResult, OrderSide, OrderStatus
 
 
 # ---------------------------------------------------------------------------
@@ -412,7 +413,9 @@ async def test_reconciliation_detects_mismatch(
 
     # Internal has AAPL=100 shares
     # Broker reports AAPL=200 shares (mismatch)
-    broker_positions: dict[str, float] = {"AAPL": 200.0}
+    broker_positions: dict[str, ReconciliationPosition] = {
+        "AAPL": ReconciliationPosition(symbol="AAPL", side=OrderSide.BUY, shares=200)
+    }
 
     discrepancies = await order_manager.reconcile_positions(broker_positions)
 
@@ -432,7 +435,9 @@ async def test_reconciliation_synced(
     await _open_position(order_manager)
 
     # Broker reports matching position
-    broker_positions: dict[str, float] = {"AAPL": 100.0}
+    broker_positions: dict[str, ReconciliationPosition] = {
+        "AAPL": ReconciliationPosition(symbol="AAPL", side=OrderSide.BUY, shares=100)
+    }
 
     discrepancies = await order_manager.reconcile_positions(broker_positions)
 
@@ -449,7 +454,9 @@ async def test_reconciliation_detects_broker_only_position(
     """Broker has a position that ARGUS doesn't know about."""
     await order_manager.start()
 
-    broker_positions: dict[str, float] = {"TSLA": 50.0}
+    broker_positions: dict[str, ReconciliationPosition] = {
+        "TSLA": ReconciliationPosition(symbol="TSLA", side=OrderSide.BUY, shares=50)
+    }
     discrepancies = await order_manager.reconcile_positions(broker_positions)
 
     assert len(discrepancies) == 1
@@ -541,7 +548,9 @@ async def test_reconciliation_no_auto_correct(
     """Reconciliation must NEVER modify positions — warn only."""
     await _open_position(order_manager)
 
-    broker_positions: dict[str, float] = {"AAPL": 200.0}
+    broker_positions: dict[str, ReconciliationPosition] = {
+        "AAPL": ReconciliationPosition(symbol="AAPL", side=OrderSide.BUY, shares=200)
+    }
 
     # Capture state before
     positions_before = order_manager.get_all_positions_flat()
@@ -1014,7 +1023,9 @@ async def test_reconciliation_result_typed(
     """ReconciliationResult is a proper dataclass, not dict[str, object]."""
     await _open_position(order_manager)
 
-    broker_positions: dict[str, float] = {"AAPL": 200.0}
+    broker_positions: dict[str, ReconciliationPosition] = {
+        "AAPL": ReconciliationPosition(symbol="AAPL", side=OrderSide.BUY, shares=200)
+    }
     await order_manager.reconcile_positions(broker_positions)
 
     result = order_manager.last_reconciliation

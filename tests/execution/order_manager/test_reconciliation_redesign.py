@@ -27,8 +27,9 @@ from argus.execution.order_manager import (
     ManagedPosition,
     OrderManager,
     PendingManagedOrder,
+    ReconciliationPosition,
 )
-from argus.models.trading import BracketOrderResult, OrderResult, OrderStatus
+from argus.models.trading import BracketOrderResult, OrderResult, OrderSide, OrderStatus
 
 
 # ---------------------------------------------------------------------------
@@ -316,7 +317,9 @@ async def test_miss_counter_resets_on_snapshot_presence(
     assert om._reconciliation_miss_count.get("GHOST", 0) == 2
 
     # Found in snapshot (matching qty) — no mismatch, counter resets
-    await om.reconcile_positions({"GHOST": 100.0})
+    await om.reconcile_positions(
+        {"GHOST": ReconciliationPosition(symbol="GHOST", side=OrderSide.BUY, shares=100)}
+    )
     assert om._reconciliation_miss_count.get("GHOST", 0) == 0
 
     # Two more misses after reset — still below threshold

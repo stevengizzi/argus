@@ -28,8 +28,9 @@ from argus.execution.order_manager import (
     ManagedPosition,
     OrderManager,
     PendingManagedOrder,
+    ReconciliationPosition,
 )
-from argus.models.trading import BracketOrderResult, OrderResult, OrderStatus
+from argus.models.trading import BracketOrderResult, OrderResult, OrderSide, OrderStatus
 
 
 # ---------------------------------------------------------------------------
@@ -232,7 +233,7 @@ async def test_reconciliation_cleanup_disabled_by_default(
     await _open_position(om)
 
     # Broker reports no position (orphan scenario)
-    broker_positions: dict[str, float] = {}
+    broker_positions: dict[str, ReconciliationPosition] = {}
     positions_before = om.get_all_positions_flat()
     shares_before = positions_before[0].shares_remaining
 
@@ -297,7 +298,9 @@ async def test_reconciliation_cleanup_skips_real_positions(
     await _open_position(om)
 
     # Broker reports a different quantity (mismatch but NOT zero)
-    broker_positions: dict[str, float] = {"AAPL": 50.0}
+    broker_positions: dict[str, ReconciliationPosition] = {
+        "AAPL": ReconciliationPosition(symbol="AAPL", side=OrderSide.BUY, shares=50)
+    }
 
     discrepancies = await om.reconcile_positions(broker_positions)
 

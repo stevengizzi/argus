@@ -92,7 +92,7 @@ from argus.db.manager import DatabaseManager
 from argus.core.regime import MarketRegime
 from argus.intelligence.position_sizer import DynamicPositionSizer
 from argus.intelligence.quality_engine import SetupQualityEngine
-from argus.execution.order_manager import OrderManager
+from argus.execution.order_manager import OrderManager, ReconciliationPosition
 from argus.strategies.afternoon_momentum import AfternoonMomentumStrategy
 from argus.strategies.pattern_strategy import PatternBasedStrategy
 from argus.strategies.patterns.factory import (
@@ -1516,14 +1516,41 @@ class ArgusSystem:
                     if self._broker is None or self._order_manager is None:
                         continue
 
-                    # Get broker positions and convert to {symbol: quantity}
+                    # Get broker positions and convert to typed dict.
+                    # Sprint 31.91 Session 2a (DEC-385 reserved): the
+                    # contract is now ``dict[str, ReconciliationPosition]``
+                    # so the broker's side travels end-to-end and downstream
+                    # reconciliation reads cannot be silently long-only-blind
+                    # (the structural cause of DEF-204).
                     broker_pos_list = await self._broker.get_positions()
-                    broker_positions: dict[str, float] = {}
+                    broker_positions: dict[str, ReconciliationPosition] = {}
                     for pos in broker_pos_list:
                         symbol = getattr(pos, "symbol", "")
-                        qty = float(getattr(pos, "shares", 0))
-                        if symbol and qty != 0:
-                            broker_positions[symbol] = qty
+                        # ``Position.shares`` is the broker's absolute size
+                        # (IBKR may report negative for shorts; `abs` is
+                        # defensive against either signing convention).
+                        shares = int(abs(getattr(pos, "shares", 0)))
+                        side = getattr(pos, "side", None)
+                        if not symbol or shares == 0:
+                            continue
+                        if side is None:
+                            # Fail-closed: a position without a side cannot
+                            # be safely reconciled. Skip and log CRITICAL;
+                            # the orphan loop's broker-orphan branch
+                            # (Session 2b.1) will detect via separate
+                            # mechanisms.
+                            logger.critical(
+                                "Reconciliation skipped %s: broker Position missing "
+                                "side attribute. This indicates a broker-layer bug "
+                                "or a Position object constructed without side. "
+                                "Sprint 31.91 (DEF-204 mechanism) hardens against "
+                                "this.",
+                                symbol,
+                            )
+                            continue
+                        broker_positions[symbol] = ReconciliationPosition(
+                            symbol=symbol, side=side, shares=shares
+                        )
 
                     # Order Manager logs consolidated mismatch summary at WARNING
                     await self._order_manager.reconcile_positions(
