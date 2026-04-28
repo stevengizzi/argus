@@ -385,7 +385,7 @@ class TestAutoResolutionPolicy:
         )
 
     def test_policy_table_is_exhaustive(self) -> None:
-        """All 8 alert types are present in the policy table."""
+        """All 10 alert types are present in the policy table."""
         table = build_policy_table(
             phantom_short_threshold_provider=lambda: 5
         )
@@ -398,6 +398,8 @@ class TestAutoResolutionPolicy:
             "ibkr_auth_failure",
             "databento_dead_feed",
             "phantom_short_startup_engaged",
+            "eod_residual_shorts",
+            "eod_flatten_failed",
         }
         assert set(table.keys()) == expected
         # NEVER_AUTO_RESOLVE entries are explicit (not omitted).
@@ -412,7 +414,12 @@ class TestAutoResolutionPolicy:
         )
         # Use a dummy event of a type the predicate doesn't consume.
         from argus.core.events import HeartbeatEvent
-        for never in ("phantom_short_retry_blocked", "cancel_propagation_timeout"):
+        for never in (
+            "phantom_short_retry_blocked",
+            "cancel_propagation_timeout",
+            "eod_residual_shorts",
+            "eod_flatten_failed",
+        ):
             assert table[never].operator_ack_required is True
             assert table[never].predicate(dummy_alert, HeartbeatEvent(), ctx) is False
 

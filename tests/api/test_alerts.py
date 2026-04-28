@@ -37,6 +37,25 @@ from argus.core.health import (
 # ---------------------------------------------------------------------------
 
 
+async def _migrate_operations_db(db_path: Path) -> None:
+    """Apply the operations.db migration framework to ``db_path``.
+
+    Sprint 31.91 Impromptu A (DEF-224) deleted the redundant route-side
+    ``_ensure_audit_table`` helper; route tests that bypass the
+    HealthMonitor persistence path (via ``_seed_alert``) must pre-create
+    the schema explicitly here. Production runs migrations at
+    HealthMonitor startup, satisfying the same precondition.
+    """
+    from argus.data.migrations import apply_migrations
+    from argus.data.migrations.operations import MIGRATIONS, SCHEMA_NAME
+
+    db_path.parent.mkdir(parents=True, exist_ok=True)
+    async with aiosqlite.connect(str(db_path)) as db:
+        await apply_migrations(
+            db, schema_name=SCHEMA_NAME, migrations=MIGRATIONS
+        )
+
+
 def _seed_alert(
     health_monitor: HealthMonitor,
     *,
@@ -264,6 +283,7 @@ class TestAcknowledgeAlert:
         # Override config data_dir to tmp_path so the audit DB lives there.
         assert app_state.config is not None
         app_state.config.data_dir = str(tmp_path)
+        await _migrate_operations_db(tmp_path / "operations.db")
 
         alert = _seed_alert(test_health_monitor)
         resp = await client.post(
@@ -312,6 +332,7 @@ class TestAcknowledgeAlert:
         """
         from argus.api.routes.alerts import _atomic_acknowledge
 
+        await _migrate_operations_db(tmp_path / "operations.db")
         alert = _seed_alert(test_health_monitor)
         db_path = str(tmp_path / "operations.db")
 
@@ -367,6 +388,7 @@ class TestAcknowledgeAlert:
         """
         assert app_state.config is not None
         app_state.config.data_dir = str(tmp_path)
+        await _migrate_operations_db(tmp_path / "operations.db")
 
         alert = _seed_alert(
             test_health_monitor,
@@ -458,6 +480,7 @@ class TestAcknowledgeAlert:
         """
         assert app_state.config is not None
         app_state.config.data_dir = str(tmp_path)
+        await _migrate_operations_db(tmp_path / "operations.db")
 
         alert = _seed_alert(
             test_health_monitor,

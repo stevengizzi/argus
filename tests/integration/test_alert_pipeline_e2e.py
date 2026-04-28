@@ -53,6 +53,7 @@ from argus.core.config import (
 from argus.core.event_bus import EventBus
 from argus.core.events import (
     IBKRReconnectedEvent,
+    OrderFilledEvent,
     ReconciliationCompletedEvent,
     SystemAlertEvent,
 )
@@ -589,6 +590,98 @@ class TestE2EIBKRDisconnectAutoResolution:
 
         # REST `/active` no longer lists it.
         resp_after = await client.get("/api/v1/alerts/active", headers=auth_headers)
+        assert all(a["alert_id"] != alert_id for a in resp_after.json())
+
+        # Audit row written with audit_kind=auto_resolution.
+        async with aiosqlite.connect(operations_db) as db:
+            cursor = await db.execute(
+                "SELECT audit_kind, operator_id "
+                "FROM alert_acknowledgment_audit WHERE alert_id = ?",
+                (alert_id,),
+            )
+            row = await cursor.fetchone()
+        assert row is not None
+        assert row[0] == "auto_resolution"
+        assert row[1] == "auto"
+
+
+class TestE2EIBKRAuthFailureAutoResolution:
+    """E2E test for ibkr_auth_failure auto-resolution via OrderFilledEvent.
+
+    Closes the symmetry gap noted in S5b closeout — Test 4 covered
+    the IBKRReconnectedEvent leg; this test covers the OrderFilledEvent
+    leg of the same predicate. Surfaced as DEF-225 by Tier 3 #2.
+    """
+
+    @pytest.mark.asyncio
+    async def test_ibkr_auth_failure_clears_on_order_filled(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        event_bus: EventBus,
+        health_monitor: HealthMonitor,
+        operations_db: str,
+    ) -> None:
+        """E2E: emit ibkr_auth_failure → consume → REST → WS →
+        auto-resolve on subsequent ``OrderFilledEvent`` → audit row
+        with ``audit_kind=auto_resolution``.
+
+        OrderFilledEvent's existence implies a successful authenticated
+        round-trip with the broker, so the predicate
+        ``_ibkr_auth_success_predicate`` clears the alert. This test
+        covers the OrderFilledEvent leg specifically — distinct from
+        Test 4's IBKRReconnectedEvent leg.
+        """
+        ws_queue = health_monitor.subscribe_state_changes()
+
+        # Emit ibkr_auth_failure via the Event Bus.
+        await event_bus.publish(
+            SystemAlertEvent(
+                source="ibkr_broker.auth_handler",
+                alert_type="ibkr_auth_failure",
+                message="account permission error 203",
+                severity="critical",
+                metadata={
+                    "error_code": 203,
+                    "symbol": "TSLA",
+                    "client_id": 1,
+                    "detection_source": "ibkr_broker.auth_handler",
+                },
+            )
+        )
+        await event_bus.drain()
+        ws_msg = await asyncio.wait_for(ws_queue.get(), timeout=1.0)
+        assert ws_msg["type"] == "alert_active"
+        assert ws_msg["alert"]["alert_type"] == "ibkr_auth_failure"
+        alert_id = ws_msg["alert"]["alert_id"]
+
+        # REST sees it.
+        resp = await client.get("/api/v1/alerts/active", headers=auth_headers)
+        assert any(a["alert_id"] == alert_id for a in resp.json())
+
+        # Auto-resolution: publish OrderFilledEvent (the
+        # OrderFilledEvent leg, NOT the IBKRReconnectedEvent leg
+        # exercised by Test 4 — that distinction is the point of this
+        # test).
+        await event_bus.publish(
+            OrderFilledEvent(
+                order_id="test-order-1",
+                fill_price=100.0,
+                fill_quantity=10,
+            )
+        )
+        await event_bus.drain()
+
+        # WS push received for auto-resolve.
+        ws_resolve_msg = await asyncio.wait_for(ws_queue.get(), timeout=1.0)
+        assert ws_resolve_msg["type"] == "alert_auto_resolved"
+        assert ws_resolve_msg["alert"]["alert_id"] == alert_id
+        assert ws_resolve_msg["alert"]["state"] == "archived"
+
+        # REST `/active` no longer lists it.
+        resp_after = await client.get(
+            "/api/v1/alerts/active", headers=auth_headers
+        )
         assert all(a["alert_id"] != alert_id for a in resp_after.json())
 
         # Audit row written with audit_kind=auto_resolution.

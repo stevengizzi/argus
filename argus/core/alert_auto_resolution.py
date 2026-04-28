@@ -307,6 +307,28 @@ def build_policy_table(
             operator_ack_required=True,
             description="All engaged symbols cleared OR 24h elapsed.",
         ),
+        "eod_residual_shorts": PolicyEntry(
+            alert_type="eod_residual_shorts",
+            consumes_event_types=(),
+            predicate=NEVER_AUTO_RESOLVE,
+            operator_ack_required=True,
+            description=(
+                "NEVER auto-resolves; operator ack required. EOD-bounded "
+                "short residue (Sprint 30 deferred residue); operator "
+                "should review before next session."
+            ),
+        ),
+        "eod_flatten_failed": PolicyEntry(
+            alert_type="eod_flatten_failed",
+            consumes_event_types=(),
+            predicate=NEVER_AUTO_RESOLVE,
+            operator_ack_required=True,
+            description=(
+                "NEVER auto-resolves; operator ack required. Failed EOD "
+                "flatten — positions remain at session close, requires "
+                "operator attention before next session."
+            ),
+        ),
     }
 
 

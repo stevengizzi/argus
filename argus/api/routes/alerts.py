@@ -142,34 +142,6 @@ def _resolve_operations_db_path(state: AppState) -> str:
     return "data/operations.db"
 
 
-_AUDIT_DDL = """
-CREATE TABLE IF NOT EXISTS alert_acknowledgment_audit (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    timestamp_utc TEXT NOT NULL,
-    alert_id TEXT NOT NULL,
-    operator_id TEXT NOT NULL,
-    reason TEXT NOT NULL,
-    audit_kind TEXT NOT NULL
-);
-"""
-
-_AUDIT_INDEX_ALERT_ID = (
-    "CREATE INDEX IF NOT EXISTS idx_aaa_alert_id "
-    "ON alert_acknowledgment_audit(alert_id);"
-)
-_AUDIT_INDEX_TIMESTAMP = (
-    "CREATE INDEX IF NOT EXISTS idx_aaa_timestamp "
-    "ON alert_acknowledgment_audit(timestamp_utc);"
-)
-
-
-async def _ensure_audit_table(db: aiosqlite.Connection) -> None:
-    """Idempotently create the audit table + indexes within ``db``."""
-    await db.execute(_AUDIT_DDL)
-    await db.execute(_AUDIT_INDEX_ALERT_ID)
-    await db.execute(_AUDIT_INDEX_TIMESTAMP)
-
-
 async def _insert_audit_row(
     db: aiosqlite.Connection,
     *,
@@ -216,7 +188,6 @@ async def _atomic_acknowledge(
 
     async with aiosqlite.connect(db_path) as db:
         try:
-            await _ensure_audit_table(db)
             audit_id = await _insert_audit_row(
                 db,
                 timestamp_utc=now_utc.isoformat(),
@@ -337,7 +308,6 @@ async def acknowledge_alert(
             )
         # Late-ack path: write a "late_ack" audit row, return state="archived".
         async with aiosqlite.connect(db_path) as db:
-            await _ensure_audit_table(db)
             audit_id = await _insert_audit_row(
                 db,
                 timestamp_utc=now_utc.isoformat(),
@@ -366,7 +336,6 @@ async def acknowledge_alert(
     # Idempotent 200 path: already acknowledged.
     if alert.state == AlertLifecycleState.ACKNOWLEDGED:
         async with aiosqlite.connect(db_path) as db:
-            await _ensure_audit_table(db)
             audit_id = await _insert_audit_row(
                 db,
                 timestamp_utc=now_utc.isoformat(),
@@ -401,7 +370,6 @@ async def acknowledge_alert(
     # Archived already (race: caller had a stale active-alerts list).
     if alert.state == AlertLifecycleState.ARCHIVED:
         async with aiosqlite.connect(db_path) as db:
-            await _ensure_audit_table(db)
             audit_id = await _insert_audit_row(
                 db,
                 timestamp_utc=now_utc.isoformat(),

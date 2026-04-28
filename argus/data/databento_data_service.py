@@ -278,7 +278,7 @@ class DatabentoDataService(DataService):
                     await self._event_bus.publish(
                         SystemAlertEvent(
                             source="databento_feed",
-                            alert_type="max_retries_exceeded",
+                            alert_type="databento_dead_feed",
                             message=message,
                             severity="critical",
                             # Sprint 31.91 Session 5a.1 (DEF-213): structured
