@@ -14,12 +14,12 @@
 
 | Field | Value |
 |---|---|
-| **Refreshed at** | 2026-04-28, post-Impromptu-C CLEAR_WITH_NOTES |
-| **Anchor commit** | `3fefda8` (Impromptu C impl); upstream `d4eff4d` (post-S5c register refresh) + `41e49e7` (S5c Tier 2 review) + `3197472` (S5c impl) |
-| **Sessions complete** | 0, 1a, 1b, 1c, 2a, 2b.1, 2b.2, 2c.1, 2c.2 (+ DEF-216 hotfix), 2d, 3, 4, 5a.1, 5a.2, 5b, Impromptu A, Impromptu B, Session 5c, **Impromptu C** |
+| **Refreshed at** | 2026-04-28, post-Session-5d CLEAR |
+| **Anchor commit** | `66d0b04` (S5d impl) + `1c08bf0` (S5d Tier 2 review verdict); upstream `97ea5d3` (post-Impromptu-C register refresh) + `3fefda8` (Impromptu C impl) |
+| **Sessions complete** | 0, 1a, 1b, 1c, 2a, 2b.1, 2b.2, 2c.1, 2c.2 (+ DEF-216 hotfix), 2d, 3, 4, 5a.1, 5a.2, 5b, Impromptu A, Impromptu B, Session 5c, Impromptu C, **Session 5d** |
 | **Tier 3 reviews complete** | #1 (PROCEED), #2 (PROCEED with conditions; AMENDED 2026-04-28) |
-| **Active session** | None — between sessions; **Session 5d is next** per sprint shape (sprint-handoff order: Impromptu C → S5d → S5e → sprint-close) |
-| **Sprint phase** | Backend SEALED + Backend HARDENING (Impromptu A) + Producer Wiring (Impromptu B) + Frontend Layer 1 (Session 5c) + **Migration Framework Adoption (Impromptu C — sprint-spec D16 fulfilled, all 8 ARGUS SQLite DBs framework-managed) COMPLETE**; Frontend Layer 2 (S5d toast + ack-error modal) and Layer 3 (S5e Observatory + Layout relocation + DEF-014 closure) remain |
+| **Active session** | None — between sessions; **Session 5e is next** (CONDITION MET: S5d landed CLEAR ✅). S5e is the FINAL implementation session before sprint-close |
+| **Sprint phase** | Backend SEALED + Backend HARDENING (Impromptu A) + Producer Wiring (Impromptu B) + Frontend Layer 1 (S5c) + Migration Framework Adoption (Impromptu C) + **Frontend Layer 2 (Session 5d — toast + ack-error modal) COMPLETE**; Frontend Layer 3 (S5e — Observatory + Layout relocation + DEF-014 closure) is ALL THAT REMAINS |
 | **Workflow protocol version** | 1.3.0 (mid-sprint doc-sync protocol + structural anchors); `tier-3-review.md` independently at 1.0.2 |
 
 ---
@@ -84,15 +84,16 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | After Impromptu A | 5,237 (+5) | 5,276 | 866 | +157 |
 | After Impromptu B | 5,238 (+1) | 5,277 | 866 | +158 |
 | After Session 5c | 5,238 (+0) | 5,277 | 886 (+20) | +158 pytest, +20 Vitest |
-| **After Impromptu C** | **5,266 (+28)** | **5,305** | **886** | **+186 pytest, +20 Vitest** |
+| After Impromptu C | 5,266 (+28) | 5,305 | 886 | +186 pytest, +20 Vitest |
+| **After Session 5d** | **5,266 (+0)** | **5,305** | **902 (+16)** | **+186 pytest, +36 Vitest** |
 
-**Sprint cumulative delta:** +186 pytest (operator-local frame), +20 Vitest.
+**Sprint cumulative delta:** +186 pytest, +36 Vitest.
 
-**Bookkeeping discipline note:** S5a.2 + S5b + Impromptu A + Impromptu B + S5c + Impromptu C closeouts cited tests_added matching actual delta (6 consecutive sessions clean); S5a.1's +21 vs +18 cosmetic discrepancy was a one-off and the RULE-038 sub-bullet feedback was internalized cleanly. S5c was the first non-zero Vitest delta of the sprint (+20).
+**Bookkeeping discipline note:** S5a.2 + S5b + Impromptu A + Impromptu B + S5c + Impromptu C + S5d closeouts cited tests_added matching actual delta (7 consecutive sessions clean); S5a.1's +21 vs +18 cosmetic discrepancy was a one-off and the RULE-038 sub-bullet feedback was internalized cleanly. S5c was the first non-zero Vitest delta of the sprint (+20); S5d added +16 more.
 
 **Test_main.py baseline drift:** Pre-existing 27 pass / 5 skip / 12 fail. Documented in CLAUDE.md DEF-048 lineage.
 
-**ADMINISTRATIVE NOTE:** CLAUDE.md test count baseline still cites `5,080`; actual operator-local now 5,266 pytest + 886 Vitest. Sprint-end doc-sync MUST refresh both baselines.
+**ADMINISTRATIVE NOTE:** CLAUDE.md test count baseline still cites `5,080`; actual operator-local now 5,266 pytest + 902 Vitest. Sprint-end doc-sync MUST refresh both baselines.
 
 ---
 
@@ -142,6 +143,8 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | **DEF-223** | Tier 3 #2 Item 8 | Migration framework adoption sweep across 7 other separate DBs | **RESOLVED-IN-SPRINT (Impromptu C, anchor `3fefda8`)** — claim applied at sprint-close per `pre-impromptu-doc-sync-manifest.md`. Sprint-spec D16 fulfilled; all 8 ARGUS SQLite DBs are now framework-managed | Sprint 31.91 Impromptu C (LANDED) |
 | **DEF-224** | Tier 3 #2 Concern E | Duplicate `_AUDIT_DDL` between routes layer and migration framework | **RESOLVED-IN-SPRINT (Impromptu A, anchor `e78a994`)** — claim applied at sprint-close | Sprint 31.91 Impromptu A (LANDED) |
 | **DEF-225** | Tier 3 #2 Item 1 | `ibkr_auth_failure` dedicated E2E auto-resolution test | **RESOLVED-IN-SPRINT (Impromptu A, anchor `e78a994`)** — claim applied at sprint-close | Sprint 31.91 Impromptu A (LANDED) |
+| **DEF-226** | S5d closeout J4 | Full focus-trap on `AlertAcknowledgmentModal` (Tab cycles within modal). Currently only initial-focus on textarea + Escape closes; mirrors existing `ConfirmModal` pattern | OPEN — DEFERRED (LOW priority) | Future UI accessibility audit pass, or WCAG conformance becomes deployment requirement |
+| **DEF-227** | S5d closeout J3 | Wire authenticated operator-id into `AlertToastStack` and `AlertAcknowledgmentModal`. Currently hardcoded `operator_id = "operator"` (matches `AlertBanner`'s pattern from S5c) | OPEN — DEFERRED (LOW priority) | When auth context / multi-operator login feature lands |
 
 ### Filed pre-Sprint 31.91, status changes
 
@@ -242,6 +245,10 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | **Impromptu C — DEF-223 (migration framework adoption sweep)** | Impromptu C | Migration framework now spans all 8 ARGUS SQLite DBs (operations + catalyst + evaluation + regime_history + learning + vix_landscape + counterfactual + experiments). 7 new migration modules + 7 owning-service `initialize()` modifications + 28 new tests (4 invariants × 7 DBs). Each DB's `schema_version` row records v1 codifying existing schema as-of Impromptu C |
 | **Impromptu C — sprint-spec D16 fulfilled** | Impromptu C | Migration framework adoption pattern complete; all 7 separate DBs other than `operations.db` adopted the framework |
 | **Migration framework adoption** for other separate DBs (was OPPORTUNISTIC at S5a.2) | Impromptu C | All 7 separate DBs adopted: catalyst.db, evaluation.db, regime_history.db, learning.db, vix_landscape.db, counterfactual.db, experiments.db |
+| **S5d — Frontend Layer 2 (toast + ack-error modal)** | S5d | `AlertToast` + `AlertToastStack` + `AlertAcknowledgmentModal` components; mounted on 5 DashboardPage render branches (mutually exclusive); 16 Vitest tests; CLEAR verdict (cleanest of sprint — no concerns recorded) |
+| **S5d — S5c F4 NOTE (5xx ack-error path not behaviorally tested)** | S5d | `AlertAcknowledgmentModal` provides error-with-retry UI for non-404 ack failures; tested at `AlertAcknowledgmentModal.test.tsx::handles network failure with retry` |
+| **S5d — Toast queue cap at 5 oldest-dropped + duplicate-ack mechanism** | S5d | `slice(-5).reverse()` math walked through by reviewer; oldest dropped, newest visually on top in DOM. Duplicate-ack via `result.acknowledged_by !== submitted operator_id` (no 409 in actual backend per RULE-038 drift #5) |
+| **S5d — Modal accessibility (V1)** | S5d | `role="dialog"`, `aria-modal="true"`, `aria-labelledby` matching heading id, initial focus on textarea, Escape closes; mirrors `ConfirmModal` pattern; full focus-trap deferred to DEF-226 |
 
 ---
 
@@ -310,6 +317,11 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | **NEW (Impromptu C):** 4 legacy ALTER fallback paths lack dedicated unit tests (`counterfactual_positions.variant_id`, `counterfactual_positions.scoring_fingerprint`, `variants.exit_overrides`, `regime_snapshots.vix_close`) | LOW (pre-existing gap unchanged by Impromptu C) | Impromptu C closeout LOW #2 + reviewer Concern | Functionally covered by production usage + end-to-end `initialize()` tests; future-sprint dedicated coverage |
 | **NEW (Impromptu C):** VIXDataService sync `_init_db()` + async `apply_migrations` test-API compromise | LOW | Impromptu C closeout LOW #3 + reviewer Concern B | A test process using ONLY the sync API would never write `schema_version`. Pure test-only scenario today; production always calls `await initialize()`. Future refactor candidate (async helper or sync-mode framework path) |
 | **NEW (Impromptu C):** Future migration v2 opportunity to retire post-`apply_migrations` legacy ALTER blocks via `ALTER TABLE ADD COLUMN IF NOT EXISTS` (PRAGMA `table_info` pre-check) | LOW (architectural cleanup) | Impromptu C reviewer Concern A | Follow-up sprint, not blocker; current legacy blocks are correctness-critical for in-place upgrade per reviewer's empirical verification |
+| **NEW (S5d):** Modal exit animation likely does not play (`AlertToastStack` unmounts modal before `AnimatePresence` exit fires) | INFO (non-blocking) | S5d reviewer INFO-1 | Cosmetic only; entry animation works; consider wrapping modal in `<AnimatePresence>` at Layout level during S5e |
+| **NEW (S5d):** Same-operator-two-tabs duplicate-ack edge case (both submit `operator_id="operator"` → mismatch test fails → classified as `first_ack`) | LOW (V1 acceptable) | Closeout J3 + reviewer | DEF-227 sharpens distinction when auth context lands; audit log preserves truth |
+| **NEW (S5d):** RULE-038 judgment calls J1-J4 acknowledged | RULE-038 acknowledged (reviewer ACCEPTED all 4) | S5d closeout J1-J4 | Mirror tests across both files; single mount per render branch (5 mount sites in Dashboard); duplicate-ack via `acknowledged_by` mismatch (no 409 in backend); focus-trap mirrors `ConfirmModal` pattern (full trap deferred to DEF-226) |
+| **NEW (S5d):** 5 in-Dashboard `AlertToastStack` mount sites; sister to existing 5-banner-mount entry | TRACKED (5e relocation) | Closeout J2 + reviewer | Remove all 5 toast mounts at S5e along with 5 banner mounts; relocate both to `Layout.tsx` |
+| **NEW (S5d):** RULE-038 drift count: 7 prompt-vs-current-code drifts disclosed (frontend path, alert shape, hook contract, 404 handling, 409-vs-200 backend behavior, test command, DEF numbering) | RULE-038 exemplary (reviewer-rated) | S5d closeout RULE-038 section + reviewer V1-V7 verification | All 7 verified real, none scope-changing; 4 verified by reviewer via grep; new DEFs 226/227 verified clean (no collision) |
 
 ---
 
@@ -321,7 +333,7 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | **Daily-flatten cessation** | Conservative criteria #1 + #2 + #3 SATISFIED post-S4; criteria #4 + #5 pending | Sprint-end + 5 paper-session-clean window |
 | Operator daily-flatten | REQUIRED, NOT OPTIONAL | Active until criterion #5 |
 | Banner mount on `Dashboard.tsx` (5c) | ✅ COMPLETE (5 mount sites covering all breakpoints + pre-market layout) | 5e (relocate to `Layout.tsx` for cross-page persistence) |
-| Toast mount on `Dashboard.tsx` (5d) | Watch | 5e (relocate to `Layout.tsx`) |
+| Toast mount on `Dashboard.tsx` (5d) | ✅ COMPLETE (5 mount sites covering all breakpoints + pre-market layout, paired with banner mounts) | 5e (relocate both banner + toast to `Layout.tsx` for cross-page persistence; remove all 10 in-Dashboard mounts) |
 | `/api/v1/alerts/{id}/audit` endpoint surface | Watch — verify whether separate `/audit` endpoint still needed | 5e (consume) |
 | AlpacaBroker `_check_connected` AttributeError | DISCLOSED | Sprint 31.94 |
 | `BracketOrderResult.oca_group_id` exposure | OBSERVATIONAL | Future |
@@ -340,7 +352,7 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | Original Pass 1 retry SELL consistency gap at `:1777` | OBSERVATIONAL | Future session |
 | Mass-balance script regex extension for trail/escalation paths | LOW priority | Future session |
 | Item 7 historical doc references in frozen artifacts | OBSERVATIONAL | Opportunistic doc-hygiene pass |
-| **CLAUDE.md test count baseline refresh** (currently `5,080`; actual operator-local 5,266 pytest + 886 Vitest) | ADMINISTRATIVE | Sprint-end doc-sync |
+| **CLAUDE.md test count baseline refresh** (currently `5,080`; actual operator-local 5,266 pytest + 902 Vitest) | ADMINISTRATIVE | Sprint-end doc-sync |
 | **`ReconciliationCompletedEvent` producer wiring** (deferred-emission) | DEFERRED | post-31.9 component-ownership sprint |
 | **`IBKRReconnectedEvent` producer wiring** (deferred-emission) | DEFERRED | `post-31.9-reconnect-recovery` sprint (DEF-194/195/196) |
 | **Doc-sync sweep check** for deferred-emission docstrings | LOW priority | Future tooling |
@@ -355,6 +367,8 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | **DEF-223** Migration framework adoption sweep | ✅ **RESOLVED-IN-SPRINT (Impromptu C, anchor `3fefda8`)** | Sprint-close transitions claim |
 | **DEF-224** Duplicate `_AUDIT_DDL` cleanup | ✅ **RESOLVED-IN-SPRINT (Impromptu A, anchor `e78a994`)** | Sprint-close transitions claim |
 | **DEF-225** `ibkr_auth_failure` dedicated E2E test | ✅ **RESOLVED-IN-SPRINT (Impromptu A, anchor `e78a994`)** | Sprint-close transitions claim |
+| **DEF-226** Full focus-trap on `AlertAcknowledgmentModal` | OPEN — DEFERRED (LOW) | Future UI accessibility audit pass or WCAG conformance trigger |
+| **DEF-227** Authenticated operator-id wiring into Toast/Modal | OPEN — DEFERRED (LOW) | When auth context / multi-operator login lands |
 | Workflow metarepo amendment v1.2.0 → v1.3.0 | ✅ COMPLETE 2026-04-28 | claude-workflow repo (separate flow) |
 
 ---
@@ -542,8 +556,8 @@ S5b zero `main.py` edits. S5c/d/e likely zero `main.py` edits (frontend layer). 
 21. ✅ **Impromptu B** (Databento heartbeat producer + DEF-217 end-to-end validation: DEF-221) — CLEAR, anchor commit `8efa72e`. **DEF-221 RESOLVED-IN-SPRINT** + DEF-217 cross-validated by production-path E2E (transitions applied at sprint-close per `pre-impromptu-doc-sync-manifest.md`).
 22. ✅ **Session 5c** (`useAlerts` hook + Dashboard banner + DEF-220 disposition) — CLEAR_WITH_NOTES, anchor commit `3197472` + review verdict `41e49e7`. **DEF-220 RESOLVED-IN-SPRINT (Option A: REMOVAL).** First non-zero Vitest delta in sprint (+20). CI green at run `25078777514`.
 23. ✅ **Impromptu C** (migration framework adoption sweep: DEF-223) — CLEAR_WITH_NOTES, anchor commit `3fefda8`. **DEF-223 RESOLVED-IN-SPRINT** + sprint-spec D16 fulfilled (all 8 ARGUS SQLite DBs framework-managed). +28 pytest tests across 7 new test files. Three LOW deferred-fix carry-forwards (all pre-existing tech debt).
-24. ⏳ Session 5d (toast + acknowledgment UI flow) — Impl prompt: `sprint-31.91-session-5d-impl.md`. ← **NEXT**
-25. ⏳ Session 5e (Observatory alerts panel + cross-page integration) — unchanged. **DEF-014 closes here.**
+24. ✅ **Session 5d** (toast + acknowledgment UI flow + ack-error modal) — CLEAR, anchor commit `66d0b04` + review verdict `1c08bf0`. **2 new DEFs filed (LOW): DEF-226 (full focus-trap), DEF-227 (auth-context operator_id).** Closes S5c F4 NOTE (5xx ack-error path now has UI surface). +16 Vitest tests; cleanest review of sprint (no concerns recorded).
+25. ⏳ Session 5e (Observatory alerts panel + Layout relocation + cross-page integration) — Impl prompt: `sprint-31.91-session-5e-impl.md`. ← **NEXT (FINAL implementation session before sprint-close).** **DEF-014 closes here.** Removes 10 in-Dashboard mount sites (5 banner + 5 toast); relocates both to `Layout.tsx` for cross-page persistence. Optional: wrap modal in `<AnimatePresence>` at Layout level to address S5d INFO-1.
 26. ⏳ Sprint-close doc-sync — reads `pre-impromptu-doc-sync-manifest.md` per `protocols/mid-sprint-doc-sync.md` v1.0.0; writes DEC-385 + DEC-388; transitions all RESOLVED-IN-SPRINT DEFs.
 
 ---
@@ -560,7 +574,7 @@ DEC writes:
 - **DEC-388 documentation (materializes at sprint-close per Pattern B; covers S5a.1+S5a.2+S5b+Impromptus A+B+C+S5c+S5d+S5e — extended policy table to 10 entries, regression guard established, route-layer DDL duplication removed, `ibkr_auth_failure` E2E coverage closed, Databento producer wired, migration framework adopted across 7 separate DBs, frontend banner + toast + Observatory panel landed)**
 
 DEF transitions (CLAUDE.md DEF table updates):
-- **17 DEFs filed in this sprint integrated into CLAUDE.md** (DEF-208/209/211/212/213/214/215/216 from pre-Tier-3-#2; DEF-217/218/219/220/221/222/223/224/225 from Tier 3 #2)
+- **19 DEFs filed in this sprint integrated into CLAUDE.md** (DEF-208/209/211/212/213/214/215/216 from pre-Tier-3-#2; DEF-217/218/219/220/221/222/223/224/225 from Tier 3 #2; DEF-226/227 from S5d)
 - DEF-213 marked FULLY RESOLVED (schema half S2b.1 + atomic-migration half S5a.1)
 - DEF-214 marked RESOLVED via S5a.1
 - DEF-216 marked RESOLVED via impromptu hotfix `c36a30c`
@@ -575,6 +589,7 @@ DEF transitions (CLAUDE.md DEF table updates):
 - DEF-221 marked RESOLVED-IN-SPRINT via Impromptu B (anchor TBD)
 - DEF-223 marked RESOLVED-IN-SPRINT via Impromptu C (anchor TBD)
 - DEF-208/209/211/212/215/222 dispositions documented (deferred / sprint-gating routing) per Tier 3 #1 + #2 verdicts
+- **DEF-226 (full focus-trap) + DEF-227 (auth-context operator_id) filed at S5d as DEFERRED (LOW priority)** with clear future triggers (UI accessibility audit / WCAG conformance for 226; auth context / multi-operator login for 227)
 
 Risk register:
 - RSK-DEC-386-DOCSTRING in `risk-register.md`
