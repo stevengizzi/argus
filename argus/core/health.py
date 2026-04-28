@@ -8,20 +8,31 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import json
 import logging
+import sqlite3
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, datetime, time
+from datetime import UTC, datetime, time, timedelta
 from enum import StrEnum
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 import aiohttp
+import aiosqlite
 
-from argus.core.config import HealthConfig
+from argus.core.alert_auto_resolution import (
+    PolicyEntry,
+    PredicateContext,
+    all_consumed_event_types,
+    build_policy_table,
+)
+from argus.core.config import AlertsConfig, HealthConfig, ReconciliationConfig
 from argus.core.event_bus import EventBus
 from argus.core.events import (
     CircuitBreakerEvent,
+    Event,
     HeartbeatEvent,
     SystemAlertEvent,
     SystemStatus,
@@ -37,6 +48,9 @@ if TYPE_CHECKING:
     from argus.strategies.telemetry_store import EvaluationEventStore
 
 logger = logging.getLogger(__name__)
+
+
+_ET_TZ = ZoneInfo("America/New_York")
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +122,37 @@ class ActiveAlert:
     acknowledgment_reason: str | None = None
 
 
+def _alert_to_payload(alert: ActiveAlert) -> dict[str, Any]:
+    """Project an ``ActiveAlert`` to its JSON-serializable wire form.
+
+    Sprint 31.91 5a.2 — used by both the WebSocket fan-out and the
+    rehydration-from-DB path. Mirrors the REST ``AlertResponse`` shape
+    so a WS client and a REST client see identical fields per alert.
+    """
+    return {
+        "alert_id": alert.alert_id,
+        "alert_type": alert.alert_type,
+        "severity": alert.severity,
+        "source": alert.source,
+        "message": alert.message,
+        "metadata": dict(alert.metadata) if alert.metadata else {},
+        "state": alert.state.value,
+        "created_at_utc": alert.created_at_utc.isoformat(),
+        "acknowledged_at_utc": (
+            alert.acknowledged_at_utc.isoformat()
+            if alert.acknowledged_at_utc
+            else None
+        ),
+        "acknowledged_by": alert.acknowledged_by,
+        "archived_at_utc": (
+            alert.archived_at_utc.isoformat()
+            if alert.archived_at_utc
+            else None
+        ),
+        "acknowledgment_reason": alert.acknowledgment_reason,
+    }
+
+
 # ---------------------------------------------------------------------------
 # HealthMonitor
 # ---------------------------------------------------------------------------
@@ -128,6 +173,10 @@ class HealthMonitor:
         config: HealthConfig,
         broker: Broker | None = None,
         trade_logger: TradeLogger | None = None,
+        *,
+        alerts_config: AlertsConfig | None = None,
+        reconciliation_config: ReconciliationConfig | None = None,
+        operations_db_path: str | None = None,
     ) -> None:
         """Initialize the HealthMonitor.
 
@@ -137,12 +186,27 @@ class HealthMonitor:
             config: Health monitoring configuration.
             broker: Optional broker for integrity checks.
             trade_logger: Optional trade logger for reconciliation.
+            alerts_config: Optional Sprint 31.91 5a.2 alerts config —
+                controls auto-resolution + retention. Falls back to
+                ``AlertsConfig()`` defaults.
+            reconciliation_config: Optional Sprint 31.91 5a.2 — phantom
+                short auto-resolution reads
+                ``broker_orphan_consecutive_clear_threshold`` from this
+                config (single source of truth with Session 2c.2).
+            operations_db_path: Path to ``data/operations.db`` for
+                Sprint 31.91 5a.2 alert-state persistence. ``None`` =
+                persistence disabled (in-memory-only mode for tests).
         """
         self._event_bus = event_bus
         self._clock = clock
         self._config = config
         self._broker = broker
         self._trade_logger = trade_logger
+        self._alerts_config: AlertsConfig = alerts_config or AlertsConfig()
+        self._reconciliation_config: ReconciliationConfig = (
+            reconciliation_config or ReconciliationConfig()
+        )
+        self._operations_db_path: str | None = operations_db_path
         # Sprint 31.91 S2b.2 (Pattern A.4 — Option C cross-reference, MEDIUM #8):
         # Optional OrderManager handle so the daily integrity-check alert can
         # cite an active ``stranded_broker_long`` alert (2b.1) for the same
@@ -167,24 +231,49 @@ class HealthMonitor:
         # Sprint 31.91 D9a (DEF-014): SystemAlertEvent consumer state.
         # ``_active_alerts`` indexes alerts currently in ACTIVE or
         # ACKNOWLEDGED state; ``_alert_history`` is an append-only window
-        # of all alerts (ACTIVE + ACKNOWLEDGED + ARCHIVED) capped at
-        # ``_alert_history_max_size``. In-memory only — Session 5a.2
-        # replaces with SQLite-backed pruning + retention policy.
+        # of all alerts (ACTIVE + ACKNOWLEDGED + ARCHIVED). Session 5a.2
+        # backs both with SQLite via ``rehydrate_alerts_from_db()`` (load)
+        # and ``_persist_alert()`` (write-on-every-mutation).
         self._active_alerts: dict[str, ActiveAlert] = {}
         self._alert_history: list[ActiveAlert] = []
         self._alert_history_max_size: int = 1000
+
+        # Sprint 31.91 5a.2: per-alert auto-resolution context (cycle
+        # counters, engaged-symbol sets). Indexed by ``alert_id``;
+        # populated lazily on first event delivery.
+        self._predicate_contexts: dict[str, PredicateContext] = {}
+
+        # Sprint 31.91 5a.2: policy table + state-change subscriber list.
+        # Built lazily so tests can construct HealthMonitor without
+        # importing the policy module ahead of time.
+        self._policy_table: dict[str, PolicyEntry] = build_policy_table(
+            phantom_short_threshold_provider=(
+                lambda: self._reconciliation_config
+                .broker_orphan_consecutive_clear_threshold
+            ),
+        )
+        self._state_change_subscribers: list[
+            asyncio.Queue[dict[str, Any]]
+        ] = []
+        self._predicate_handlers_subscribed: bool = False
+        self._retention_task: asyncio.Task[None] | None = None
 
     async def start(self) -> None:
         """Start health monitoring.
 
         1. Subscribe to CircuitBreakerEvent for alert dispatch.
-        2. Start heartbeat loop.
-        3. Start integrity check loop.
+        2. Sprint 31.91 5a.2: subscribe to every event type referenced by
+           the auto-resolution policy table.
+        3. Start heartbeat loop.
+        4. Start integrity check loop.
+        5. Sprint 31.91 5a.2: start the retention background task.
         """
         self._event_bus.subscribe(CircuitBreakerEvent, self._on_circuit_breaker)
+        self._subscribe_predicate_handlers()
         self._running = True
         self._heartbeat_task = asyncio.create_task(self._heartbeat_loop())
         self._integrity_task = asyncio.create_task(self._integrity_loop())
+        self._retention_task = asyncio.create_task(self._retention_loop())
         logger.info("HealthMonitor started")
 
     async def stop(self) -> None:
@@ -198,6 +287,11 @@ class HealthMonitor:
             self._integrity_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._integrity_task
+        if self._retention_task:
+            self._retention_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._retention_task
+            self._retention_task = None
         logger.info("HealthMonitor stopped")
 
     # --- Component Registry ---
@@ -419,9 +513,13 @@ class HealthMonitor:
         """Subscribe-handler for ``SystemAlertEvent`` (Sprint 31.91 D9a).
 
         Captures every alert into the in-memory active-alert state machine
-        and the bounded history window. The acknowledgment surface lives
-        at ``POST /api/v1/alerts/{alert_id}/acknowledge``; auto-resolution
-        policy lands in Session 5a.2.
+        and the bounded history window. Session 5a.2 layered on:
+
+        - SQLite persistence (``_persist_alert``) so alerts survive restart.
+        - WebSocket fan-out via ``_publish_state_change`` so connected
+          ``/ws/v1/alerts`` clients see the new alert in real time.
+        - Predicate-context bookkeeping so the auto-resolution policy
+          table can fire for this alert's ``alert_type``.
 
         Args:
             event: The system alert event consumed from the Event Bus.
@@ -438,11 +536,21 @@ class HealthMonitor:
         self._active_alerts[alert_id] = alert
         self._alert_history.append(alert)
         if len(self._alert_history) > self._alert_history_max_size:
-            # Cap history (Session 5a.2 replaces with SQLite-backed
-            # retention).
+            # Cap in-memory history; SQLite retention task is the durable
+            # bound (see _retention_loop).
             self._alert_history = self._alert_history[
                 -self._alert_history_max_size:
             ]
+        # Predicate context — created here so it exists before any
+        # subsequent event delivery.
+        self._predicate_contexts[alert_id] = PredicateContext(
+            engaged_at_utc=alert.created_at_utc,
+        )
+        await self._persist_alert(alert)
+        await self._publish_state_change(
+            kind="alert_active",
+            alert=alert,
+        )
         logger.info(
             "HealthMonitor consumed alert %s (type=%s severity=%s source=%s).",
             alert_id,
@@ -516,11 +624,416 @@ class HealthMonitor:
         rolls back the transaction; this method's mutation is reverted by
         the caller via the "first take a snapshot" pattern (the route
         captures the alert's pre-mutation state).
+
+        Sprint 31.91 5a.2 — pure in-memory mutation. SQLite persistence
+        and WebSocket fan-out are the route handler's responsibility,
+        invoked AFTER the atomic-transaction COMMIT succeeds via
+        ``persist_acknowledgment_after_commit``. This avoids racing the
+        persist task against the route's own rollback path.
         """
         alert.state = AlertLifecycleState.ACKNOWLEDGED
         alert.acknowledged_at_utc = now_utc
         alert.acknowledged_by = operator_id
         alert.acknowledgment_reason = reason
+
+    async def persist_acknowledgment_after_commit(
+        self,
+        alert: ActiveAlert,
+    ) -> None:
+        """Post-commit: persist alert_state + fan out to WS subscribers.
+
+        Sprint 31.91 5a.2 — invoked by the acknowledgment route once
+        the audit-log transaction has committed. Splitting this from
+        ``apply_acknowledgment`` keeps the in-memory mutation
+        synchronous (so the route can hold an open aiosqlite txn) and
+        avoids races with the route's rollback path.
+        """
+        await self._persist_alert(alert)
+        await self._publish_state_change(
+            kind="alert_acknowledged",
+            alert=alert,
+        )
+
+    # --- Sprint 31.91 5a.2: SQLite persistence + rehydration ---
+
+    async def _persist_alert(self, alert: ActiveAlert) -> None:
+        """Write or update one alert row in ``alert_state`` (5a.2).
+
+        Best-effort: persistence failures are logged but do not raise,
+        so a transient SQLite error cannot disrupt alert flow. The
+        ``alert_state`` table grows by one row per emitted alert; the
+        retention background task bounds it.
+        """
+        if self._operations_db_path is None:
+            return
+        try:
+            await self._ensure_operations_schema()
+            now_utc = datetime.now(UTC)
+            now_et = now_utc.astimezone(_ET_TZ)
+            async with aiosqlite.connect(self._operations_db_path) as db:
+                await db.execute(
+                    """
+                    INSERT INTO alert_state (
+                        alert_id, alert_type, severity, source, message,
+                        metadata_json, emitted_at_utc, emitted_at_et,
+                        status, acknowledged_by, acknowledged_at_utc,
+                        acknowledgment_reason, auto_resolved_at_utc,
+                        archived_at_utc
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(alert_id) DO UPDATE SET
+                        status=excluded.status,
+                        acknowledged_by=excluded.acknowledged_by,
+                        acknowledged_at_utc=excluded.acknowledged_at_utc,
+                        acknowledgment_reason=excluded.acknowledgment_reason,
+                        auto_resolved_at_utc=excluded.auto_resolved_at_utc,
+                        archived_at_utc=excluded.archived_at_utc,
+                        message=excluded.message,
+                        metadata_json=excluded.metadata_json
+                    """,
+                    (
+                        alert.alert_id,
+                        alert.alert_type,
+                        alert.severity,
+                        alert.source,
+                        alert.message,
+                        json.dumps(alert.metadata or {}, default=str),
+                        alert.created_at_utc.isoformat(),
+                        now_et.isoformat(),
+                        alert.state.value,
+                        alert.acknowledged_by,
+                        (
+                            alert.acknowledged_at_utc.isoformat()
+                            if alert.acknowledged_at_utc
+                            else None
+                        ),
+                        alert.acknowledgment_reason,
+                        alert.metadata.get("auto_resolved_at_utc")
+                        if alert.metadata
+                        else None,
+                        (
+                            alert.archived_at_utc.isoformat()
+                            if alert.archived_at_utc
+                            else None
+                        ),
+                    ),
+                )
+                await db.commit()
+        except Exception as exc:
+            logger.warning("alert_state persistence failed for %s: %s", alert.alert_id, exc)
+
+    async def _ensure_operations_schema(self) -> None:
+        """Apply pending migrations to ``data/operations.db`` (5a.2)."""
+        if self._operations_db_path is None:
+            return
+        # Lazy import — keeps the migration framework optional for
+        # in-memory tests that pass operations_db_path=None.
+        from argus.data.migrations import apply_migrations
+        from argus.data.migrations.operations import MIGRATIONS, SCHEMA_NAME
+
+        # Ensure parent dir exists.
+        Path(self._operations_db_path).parent.mkdir(parents=True, exist_ok=True)
+        async with aiosqlite.connect(self._operations_db_path) as db:
+            await apply_migrations(db, schema_name=SCHEMA_NAME, migrations=MIGRATIONS)
+
+    async def rehydrate_alerts_from_db(self) -> None:
+        """Repopulate in-memory alert state from ``alert_state`` (5a.2).
+
+        MUST be invoked from ``main.py`` BEFORE the
+        ``event_bus.subscribe(SystemAlertEvent, ...)`` call. Without that
+        ordering, alerts emitted between rehydration and subscription
+        slip through the gap. ``main.py`` documents the line ordering
+        explicitly per sprint invariant 15's scoped exception.
+        """
+        if self._operations_db_path is None:
+            return
+        try:
+            await self._ensure_operations_schema()
+            async with aiosqlite.connect(self._operations_db_path) as db:
+                db.row_factory = aiosqlite.Row
+                cursor = await db.execute(
+                    "SELECT * FROM alert_state ORDER BY emitted_at_utc ASC"
+                )
+                rows = await cursor.fetchall()
+        except Exception as exc:
+            logger.error("alert_state rehydration failed: %s", exc)
+            return
+        for row in rows:
+            alert = self._row_to_alert(row)
+            if alert is None:
+                continue
+            self._alert_history.append(alert)
+            if alert.state in (
+                AlertLifecycleState.ACTIVE,
+                AlertLifecycleState.ACKNOWLEDGED,
+            ):
+                self._active_alerts[alert.alert_id] = alert
+                # Predicate context — allow auto-resolution to keep
+                # working post-restart.
+                self._predicate_contexts[alert.alert_id] = PredicateContext(
+                    engaged_at_utc=alert.created_at_utc,
+                )
+        logger.info(
+            "Rehydrated alert state from %s: %d active, %d total in history.",
+            self._operations_db_path,
+            len(self._active_alerts),
+            len(self._alert_history),
+        )
+
+    @staticmethod
+    def _row_to_alert(row: aiosqlite.Row) -> ActiveAlert | None:
+        """Project an ``alert_state`` row back to an ``ActiveAlert``."""
+        try:
+            metadata = json.loads(row["metadata_json"]) if row["metadata_json"] else {}
+        except json.JSONDecodeError:
+            metadata = {}
+        try:
+            state = AlertLifecycleState(row["status"])
+        except ValueError:
+            return None
+        created_at = datetime.fromisoformat(row["emitted_at_utc"])
+        ack_at = (
+            datetime.fromisoformat(row["acknowledged_at_utc"])
+            if row["acknowledged_at_utc"]
+            else None
+        )
+        archived_at = (
+            datetime.fromisoformat(row["archived_at_utc"])
+            if row["archived_at_utc"]
+            else None
+        )
+        return ActiveAlert(
+            alert_id=row["alert_id"],
+            alert_type=row["alert_type"],
+            severity=row["severity"],
+            source=row["source"],
+            message=row["message"],
+            metadata=metadata,
+            state=state,
+            created_at_utc=created_at,
+            acknowledged_at_utc=ack_at,
+            acknowledged_by=row["acknowledged_by"],
+            archived_at_utc=archived_at,
+            acknowledgment_reason=row["acknowledgment_reason"],
+        )
+
+    # --- Sprint 31.91 5a.2: WebSocket fan-out ---
+
+    def subscribe_state_changes(self) -> asyncio.Queue[dict[str, Any]]:
+        """Register a WS client for state-change deltas (5a.2).
+
+        Returns a queue the caller awaits. ``unsubscribe_state_changes``
+        removes the queue when the client disconnects.
+        """
+        queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        self._state_change_subscribers.append(queue)
+        return queue
+
+    def unsubscribe_state_changes(
+        self, queue: asyncio.Queue[dict[str, Any]]
+    ) -> None:
+        """Remove a previously-subscribed queue (5a.2)."""
+        try:
+            self._state_change_subscribers.remove(queue)
+        except ValueError:
+            pass
+
+    async def _publish_state_change(
+        self,
+        *,
+        kind: str,
+        alert: ActiveAlert,
+    ) -> None:
+        """Broadcast a state-change message to every subscribed queue."""
+        if not self._state_change_subscribers:
+            return
+        message = {
+            "type": kind,
+            "alert": _alert_to_payload(alert),
+        }
+        # Snapshot the subscriber list so a concurrent unsubscribe
+        # during iteration doesn't raise RuntimeError.
+        for queue in list(self._state_change_subscribers):
+            try:
+                queue.put_nowait(message)
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.warning("State-change publish failed: %s", exc)
+
+    # --- Sprint 31.91 5a.2: auto-resolution ---
+
+    def _subscribe_predicate_handlers(self) -> None:
+        """Subscribe ``_evaluate_predicates`` to every consumed event type."""
+        if self._predicate_handlers_subscribed:
+            return
+        for event_type in all_consumed_event_types(self._policy_table):
+            self._event_bus.subscribe(event_type, self._evaluate_predicates)
+        self._predicate_handlers_subscribed = True
+
+    async def _evaluate_predicates(self, event: Event) -> None:
+        """Run every active alert's predicate against ``event``."""
+        if not self._alerts_config.auto_resolve_on_condition_cleared:
+            return
+        # list() to allow _auto_resolve to mutate _active_alerts.
+        for alert_id, alert in list(self._active_alerts.items()):
+            entry = self._policy_table.get(alert.alert_type)
+            if entry is None:
+                continue
+            if not isinstance(event, entry.consumes_event_types):
+                continue
+            context = self._predicate_contexts.setdefault(
+                alert_id, PredicateContext(engaged_at_utc=alert.created_at_utc)
+            )
+            try:
+                cleared = entry.predicate(alert, event, context)
+            except Exception as exc:
+                logger.warning(
+                    "Auto-resolution predicate raised for alert %s (%s): %s",
+                    alert_id,
+                    alert.alert_type,
+                    exc,
+                )
+                continue
+            if cleared:
+                await self._auto_resolve(alert_id)
+
+    async def _auto_resolve(self, alert_id: str) -> None:
+        """Transition an alert to ARCHIVED via the auto-resolution path."""
+        alert = self._active_alerts.pop(alert_id, None)
+        if alert is None:
+            return
+        now_utc = datetime.now(UTC)
+        alert.state = AlertLifecycleState.ARCHIVED
+        alert.archived_at_utc = now_utc
+        if alert.metadata is None:
+            alert.metadata = {}
+        alert.metadata["auto_resolved_at_utc"] = now_utc.isoformat()
+        # Drop the predicate context — alert is no longer active.
+        self._predicate_contexts.pop(alert_id, None)
+        # Persist the new ARCHIVED state.
+        await self._persist_alert(alert)
+        # Audit-log row mirroring the 5a.1 ack-audit shape — outcome
+        # ``auto_resolution`` per spec D9a line 342.
+        await self._write_auto_resolution_audit(alert_id, now_utc)
+        # Fan out.
+        await self._publish_state_change(
+            kind="alert_auto_resolved",
+            alert=alert,
+        )
+        logger.info(
+            "Alert %s auto-resolved (type=%s).",
+            alert_id,
+            alert.alert_type,
+        )
+
+    async def _write_auto_resolution_audit(
+        self,
+        alert_id: str,
+        now_utc: datetime,
+    ) -> None:
+        """Write a ``audit_kind=auto_resolution`` row to the audit log."""
+        if self._operations_db_path is None:
+            return
+        try:
+            await self._ensure_operations_schema()
+            async with aiosqlite.connect(self._operations_db_path) as db:
+                await db.execute(
+                    """
+                    INSERT INTO alert_acknowledgment_audit
+                        (timestamp_utc, alert_id, operator_id, reason, audit_kind)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        now_utc.isoformat(),
+                        alert_id,
+                        "auto",
+                        "policy-table predicate fired",
+                        "auto_resolution",
+                    ),
+                )
+                await db.commit()
+        except Exception as exc:
+            logger.warning(
+                "auto_resolution audit-log write failed for %s: %s",
+                alert_id,
+                exc,
+            )
+
+    # --- Sprint 31.91 5a.2: retention task + VACUUM ---
+
+    async def _retention_loop(self) -> None:
+        """Daily retention pass (5a.2, MEDIUM #9)."""
+        interval = self._alerts_config.retention_task_interval_seconds
+        # First pass on a short delay — gives test harnesses a chance to
+        # observe a single iteration without waiting a full day.
+        await asyncio.sleep(min(interval, 1.0))
+        while self._running:
+            try:
+                await self._run_retention_once()
+            except Exception as exc:
+                logger.warning("Alert retention pass failed: %s", exc)
+            try:
+                await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                raise
+
+    async def _run_retention_once(self) -> None:
+        """One retention pass: prune archived alerts + (optional) audit rows."""
+        if self._operations_db_path is None:
+            return
+        await self._ensure_operations_schema()
+        archived_cutoff = (
+            datetime.now(UTC)
+            - timedelta(days=self._alerts_config.archived_alert_retention_days)
+        ).isoformat()
+        async with aiosqlite.connect(self._operations_db_path) as db:
+            await db.execute(
+                """
+                DELETE FROM alert_state
+                WHERE status = 'archived'
+                  AND archived_at_utc IS NOT NULL
+                  AND archived_at_utc < ?
+                """,
+                (archived_cutoff,),
+            )
+            if self._alerts_config.audit_log_retention_days is not None:
+                audit_cutoff = (
+                    datetime.now(UTC)
+                    - timedelta(
+                        days=self._alerts_config.audit_log_retention_days
+                    )
+                ).isoformat()
+                await db.execute(
+                    """
+                    DELETE FROM alert_acknowledgment_audit
+                    WHERE timestamp_utc < ?
+                    """,
+                    (audit_cutoff,),
+                )
+            await db.commit()
+        await self._vacuum_operations_db()
+
+    async def _vacuum_operations_db(self) -> None:
+        """VACUUM via Sprint 31.8 S2 idiom: close → to_thread → reopen.
+
+        HealthMonitor does NOT keep an open ``aiosqlite`` connection
+        (every persistence call opens-then-closes its own connection),
+        so the ``close → VACUUM → reopen`` dance reduces to "VACUUM via
+        a synchronous sqlite3 connection on a worker thread." The
+        idiom is preserved end-to-end for consistency with the 31.8
+        reference implementation.
+        """
+        if self._operations_db_path is None:
+            return
+
+        db_path = self._operations_db_path
+
+        def _sync_vacuum() -> None:
+            conn = sqlite3.connect(db_path, isolation_level=None)
+            try:
+                conn.execute("VACUUM")
+            finally:
+                conn.close()
+
+        await asyncio.to_thread(_sync_vacuum)
 
     # --- Integrity Checks ---
 

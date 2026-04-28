@@ -708,11 +708,13 @@ def create_app(app_state: AppState) -> FastAPI:
 
     # Mount WebSocket routes (no prefix)
     from argus.api.websocket import ai_ws_router, ws_router
+    from argus.api.websocket.alerts_ws import alerts_ws_router
     from argus.api.websocket.arena_ws import arena_ws_router
 
     app.include_router(ws_router)
     app.include_router(ai_ws_router)
     app.include_router(arena_ws_router)
+    app.include_router(alerts_ws_router)
 
     # Mount Observatory WebSocket (config-gated — Sprint 25 S2)
     if observatory_enabled:

@@ -430,6 +430,20 @@ async def acknowledge_alert(
         now_utc=now_utc,
     )
 
+    # Sprint 31.91 5a.2: post-commit, persist alert_state + fan out to
+    # WebSocket subscribers. Best-effort; persistence failures are
+    # logged inside ``persist_acknowledgment_after_commit`` and do not
+    # affect the REST response (the in-memory transition + audit row
+    # are already durable).
+    try:
+        await health_monitor.persist_acknowledgment_after_commit(alert)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(
+            "Post-commit persistence failed for ack of %s: %s",
+            alert_id,
+            exc,
+        )
+
     logger.info(
         "Alert %s acknowledged by operator %s. Audit-id: %d.",
         alert_id,

@@ -4,6 +4,10 @@ Bridges Event Bus events to connected WebSocket clients.
 """
 
 from argus.api.websocket.ai_chat import ai_ws_router, get_active_connections
+from argus.api.websocket.alerts_ws import (
+    alerts_ws_router,
+    get_active_alerts_connections,
+)
 from argus.api.websocket.arena_ws import arena_ws_router, get_active_arena_connections
 from argus.api.websocket.live import (
     ClientConnection,
@@ -29,4 +33,6 @@ __all__ = [
     "get_active_observatory_connections",
     "arena_ws_router",
     "get_active_arena_connections",
+    "alerts_ws_router",
+    "get_active_alerts_connections",
 ]

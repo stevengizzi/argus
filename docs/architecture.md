@@ -2009,6 +2009,7 @@ WebSocket routes in the OpenAPI schema._
 | Endpoint | Module | Description |
 |----------|--------|-------------|
 | `WS /ws/v1/ai/chat` | `ai_chat` | AI Copilot chat streaming (token auth in first message) — detailed schema in §7.8 |
+| `WS /ws/v1/alerts` | `alerts_ws` | Alert lifecycle deltas — initial snapshot + `alert_active`/`alert_acknowledged`/`alert_auto_resolved`/`alert_archived` (Sprint 31.91 5a.2) |
 | `WS /ws/v1/arena` | `arena_ws` | Real-time Arena position/candle stream — detailed schema in §13.5.2 |
 | `WS /ws/v1/live` | `live` | Event Bus bridge (positions, orders, prices, system, scanner, signals) |
 | `WS /ws/v1/observatory` | `observatory_ws` | Pipeline stage counts + tier transitions (config-gated) |

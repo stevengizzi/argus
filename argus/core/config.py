@@ -237,9 +237,58 @@ class AlertsConfig(BaseModel):
             "auto-resolution per the 5a.2 policy table."
         ),
     )
-    # Note: ``auto_resolve_on_condition_cleared``,
-    # ``audit_log_retention_days``, and ``archived_alert_retention_days``
-    # are added in Session 5a.2.
+
+    # Sprint 31.91 Session 5a.2 (HIGH #1): master switch for auto-resolution.
+    # When False, every alert becomes operator-ack-only. The per-alert-type
+    # ``operator_ack_required`` column in ``alert_auto_resolution.POLICY_TABLE``
+    # is the granular policy; this is the kill switch for the whole feature.
+    auto_resolve_on_condition_cleared: bool = Field(
+        default=True,
+        description=(
+            "Master enable for auto-resolution policy. When False, every "
+            "alert requires operator acknowledgment regardless of policy "
+            "table entry. Set to False during incident triage if the "
+            "auto-resolver is misbehaving."
+        ),
+    )
+
+    # Sprint 31.91 Session 5a.2 (MEDIUM #9): retention policy for the
+    # acknowledgment audit log. Default is forever (None) — forensic data
+    # retained by default since the table grows slowly (one row per
+    # operator action, not per alert).
+    audit_log_retention_days: int | None = Field(
+        default=None,
+        description=(
+            "Days to retain rows in alert_acknowledgment_audit. None = "
+            "forever (forensic retention). Daily background task DELETEs "
+            "rows older than this when not None."
+        ),
+    )
+
+    # Sprint 31.91 Session 5a.2 (MEDIUM #9): retention for archived alerts
+    # in alert_state. Default 90 days — long enough to cover quarter-end
+    # post-mortems but bounded so the table doesn't grow without limit.
+    archived_alert_retention_days: int = Field(
+        default=90,
+        ge=1,
+        le=3650,
+        description=(
+            "Days to retain rows in alert_state with status='archived'. "
+            "Daily background task DELETEs older rows + VACUUMs the DB."
+        ),
+    )
+
+    # Sprint 31.91 Session 5a.2: cadence for the retention background
+    # task. Daily by default; can be shortened in tests to exercise the
+    # task without waiting 24 hours.
+    retention_task_interval_seconds: float = Field(
+        default=86400.0,
+        gt=0.0,
+        description=(
+            "Seconds between retention task wake-ups. Default 86400 "
+            "(daily). Tests override to a small value."
+        ),
+    )
 
 
 class StartupConfig(BaseModel):

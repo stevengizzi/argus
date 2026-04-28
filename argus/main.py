@@ -403,14 +403,26 @@ class ArgusSystem:
 
         # --- Phase 4: Health Monitor ---
         logger.info("[4/12] Starting health monitor...")
+        operations_db_path = str(
+            Path(config.system.data_dir) / "operations.db"
+        )
         self._health_monitor = HealthMonitor(
             event_bus=self._event_bus,
             clock=self._clock,
             config=config.system.health,
             broker=self._broker,
             trade_logger=self._trade_logger,
+            alerts_config=config.system.alerts,
+            reconciliation_config=config.system.reconciliation,
+            operations_db_path=operations_db_path,
         )
         await self._health_monitor.start()
+        # Sprint 31.91 Session 5a.2 (DEF-213): rehydrate alert state from
+        # SQLite BEFORE subscribing to SystemAlertEvent. Without this
+        # ordering, alerts emitted between rehydration and subscription
+        # are lost. Scoped exception per Sprint 31.91 invariant 15
+        # ("Session 5a.2 main.py rehydration line").
+        await self._health_monitor.rehydrate_alerts_from_db()
         # Sprint 31.91 Session 5a.1 (DEF-014, DEF-213): subscribe
         # HealthMonitor to SystemAlertEvent so the in-memory active-alert
         # state machine + REST surface (/api/v1/alerts/*) stay populated.

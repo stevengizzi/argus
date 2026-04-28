@@ -402,6 +402,51 @@ class DataResumedEvent(Event):
 
 
 @dataclass(frozen=True)
+class ReconciliationCompletedEvent(Event):
+    """Published when a reconciliation cycle finishes.
+
+    Sprint 31.91 Session 5a.2 (D9b): consumed by HealthMonitor's
+    auto-resolution policy. The ``broker_shares_by_symbol`` snapshot lets
+    the ``phantom_short`` predicate count consecutive zero-share cycles
+    against the same threshold used by the Session 2c.2 entry-gate clear
+    (``ReconciliationConfig.broker_orphan_consecutive_clear_threshold``).
+
+    Emission is deferred to a future session that touches the
+    OrderManager reconciliation loop; the dataclass exists today so the
+    predicate framework can be wired without forward references.
+    """
+
+    cycle_number: int = 0
+    broker_shares_by_symbol: dict[str, int] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class IBKRReconnectedEvent(Event):
+    """Published when the IBKR broker successfully completes a reconnect.
+
+    Sprint 31.91 Session 5a.2 (D9b): consumed by HealthMonitor's
+    auto-resolution policy to clear an active ``ibkr_disconnect`` alert.
+    Emission is deferred to a future broker-layer session.
+    """
+
+    client_id: int = 0
+
+
+@dataclass(frozen=True)
+class DatabentoHeartbeatEvent(Event):
+    """Published periodically while the Databento feed is healthy.
+
+    Sprint 31.91 Session 5a.2 (D9b): consumed by HealthMonitor's
+    auto-resolution policy — three consecutive heartbeats clear an active
+    ``databento_dead_feed`` alert. Emission is deferred to a future
+    data-layer session that wires Databento health-poller output through
+    the Event Bus.
+    """
+
+    seconds_since_last_message: float = 0.0
+
+
+@dataclass(frozen=True)
 class SystemAlertEvent(Event):
     """Operational alert requiring human attention.
 
