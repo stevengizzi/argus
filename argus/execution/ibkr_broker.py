@@ -27,6 +27,7 @@ from argus.core.events import (
     OrderSubmittedEvent,
     OrderType,
     Side,
+    SystemAlertEvent,
 )
 from argus.core.ids import generate_id
 from argus.execution.broker import Broker, CancelPropagationTimeout
@@ -418,6 +419,19 @@ class IBKRBroker(Broker):
             if is_connection_error(error_code):
                 # Connection errors trigger reconnection (handled by _on_disconnected)
                 pass
+            else:
+                # Sprint 31.91 Session 5b (DEF-014): non-connection CRITICAL
+                # errors (e.g. 203 "security not available for this account",
+                # 321 "Server error validating API client request") signal
+                # auth / permission failures that block trading until
+                # resolved. Emit SystemAlertEvent so HealthMonitor (5a.1
+                # consumer) can surface to operator via REST + WebSocket.
+                # Auto-resolution policy (5a.2) clears the alert on the next
+                # OrderFilledEvent OR IBKRReconnectedEvent — either implies
+                # a successful authenticated round-trip with the broker.
+                self._emit_ibkr_auth_failure_alert(
+                    error_code, error_string, contract
+                )
 
         elif error_info.severity == IBKRErrorSeverity.WARNING:
             logger.warning("IBKR error %d: %s", error_code, error_string)
@@ -435,6 +449,52 @@ class IBKRBroker(Broker):
         else:
             # INFO severity — debug log only (e.g., market data not subscribed)
             logger.debug("IBKR info %d: %s", error_code, error_string)
+
+    def _emit_ibkr_auth_failure_alert(
+        self,
+        error_code: int,
+        error_string: str,
+        contract: Contract | None,
+    ) -> None:
+        """Publish a SystemAlertEvent for an IBKR auth / permission failure.
+
+        Called from the synchronous ``_on_error`` callback. Bridges to
+        the asyncio loop via ``asyncio.ensure_future`` since
+        ``_event_bus.publish`` is a coroutine.
+
+        Sprint 31.91 Session 5b (DEF-014). Auto-resolution policy
+        (5a.2) consumes ``OrderFilledEvent`` OR ``IBKRReconnectedEvent``
+        for ``ibkr_auth_failure`` — either is sufficient to clear.
+        """
+        symbol = contract.symbol if contract else None
+        alert = SystemAlertEvent(
+            severity="critical",
+            source="ibkr_broker.auth_handler",
+            alert_type="ibkr_auth_failure",
+            message=(
+                f"IBKR API auth/permission failure (error {error_code}): "
+                f"{error_string}. Trading paused until auth recovered. "
+                f"Auto-resolution: any successful subsequent "
+                f"authenticated IBKR operation."
+            ),
+            metadata={
+                "error_code": error_code,
+                "error_message": error_string,
+                "symbol": symbol,
+                "client_id": self._config.client_id,
+                "detection_source": "ibkr_broker.auth_handler",
+            },
+        )
+        try:
+            asyncio.ensure_future(self._event_bus.publish(alert))
+        except RuntimeError:
+            # No running loop (defensive — _on_error always fires while
+            # the asyncio loop is running, but `ensure_future` raises
+            # without one).
+            logger.exception(
+                "Failed to publish ibkr_auth_failure SystemAlertEvent "
+                "(no running asyncio loop)"
+            )
 
     def _is_market_hours(self) -> bool:
         """Check if current time is within US market hours (9:30 AM – 4:00 PM ET).
@@ -488,8 +548,11 @@ class IBKRBroker(Broker):
         exponential backoff with a cap at reconnect_max_delay_seconds.
         After successful reconnection, verifies position consistency.
 
-        If all retries are exhausted, logs CRITICAL error.
-        SystemAlertEvent deferred to DEF-014.
+        If all retries are exhausted, logs CRITICAL error AND publishes a
+        ``SystemAlertEvent(alert_type="ibkr_disconnect", severity="critical")``
+        so HealthMonitor can surface the condition to the operator. The
+        Sprint 31.91 5a.2 auto-resolution policy clears the alert on the
+        next ``IBKRReconnectedEvent``.
         """
         self._reconnecting = True
 
@@ -567,7 +630,36 @@ class IBKRBroker(Broker):
             "IB Gateway unreachable. Manual intervention required.",
             self._config.reconnect_max_retries,
         )
-        # TODO: Publish SystemAlertEvent when available (DEF-014)
+        # Sprint 31.91 Session 5b (DEF-014): emit SystemAlertEvent so
+        # HealthMonitor (5a.1 consumer) can surface this to the operator
+        # via REST + WebSocket. Auto-resolution policy (5a.2) clears the
+        # alert on the next IBKRReconnectedEvent.
+        try:
+            await self._event_bus.publish(
+                SystemAlertEvent(
+                    severity="critical",
+                    source="ibkr_broker.disconnect_handler",
+                    alert_type="ibkr_disconnect",
+                    message=(
+                        f"IBKR Gateway reconnect retries exhausted after "
+                        f"{self._config.reconnect_max_retries} attempts. "
+                        f"Trading paused until connection recovered. "
+                        f"Auto-resolution: any successful subsequent "
+                        f"IBKR reconnect."
+                    ),
+                    metadata={
+                        "max_retries": self._config.reconnect_max_retries,
+                        "client_id": self._config.client_id,
+                        "host": self._config.host,
+                        "port": self._config.port,
+                        "detection_source": "ibkr_broker.disconnect_handler",
+                    },
+                )
+            )
+        except Exception:
+            logger.exception(
+                "Failed to publish SystemAlertEvent for IBKR reconnect exhaustion"
+            )
 
     # --- Order Building Helpers ---
 
