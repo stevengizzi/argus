@@ -770,6 +770,24 @@ for row in c.fetchall():
 conn.close()
 ```
 
+### 7.4 — Bracket-stop slippage check (Sprint 31.91 D8 acceptance)
+
+Compare mean bracket-stop fill slippage on the $7–$15 share universe against
+the pre-31.91 baseline. Threshold: ≤$0.02 degradation.
+
+If degradation exceeds $0.02:
+1. Trigger restart-required rollback evaluation per `live-operations.md`
+   §"OCA Architecture Operations" (the `bracket_oca_type: 0` config flip
+   is restart-required per H1 disposition; mid-session flip is unsupported).
+2. Investigate whether ocaType=1's 50–200ms cancellation propagation cost
+   is producing bracket-stop fills at worse prices than the pre-31.91
+   ocaType=2 architecture.
+3. Document findings; decide whether rollback is warranted.
+
+The slippage measurement is intended to be run after each post-Sprint-31.91
+paper session; persistent >$0.02 degradation across consecutive sessions is
+the rollback trigger, not a single-session blip.
+
 ### 7.5 — DEF Items
 
 Log any issues discovered as DEF items with priority:

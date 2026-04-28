@@ -410,7 +410,7 @@ enforced thereafter.
 
 **Test:** When ARGUS is in paper-trading mode, the most recent
 `scripts/spike_ibkr_oca_late_add.py` result file
-(`spike-results-YYYYMMDD.json`) must be dated within the last 30 days.
+(`spike-results-YYYY-MM-DD.json`) must be dated within the last 30 days.
 Operator runs the spike on the trigger registry events documented in
 `docs/live-operations.md`:
 - Before any live-trading transition (live-enable gate item)
@@ -437,11 +437,9 @@ def test_spike_script_result_dated_within_30_days_in_paper_mode():
     )
     if not files:
         return
-    latest = files[-1]  # spike-results-YYYYMMDD.json
+    latest = files[-1]  # spike-results-YYYY-MM-DD.json (ISO with dashes)
     date_str = latest[len("spike-results-"):-len(".json")]
-    latest_date = datetime.date.fromisoformat(
-        f"{date_str[:4]}-{date_str[4:6]}-{date_str[6:8]}"
-    )
+    latest_date = datetime.date.fromisoformat(date_str)
     age_days = (datetime.date.today() - latest_date).days
     assert age_days <= 30, (
         f"Spike script result is {age_days} days old "

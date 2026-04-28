@@ -59,8 +59,10 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import datetime as _datetime
 import json
 import logging
+import os
 import sys
 import time
 import uuid
@@ -505,8 +507,17 @@ async def main_async(args: argparse.Namespace) -> int:
             results.trials
         )
 
-        # Persist
-        out_path = args.output or f"spike-results-{int(time.time())}.json"
+        # Persist (Sprint 31.91 Session 4 / PHASE-D-OPEN-ITEMS Item 7:
+        # ISO date with dashes; default location scripts/spike-results/).
+        if args.output:
+            out_path = args.output
+        else:
+            out_dir = "scripts/spike-results"
+            os.makedirs(out_dir, exist_ok=True)
+            out_path = os.path.join(
+                out_dir,
+                f"spike-results-{_datetime.date.today().isoformat()}.json",
+            )
         with open(out_path, "w") as f:
             json.dump(asdict(results), f, indent=2, default=str)
         log.info("Results written to %s", out_path)
@@ -573,7 +584,10 @@ def parse_args() -> argparse.Namespace:
     p.add_argument(
         "--output",
         default=None,
-        help="Output JSON path (default spike-results-<timestamp>.json)",
+        help=(
+            "Output JSON path (default "
+            "scripts/spike-results/spike-results-YYYY-MM-DD.json)"
+        ),
     )
     return p.parse_args()
 

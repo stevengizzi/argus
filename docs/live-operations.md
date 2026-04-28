@@ -826,30 +826,47 @@ This lock-step burden disappears once Sprint 31.92 lands DEF-212.
 
 4. **Do NOT attempt to bypass the abort by re-running the flatten without addressing the timeout.** The abort is the safety mechanism; bypassing it is what creates the phantom-short risk we're avoiding.
 
-### Spike-script trigger registry (Sprint 31.91 regression invariant 22)
+### Spike Script Trigger Registry (Sprint 31.91 HIGH #5 / B28; regression invariant 22)
 
 The Phase A spike script `scripts/spike_ibkr_oca_late_add.py` is the **live-IBKR regression check** that verifies IBKR continues to enforce ocaType=1 atomic cancellation pre-submit (the success signature is `PATH_1_SAFE`). Failure to return `PATH_1_SAFE` invalidates the OCA architecture seal and triggers Tier 3 review.
 
-**Run the spike script before any of the following events:**
+#### Re-run triggers
 
-- [ ] **Before any live-trading transition.** Live-enable gate item per `pre-live-transition-checklist.md` §"Sprint 31.91 — OCA Architecture & Reconciliation Drift".
+- [ ] **Before any live-trading transition** (one of the live-enable gates per `pre-live-transition-checklist.md` §"Sprint 31.91 — OCA Architecture & Reconciliation Drift").
 - [ ] **Before AND after any `ib_async` library version upgrade.** The spike's behavior depends on `ib_async`'s exception-string passthrough.
 - [ ] **Before AND after any IBKR API version change** (TWS / IB Gateway upgrade). IBKR has historically modified Error 201 reason strings between versions.
-- [ ] **Monthly during paper-trading windows.** Calendar reminder (any monthly cadence works; no enforced date). The most-recent result file (`scripts/spike-results/spike-results-YYYYMMDD.json`) must be ≤30 days old per regression invariant 22 — `tests/_regression_guards/test_spike_script_freshness.py` (lands at Session 4) enforces this in CI.
+- [ ] **Monthly during paper-trading windows** — ensures no silent IBKR-side API behavior drift between live-enable transitions. Calendar reminder (any monthly cadence works; no enforced date).
 
-**How to run:**
+#### Spike result file format
+
+- **Filename:** `spike-results-YYYY-MM-DD.json` (ISO date with dashes; matches `datetime.date.today().isoformat()`)
+- **Location:** `scripts/spike-results/`
+- **Freshness:** the most-recent file must be dated within the last 30 days when in paper-trading mode (enforced by regression invariant 22 — `tests/_regression_guards/test_spike_script_freshness.py`)
+
+#### How to run
 
 ```bash
 # IB Gateway must be running and connected (paper account, port 4002).
 python scripts/spike_ibkr_oca_late_add.py
 
-# Result file is written to scripts/spike-results/spike-results-YYYYMMDD.json
+# Result file is written to scripts/spike-results/spike-results-YYYY-MM-DD.json
 # Verify the verdict:
 jq '.overall_outcome' scripts/spike-results/spike-results-$(date +%Y-%m-%d).json
 # Expected: "PATH_1_SAFE"
 ```
 
-**If the verdict is anything other than `PATH_1_SAFE`** (e.g., `PATH_2_RACE`, `PATH_3_LATE_FILL`, or an explicit error): halt the trigger event (live transition / upgrade), and either roll back to `bracket_oca_type: 0` (RESTART-REQUIRED procedure above) or arrange Tier 3 architectural review of the new mechanism behavior.
+#### Failure response
+
+- Spike returns NOT `PATH_1_SAFE` → OCA-architecture seal **INVALIDATED**.
+- Halt all live-trading preparation; trigger Tier 3 architectural review.
+- Either roll back to `bracket_oca_type: 0` (RESTART-REQUIRED procedure above) or arrange Tier 3 architectural review of the new mechanism behavior.
+- Document the failure mode in the result file's `failure_reason` (or equivalent) field.
+
+#### Cross-reference
+
+- Spike script: `scripts/spike_ibkr_oca_late_add.py`
+- Path safety analysis: `docs/sprints/sprint-31.91-reconciliation-drift/PHASE-A-REVISIT-FINDINGS.md`
+- Regression invariant: `docs/sprints/sprint-31.91-reconciliation-drift/regression-checklist.md` invariant 22
 
 ### Operator daily flatten — current status
 

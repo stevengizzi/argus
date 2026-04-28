@@ -200,6 +200,45 @@ Shadow-mode variant signals bypass quality pipeline and risk manager (routing di
 
 > Sprint 31.91 (Reconciliation Drift / Phantom-Short Fix + Alert Observability) is the sprint that closes DEF-204. **Live trading MUST NOT proceed until ALL of the following gates are satisfied.** Sprint 31.91 itself is a multi-week sprint; these checklist items become live-trading-blocking the moment 31.91 is sealed.
 
+### Live-Enable Gate Criteria (Sprint 31.91 — decomposed per HIGH #4)
+
+ARGUS may be transitioned from paper to live trading ONLY when ALL of
+the following criteria are met. The gates are operational shorthand for
+the detailed checklists below; each gate item maps to a specific
+verification step in the per-section subsections that follow.
+
+#### Gate 1 — Multi-session paper validation
+**≥3 consecutive paper-trading sessions with all of:**
+- Zero `unaccounted_leak` rows in `validate_session_oca_mass_balance.py` output
+- Zero `phantom_short` alerts (any source: reconciliation, EOD Pass 2, Health, startup)
+- Zero `phantom_short_retry_blocked` alerts
+- Zero `cancel_propagation_timeout` alerts on EOD-flatten-path symbols
+
+#### Gate 2 — Pre-live paper stress test (Gate 3a per spec D7)
+**≥1 paper-trading session under live-config simulation:**
+- Paper-trading data-capture overrides removed
+- Risk limits restored to production values
+- Overflow capacity restored
+- ≥10 entries placed during the session (sufficient activity for confidence)
+- Zero `phantom_short` alerts
+- Zero `unaccounted_leak` mass-balance rows
+- Zero `phantom_short_retry_blocked` alerts
+
+#### Gate 3 — Live rollback policy (Gate 3b per spec D7)
+**First live trading session caps:**
+- Position size: $50–$500 notional
+- Single operator-selected symbol
+- Any `phantom_short*` or `phantom_short_retry_blocked` alert during the
+  session triggers immediate suspension via operator-manual halt
+  (formal `POST /api/v1/system/suspend` deferred — DEF-210)
+
+After session-end clean (zero alerts; mass-balance clean), expand to
+standard sizing on day 2.
+
+#### Note on disconnect-reconnect testing
+Disconnect-reconnect resilience testing is **deferred to Sprint 31.93**
+and is NOT a Sprint 31.91 live-enable gate criterion.
+
 ### Sprint 31.91 must be sealed (all 18 sessions complete)
 
 - [ ] Sessions 0 + 1a + 1b + 1c (OCA architecture; DEC-386) — **LANDED 2026-04-27**, Tier 3 review #1 verdict PROCEED.
@@ -237,7 +276,7 @@ Shadow-mode variant signals bypass quality pipeline and risk manager (routing di
 
 ### Spike script freshness (per Sprint 31.91 regression invariant 22 / HIGH #5)
 
-- [ ] `scripts/spike-results/spike-results-YYYYMMDD.json` dated within the last 30 days.
+- [ ] `scripts/spike-results/spike-results-YYYY-MM-DD.json` dated within the last 30 days.
 - [ ] Verdict in that file is `PATH_1_SAFE`.
 - [ ] Re-run `scripts/spike_ibkr_oca_late_add.py` before the live-trading transition decision (trigger registry per `docs/live-operations.md`'s OCA Architecture Rollback section).
 
