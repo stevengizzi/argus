@@ -282,6 +282,32 @@ class ReconciliationConfig(BaseModel):
         ),
     )
 
+    # Sprint 31.91 Session 2d (D5, L3 + L15): aggregate-alert threshold.
+    # When >= this many symbols are gated at startup (rehydrated from
+    # ``data/operations.db``), an aggregate
+    # ``phantom_short_startup_engaged`` SystemAlertEvent fires alongside
+    # the per-symbol ``phantom_short`` alerts. L3 disposition is
+    # always-fire-both: per-symbol alerts ALWAYS fire (no suppression even
+    # when the aggregate fires). The threshold only gates the aggregate;
+    # the per-symbol fan-out is unconditional. Threshold is configurable
+    # per L15 — high-volume operators may raise to 20+ to reduce noise;
+    # low-volume operators (steady state post-fix) may lower to 5 to catch
+    # any resurgence early. Range 1-1000.
+    phantom_short_aggregate_alert_threshold: int = Field(
+        default=10,
+        ge=1,
+        le=1000,
+        description=(
+            "When N or more symbols are gated at startup, an aggregate "
+            "phantom_short_startup_engaged alert fires alongside the "
+            "per-symbol alerts (L3 — both always fire). High-volume "
+            "operators may raise to 20+ to reduce noise; low-volume "
+            "operators (steady state post-fix) may lower to 5 to catch "
+            "any resurgence early. Default 10 per L15 (Phase A revisit "
+            "configurable threshold disposition)."
+        ),
+    )
+
 
 class TrailingStopConfig(BaseModel):
     """Configuration for trailing stop behavior (Sprint 28.5).

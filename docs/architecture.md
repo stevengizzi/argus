@@ -1942,6 +1942,12 @@ All routes mount under the `/api/v1` prefix (see [argus/api/server.py](../argus/
 | `GET    /api/v1/quality/history` | Get paginated quality history with optional filters. |
 | `GET    /api/v1/quality/{symbol}` | Get the most recent quality score for a symbol. |
 
+**reconciliation**
+
+| Endpoint | Summary |
+|----------|---------|
+| `POST   /api/v1/reconciliation/phantom-short-gate/clear` | Manually clear the phantom-short entry gate for ``symbol``. |
+
 **session**
 
 | Endpoint | Summary |

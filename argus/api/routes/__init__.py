@@ -31,6 +31,7 @@ from argus.api.routes.orchestrator import router as orchestrator_router
 from argus.api.routes.performance import router as performance_router
 from argus.api.routes.positions import router as positions_router
 from argus.api.routes.quality import router as quality_router
+from argus.api.routes.reconciliation import router as reconciliation_router
 from argus.api.routes.session import router as session_router
 from argus.api.routes.strategies import router as strategies_router
 from argus.api.routes.trades import router as trades_router
@@ -72,3 +73,6 @@ api_router.include_router(learning_router, prefix="/learning", tags=["learning"]
 api_router.include_router(experiments_router, prefix="/experiments", tags=["experiments"])
 api_router.include_router(arena_router, prefix="/arena", tags=["arena"])
 api_router.include_router(historical_router, prefix="/historical", tags=["historical"])
+api_router.include_router(
+    reconciliation_router, prefix="/reconciliation", tags=["reconciliation"]
+)

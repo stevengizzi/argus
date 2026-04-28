@@ -71,6 +71,7 @@ from argus.core.events import (
     SessionEndEvent,
     ShutdownRequestedEvent,
     SignalRejectedEvent,
+    SystemAlertEvent,
 )
 from argus.core.health import ComponentStatus, HealthMonitor
 from argus.core.logging_config import setup_logging
@@ -1074,6 +1075,70 @@ class ArgusSystem:
         # what subscribes to OrderApprovedEvent, so the rehydration must
         # precede it.
         await self._order_manager._rehydrate_gated_symbols_from_db()
+        # Sprint 31.91 Session 2d (D5, L3 + L15): emit startup alerts
+        # for any gated symbols that survived the prior session. The
+        # rehydration call above already logs CRITICAL when symbols are
+        # loaded; this block adds the explicit "operator triage required"
+        # log line + L3 always-both-alerts emission (per-symbol alerts
+        # ALWAYS fire; aggregate alert fires only if count >= L15
+        # threshold). Threshold is configurable via
+        # ``reconciliation.phantom_short_aggregate_alert_threshold``.
+        if self._order_manager._phantom_short_gated_symbols:
+            gated_list = sorted(
+                self._order_manager._phantom_short_gated_symbols
+            )
+            logger.critical(
+                "STARTUP: %d phantom-short gated symbol(s) rehydrated from "
+                "prior session: %s. These symbols will reject new entries. "
+                "See docs/live-operations.md 'Phantom-Short Gate Diagnosis "
+                "and Clearance' for operator triage steps.",
+                len(gated_list),
+                gated_list,
+            )
+            agg_threshold = (
+                config.system.reconciliation
+                .phantom_short_aggregate_alert_threshold
+            )
+            # L15 configurable threshold gates the aggregate alert.
+            if len(gated_list) >= agg_threshold:
+                await self._event_bus.publish(
+                    SystemAlertEvent(
+                        severity="critical",
+                        source="startup",
+                        alert_type="phantom_short_startup_engaged",
+                        message=(
+                            f"STARTUP: {len(gated_list)} phantom-short "
+                            f"symbols rehydrated (threshold: "
+                            f"{agg_threshold}). Operator triage required."
+                        ),
+                        metadata={
+                            "gated_symbols": gated_list,
+                            "count": len(gated_list),
+                            "threshold": agg_threshold,
+                        },
+                    )
+                )
+            # L3 always-both-alerts: per-symbol alerts ALWAYS fire,
+            # regardless of whether the aggregate fired. Operator needs
+            # both signals — aggregate to know "many symbols gated";
+            # per-symbol to triage each one.
+            for symbol in gated_list:
+                await self._event_bus.publish(
+                    SystemAlertEvent(
+                        severity="critical",
+                        source="startup",
+                        alert_type="phantom_short",
+                        message=(
+                            f"STARTUP: phantom-short gate rehydrated "
+                            f"for {symbol}. Operator triage required."
+                        ),
+                        metadata={
+                            "symbol": symbol,
+                            "side": "SELL",
+                            "detection_source": "startup.rehydration",
+                        },
+                    )
+                )
         await self._order_manager.start()
         # Reconstruct open positions from broker — gated by the startup
         # invariant (DEF-199 defense). If any short was detected at connect

@@ -512,7 +512,10 @@ def test_reconciliation_config_fields_recognized() -> None:
     # ``broker_orphan_entry_gate_enabled`` (default True) for the per-symbol
     # entry gate engaged on phantom_short detection. Sprint 31.91 Session 2c.2
     # adds ``broker_orphan_consecutive_clear_threshold`` (default 5, M4) for
-    # the gate's auto-clear cycle threshold.
+    # the gate's auto-clear cycle threshold. Sprint 31.91 Session 2d adds
+    # ``phantom_short_aggregate_alert_threshold`` (default 10, L15) — gates
+    # the startup aggregate ``phantom_short_startup_engaged`` alert (per-symbol
+    # alerts always fire regardless, L3 always-both).
     expected_keys = {
         "auto_cleanup_orphans",
         "auto_cleanup_unconfirmed",
@@ -520,6 +523,7 @@ def test_reconciliation_config_fields_recognized() -> None:
         "broker_orphan_alert_enabled",
         "broker_orphan_entry_gate_enabled",
         "broker_orphan_consecutive_clear_threshold",
+        "phantom_short_aggregate_alert_threshold",
     }
     assert expected_keys == set(ReconciliationConfig.model_fields.keys())
 

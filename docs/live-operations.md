@@ -677,6 +677,99 @@ A successful run ends with a download summary (populate) and an atomic-rename co
 
 ---
 
+## Phantom-Short Gate Diagnosis and Clearance (Sprint 31.91 / DEC-385)
+
+> Sprint 31.91 Sessions 2a–2d introduced the side-aware reconciliation contract (DEC-385). When the broker reports a SHORT position ARGUS does not track, the per-symbol entry gate engages — new entries on that symbol are rejected with `rejection_reason="phantom_short_gate"` until the broker reconciles to zero (5 consecutive cycles) OR the operator manually clears the gate via this runbook. State persists to `data/operations.db` and rehydrates on startup, so the gate survives restarts.
+
+### Symptom
+
+- ARGUS startup logs a CRITICAL line listing N gated symbols, formatted: `"STARTUP: <N> phantom-short gated symbol(s) rehydrated from prior session: ['AAPL', 'NVDA', ...]. These symbols will reject new entries..."`.
+- Per-symbol `phantom_short` alerts (one per gated symbol) appear in the alerts panel (Session 5e UI surface; pre-5e the alert events are visible in the JSONL log via `grep -F '"alert_type": "phantom_short"' logs/argus_$(date +%Y%m%d).jsonl`).
+- If N ≥ `reconciliation.phantom_short_aggregate_alert_threshold` (default 10), an aggregate `phantom_short_startup_engaged` alert ALSO fires (L3 always-fire-both — the aggregate does NOT suppress the per-symbol alerts).
+- Mid-session: the same `phantom_short` alert taxonomy fires from `argus/execution/order_manager.py`'s reconciliation broker-orphan branch (Session 2b.1) when a phantom short is detected during the regular reconciliation cycle.
+
+### Diagnosis steps
+
+1. **Check actual broker state.** Use the close-positions script's `--dry-run` flag to enumerate broker-side positions without action:
+
+   ```bash
+   python scripts/ibkr_close_all_positions.py --dry-run
+   ```
+
+2. **Cross-reference the gated-symbol list against broker state.**
+   - Broker reports a SHORT for the gated symbol → confirmed phantom-short scenario; proceed to **Clearance Option (a)**.
+   - Broker reports zero / long position for the gated symbol → eventual-consistency gap or stale gate state (a residual flag from a prior session that has since reconciled at the broker but the gate row was not auto-cleared); proceed to **Clearance Option (b)** or **(c)**.
+
+### Clearance options
+
+**(a) Manual flatten + auto-clear.** Run the close-positions script to flatten the broker-side short, then wait 5 reconciliation cycles (~5 minutes — Session 2c.2's M4 default; was 3 in earlier drafts) for the per-symbol gate to auto-clear once the reconciliation cycle observes broker-zero shares for 5 consecutive cycles:
+
+```bash
+python scripts/ibkr_close_all_positions.py
+```
+
+The auto-clear threshold is configurable via `reconciliation.broker_orphan_consecutive_clear_threshold` (default 5, range 1–60).
+
+**(b) Manual API clearance.** POST to the override endpoint with a ≥10-char justification string. The audit log captures full forensic context (timestamps, prior engagement source, full request payload):
+
+```bash
+curl -X POST http://localhost:8000/api/v1/reconciliation/phantom-short-gate/clear \
+  -H "Authorization: Bearer $ARGUS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"symbol": "AAPL", "reason": "operator manually flattened short via ibkr_close_all_positions.py at 09:31 ET"}'
+```
+
+The response includes the `audit_id` (autoincrementing PK from `phantom_short_override_audit`) so you can later retrieve the row with full context. Reason strings shorter than 10 characters are rejected at the request validation layer.
+
+**(c) UI clearance.** Navigate to the Observatory alerts panel (Session 5e), click the acknowledgment button on the `phantom_short` alert. The acknowledgment flow is delivered by Sprint 31.91 Sessions 5d/5e; pre-5e, options (a) and (b) only.
+
+### Audit-log location
+
+Override clearances persist to the `phantom_short_override_audit` table in `data/operations.db`. Schema:
+
+```
+id INTEGER PRIMARY KEY AUTOINCREMENT
+timestamp_utc TEXT NOT NULL
+timestamp_et TEXT NOT NULL
+symbol TEXT NOT NULL
+prior_engagement_source TEXT          -- "reconciliation.broker_orphan_branch" pre-5a.1
+prior_engagement_alert_id TEXT        -- None pre-5a.1; populated post-5a.1
+reason_text TEXT NOT NULL
+override_payload_json TEXT NOT NULL
+```
+
+Rows persist across restarts (no retention policy on this table — full audit forever per Sprint 31.91 retention spec). Indexes on `symbol` and `timestamp_utc`. Query the most recent 10 rows:
+
+```bash
+sqlite3 data/operations.db "SELECT * FROM phantom_short_override_audit ORDER BY id DESC LIMIT 10;"
+```
+
+### Persistence verification
+
+After a (b) or (c) clearance, restart ARGUS and confirm:
+
+1. The previously-gated symbol does **NOT** reappear in the startup CRITICAL log line (the row in `phantom_short_gated_symbols` was deleted in the same SQLite transaction as the audit-log INSERT, so rehydration finds nothing for that symbol).
+2. The audit-log row remains queryable via the SQL command above (audit log is forensic — it persists indefinitely regardless of subsequent gate state changes).
+
+### Aggregate alert tuning
+
+Per L15: the threshold for the aggregate `phantom_short_startup_engaged` alert is configurable via `reconciliation.phantom_short_aggregate_alert_threshold` (default `10`). Tune based on observed phantom-short volume:
+
+- **High-volume operators** (during the Sprint 31.91 paper-trading window where DEF-204's cascade is still being validated) may raise to **20+** to reduce noise from the aggregate alert. Per-symbol alerts continue to fire regardless — the threshold gates only the aggregate.
+- **Low-volume operators** (steady state post-fix, expecting zero phantom shorts) may lower to **5** to catch any resurgence early. A low threshold makes the aggregate alert effectively redundant with the per-symbol alerts but provides a clear "this is unusual" signal that the per-symbol alerts alone do not.
+
+### Cross-reference
+
+Sprint 31.91 sessions that contributed to this runbook:
+
+- **Session 2b.1** — broker-orphan branch detection in the reconciliation loop; emits the `phantom_short` (CRITICAL) and `stranded_broker_long` (WARNING, exp-backoff) alerts.
+- **Session 2b.2** — Health daily integrity check + EOD Pass 2 alert taxonomy alignment (consistent `phantom_short` alert across all detection sites).
+- **Session 2c.1** — per-symbol entry gate state (`_phantom_short_gated_symbols`) + SQLite persistence to `phantom_short_gated_symbols` table + M5 rehydration ordering on startup.
+- **Session 2c.2** — auto-clear at 5 consecutive cycles (M4 default; configurable).
+- **Session 2d** — operator override API + audit log + L3 always-both-alerts at startup + this runbook section.
+
+---
+
 ## OCA Architecture Operations (Sprint 31.91 / DEC-386)
 
 > Sprint 31.91 introduced a 4-layer OCA architecture closing DEF-204's primary mechanism. This section covers the operator-facing procedures: rollback, lock-step constraints, failure-mode response, and the spike-script trigger registry.

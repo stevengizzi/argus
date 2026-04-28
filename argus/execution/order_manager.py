@@ -2546,6 +2546,34 @@ class OrderManager:
         ")"
     )
 
+    # Sprint 31.91 Session 2d (D5, M3): operator-override audit log.
+    # Captures forensic detail for each manual phantom-short gate
+    # clearance via ``POST /api/v1/reconciliation/phantom-short-gate/clear``.
+    # Append-only; rows persist across restarts (no retention policy on
+    # this table per Sprint 31.91 retention spec — full audit forever).
+    # ``prior_engagement_alert_id`` is None pre-Session-5a.1 (HealthMonitor
+    # consumer not yet wired); 5a.1 will populate it via cross-reference.
+    _PHANTOM_SHORT_OVERRIDE_AUDIT_DDL: str = (
+        "CREATE TABLE IF NOT EXISTS phantom_short_override_audit (\n"
+        "    id INTEGER PRIMARY KEY AUTOINCREMENT,\n"
+        "    timestamp_utc TEXT NOT NULL,\n"
+        "    timestamp_et TEXT NOT NULL,\n"
+        "    symbol TEXT NOT NULL,\n"
+        "    prior_engagement_source TEXT,\n"
+        "    prior_engagement_alert_id TEXT,\n"
+        "    reason_text TEXT NOT NULL,\n"
+        "    override_payload_json TEXT NOT NULL\n"
+        ")"
+    )
+    _PHANTOM_SHORT_OVERRIDE_AUDIT_INDEX_SYMBOL: str = (
+        "CREATE INDEX IF NOT EXISTS idx_psoa_symbol "
+        "ON phantom_short_override_audit(symbol)"
+    )
+    _PHANTOM_SHORT_OVERRIDE_AUDIT_INDEX_TIMESTAMP: str = (
+        "CREATE INDEX IF NOT EXISTS idx_psoa_timestamp "
+        "ON phantom_short_override_audit(timestamp_utc)"
+    )
+
     def _ensure_operations_db_parent(self) -> None:
         """Ensure the parent directory of ``operations.db`` exists.
 
@@ -2605,6 +2633,84 @@ class OrderManager:
                 (symbol,),
             )
             await db.commit()
+
+    async def clear_phantom_short_gate_with_audit(
+        self,
+        symbol: str,
+        reason: str,
+        override_payload_json: str,
+    ) -> tuple[int, str | None, str | None]:
+        """Manually clear the phantom-short gate for ``symbol`` with full
+        forensic audit-log persistence (Sprint 31.91 Session 2d, M3).
+
+        Persistence-first ordering — both writes (audit INSERT + gated
+        DELETE) happen inside the same ``aiosqlite`` connection's
+        ``commit()`` so a failure between them rolls back atomically.
+        In-memory state is mutated by the caller AFTER this method
+        returns successfully; if the SQLite write fails, in-memory state
+        is unchanged and the gate remains engaged (fail-closed).
+
+        Args:
+            symbol: Symbol to clear (caller has already normalized to
+                uppercase).
+            reason: Operator's ≥10-char justification (validated upstream
+                by Pydantic).
+            override_payload_json: Full request-body JSON for forensic
+                replay.
+
+        Returns:
+            Tuple of ``(audit_id, prior_engagement_source,
+            prior_engagement_alert_id)``. ``prior_engagement_source`` is
+            ``"reconciliation.broker_orphan_branch"`` pre-5a.1 (the only
+            engagement source). ``prior_engagement_alert_id`` is ``None``
+            until Session 5a.1 wires HealthMonitor cross-reference.
+        """
+        self._ensure_operations_db_parent()
+        utcnow = datetime.now(UTC)
+        et_now = utcnow.astimezone(ZoneInfo("America/New_York"))
+        # Pre-Session-5a.1: only engagement source is the reconciliation
+        # broker-orphan branch. Once HealthMonitor exposes alert IDs,
+        # this becomes a cross-reference lookup.
+        prior_source = "reconciliation.broker_orphan_branch"
+        prior_alert_id: str | None = None
+
+        async with aiosqlite.connect(self._operations_db_path) as db:
+            # Idempotent DDL — both tables, both audit-log indexes.
+            await db.execute(self._PHANTOM_SHORT_GATED_SYMBOLS_DDL)
+            await db.execute(self._PHANTOM_SHORT_OVERRIDE_AUDIT_DDL)
+            await db.execute(self._PHANTOM_SHORT_OVERRIDE_AUDIT_INDEX_SYMBOL)
+            await db.execute(self._PHANTOM_SHORT_OVERRIDE_AUDIT_INDEX_TIMESTAMP)
+            cursor = await db.execute(
+                "INSERT INTO phantom_short_override_audit "
+                "(timestamp_utc, timestamp_et, symbol, "
+                "prior_engagement_source, prior_engagement_alert_id, "
+                "reason_text, override_payload_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    utcnow.isoformat(),
+                    et_now.isoformat(),
+                    symbol,
+                    prior_source,
+                    prior_alert_id,
+                    reason,
+                    override_payload_json,
+                ),
+            )
+            audit_id = cursor.lastrowid
+            await db.execute(
+                "DELETE FROM phantom_short_gated_symbols WHERE symbol = ?",
+                (symbol,),
+            )
+            # Single transaction: audit INSERT + gated DELETE both
+            # commit together or both roll back.
+            await db.commit()
+
+        if audit_id is None:  # pragma: no cover - aiosqlite always sets lastrowid
+            raise RuntimeError(
+                "phantom_short_override_audit INSERT did not return a "
+                "lastrowid"
+            )
+        return audit_id, prior_source, prior_alert_id
 
     async def _rehydrate_gated_symbols_from_db(self) -> None:
         """M5 rehydration: load gated symbols from ``operations.db`` into

@@ -202,6 +202,14 @@ reconciliation:
   # Default 5 (~5 minutes) per M4 cost-of-error asymmetry — false-clear
   # is more dangerous than false-hold. Range 1-60.
   broker_orphan_consecutive_clear_threshold: 5
+  # Sprint 31.91 Session 2d (L3 + L15): aggregate startup-alert threshold.
+  # When >= this many symbols are gated at startup (rehydrated from
+  # data/operations.db), an aggregate phantom_short_startup_engaged alert
+  # fires ALONGSIDE per-symbol phantom_short alerts. Per-symbol alerts
+  # always fire — the threshold only gates the aggregate. High-volume
+  # operators may raise to 20+ to reduce noise; low-volume operators
+  # (steady state post-fix) may lower to 5 to catch resurgence early.
+  phantom_short_aggregate_alert_threshold: 10
 
 # Observatory (Sprint 25 — The Observatory)
 # Immersive pipeline visualization page for operational visibility.
