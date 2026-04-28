@@ -221,8 +221,10 @@ observatory:
 # block here; it would diverge from the standalone file.
 
 # Alert Observability (Sprint 31.91 D9a — DEF-014)
-# HealthMonitor SystemAlertEvent consumer + REST surface. Severities listed
-# under acknowledgment_required_severities require operator acknowledgment;
-# all other severities auto-archive on auto-resolution (5a.2).
-alerts:
-  acknowledgment_required_severities: ["critical"]
+# HealthMonitor SystemAlertEvent consumer + REST surface. Per-alert-type
+# acknowledgment-required gating lives in alert_auto_resolution.POLICY_TABLE
+# (operator_ack_required field). DEF-220 (resolved S5c) removed the redundant
+# acknowledgment_required_severities field that had no consumer; the alerts
+# block now relies on AlertsConfig defaults (auto_resolve_on_condition_cleared,
+# retention windows, retention_task_interval_seconds).
+alerts: {}

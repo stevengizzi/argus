@@ -228,15 +228,13 @@ class AlertsConfig(BaseModel):
     in-memory only.
     """
 
-    acknowledgment_required_severities: list[str] = Field(
-        default_factory=lambda: ["critical"],
-        description=(
-            "Alert severities for which acknowledgment is required (alert "
-            "remains visible until operator acks). 'critical' alerts MUST "
-            "be acknowledged. 'warning' and 'info' auto-archive on "
-            "auto-resolution per the 5a.2 policy table."
-        ),
-    )
+    # DEF-220 (RESOLVED at S5c, 2026-04-28): the previous
+    # ``acknowledgment_required_severities`` field had no consumer and was
+    # superseded by per-alert-type ``PolicyEntry.operator_ack_required`` in
+    # ``argus/core/alert_auto_resolution.py``. Removed per Tier 3 #2 verdict
+    # disposition (Option A — removal). The frontend banner reads
+    # ``severity == "critical"`` directly; auto-resolution gating happens
+    # at the policy table.
 
     # Sprint 31.91 Session 5a.2 (HIGH #1): master switch for auto-resolution.
     # When False, every alert becomes operator-ack-only. The per-alert-type

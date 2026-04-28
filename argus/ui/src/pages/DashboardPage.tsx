@@ -36,6 +36,7 @@ import {
   VitalsStrip,
 } from '../features/dashboard';
 import { LearningDashboardCard } from '../components/learning/LearningDashboardCard';
+import { AlertBanner } from '../components/AlertBanner';
 import { WatchlistSidebar } from '../features/watchlist';
 import { staggerContainer, staggerItem } from '../utils/motion';
 import { useIsMultiColumn, useMediaQuery } from '../hooks/useMediaQuery';
@@ -70,7 +71,8 @@ export function DashboardPage() {
     if (isDesktop) {
       return (
         <div className="flex gap-6 -mr-6 -mb-6">
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 flex flex-col gap-3">
+            <AlertBanner />
             <PreMarketLayout />
           </div>
           <WatchlistSidebar className="sticky top-0 h-[calc(100vh-3rem)] flex-shrink-0" />
@@ -80,6 +82,7 @@ export function DashboardPage() {
 
     return (
       <>
+        <div className="mb-3"><AlertBanner /></div>
         <PreMarketLayout />
         <WatchlistSidebar />
       </>
@@ -97,6 +100,10 @@ export function DashboardPage() {
           initial="hidden"
           animate="show"
         >
+          <motion.div variants={staggerItem}>
+            <AlertBanner />
+          </motion.div>
+
           <motion.div variants={staggerItem}>
             <OrchestratorStatusStrip />
           </motion.div>
@@ -139,6 +146,11 @@ export function DashboardPage() {
           initial="hidden"
           animate="show"
         >
+          {/* Critical alert banner — temporary placement; 5e moves to Layout */}
+          <motion.div variants={staggerItem}>
+            <AlertBanner />
+          </motion.div>
+
           {/* Row 1: VitalsStrip — full width */}
           <motion.div variants={staggerItem}>
             <VitalsStrip todayStats={summaryData?.today_stats} />
@@ -202,6 +214,10 @@ export function DashboardPage() {
         initial="hidden"
         animate="show"
       >
+        <motion.div variants={staggerItem}>
+          <AlertBanner />
+        </motion.div>
+
         <motion.div variants={staggerItem}>
           <OrchestratorStatusStrip />
         </motion.div>
