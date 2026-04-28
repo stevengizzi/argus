@@ -12,12 +12,12 @@
 
 | Field | Value |
 |---|---|
-| **Refreshed at** | 2026-04-27, end-of-Session-2c.1 verdict |
-| **Anchor commit** | `6ec03ac` (S2c.1 Tier 2 review + impl `0c034b3`) |
-| **Sessions complete** | 0, 1a, 1b, 1c, 2a, 2b.1, 2b.2, 2c.1 |
+| **Refreshed at** | 2026-04-28, end-of-Session-2c.2 verdict + impromptu DEF-216 hotfix |
+| **Anchor commit** | `c36a30c` (DEF-216 ET-midnight flake hotfix) |
+| **Sessions complete** | 0, 1a, 1b, 1c, 2a, 2b.1, 2b.2, 2c.1, 2c.2 (+ impromptu DEF-216 hotfix) |
 | **Tier 3 reviews complete** | #1 (PROCEED) |
-| **Active session** | None — between sessions; cleared to proceed to Session 2c.2 |
-| **Sprint phase** | Track A complete (OCA architecture); Track B detection + count-filter alignment + entry gate engagement live; auto-clear (2c.2) + operator override (2d) pending |
+| **Active session** | None — between sessions; cleared to proceed to Session 2d |
+| **Sprint phase** | Track A complete (OCA architecture); Track B detection + count-filter alignment + entry gate engagement + auto-clear live; operator override (2d) pending — DEC-385 materializes there |
 | **Workflow protocol version** | 1.2.0 (per-session register discipline formalized) |
 
 ---
@@ -29,7 +29,7 @@
 - **Mode:** HITL on `main`
 - **Primary defects:** DEF-204 (reconciliation drift / phantom-short mechanism), DEF-014 (alert observability gap)
 - **Operational mitigation:** Operator runs `scripts/ibkr_close_all_positions.py` daily — REQUIRED, NOT OPTIONAL per Apr 27 evidence
-- **Reserved DECs at planning:** DEC-385 (side-aware reconciliation contract — Sessions 2a–2d, REMAINS RESERVED), DEC-386 (OCA-group threading + broker-only safety — MATERIALIZED at Tier 3 #1), DEC-387 (reserved but not consumed — freed), DEC-388 (alert observability architecture, resolves DEF-014 — Sessions 5a.1/5a.2/5b/5c/5d/5e)
+- **Reserved DECs at planning:** DEC-385 (side-aware reconciliation contract — Sessions 2a–2d, REMAINS RESERVED — materializes at S2d), DEC-386 (OCA-group threading + broker-only safety — MATERIALIZED at Tier 3 #1), DEC-387 (reserved but not consumed — freed), DEC-388 (alert observability architecture, resolves DEF-014 — Sessions 5a.1/5a.2/5b/5c/5d/5e)
 
 ---
 
@@ -46,9 +46,11 @@
 | After S2a | 5,133 (+5) | 5,172 | 866 | +53 |
 | After S2b.1 | 5,139 (+6) | 5,178 | 866 | +59 |
 | After S2b.2 | 5,153 (+14) | 5,192 | 866 | +73 |
-| **After S2c.1** | **5,159 (+6)** | **5,198** | **866** | **+79** |
+| After S2c.1 | 5,159 (+6) | 5,198 | 866 | +79 |
+| After S2c.2 | 5,163 (+4) | 5,202 | 866 | +83 |
+| **After DEF-216 hotfix** | **5,163 (+0; fix to existing test, not new test)** | **5,202** | **866** | **+83** |
 
-**Sprint cumulative delta:** +79 pytest, 0 Vitest.
+**Sprint cumulative delta:** +83 pytest, 0 Vitest.
 
 **Test_main.py baseline:** 39 pass + 5 skip — unchanged across all sessions.
 
@@ -66,7 +68,7 @@
 
 | DEC | Description | Sessions | Materializes at |
 |---|---|---|---|
-| DEC-385 | Side-aware reconciliation contract | 2a (foundation) + 2b.1 (detection live) + 2b.2 (count-filter alignment + Health hybrid) + 2c.1 (entry gate engagement + SQLite persistence + M5 rehydration) → 2c.2 (auto-clear) + 2d (operator override) | Session 2d close-out |
+| DEC-385 | Side-aware reconciliation contract | 2a (foundation) + 2b.1 (detection live) + 2b.2 (count-filter alignment + Health hybrid) + 2c.1 (entry gate engagement + SQLite persistence + M5 rehydration) + 2c.2 (auto-clear at 5-cycle threshold) → 2d (operator override + audit-log + always-both-alerts + B22 runbook) | **Session 2d close-out (NEXT)** |
 | DEC-388 | Alert observability architecture (resolves DEF-014) | 5a.1/5a.2/5b/5c/5d/5e | Session 5e close-out |
 
 ### Freed
@@ -89,22 +91,23 @@
 | **DEF-213** | Tier 3 #1 Concern C | `SystemAlertEvent.metadata` schema gap. **PARTIAL-RESOLVED in S2b.1** | **Sprint 31.91 Session 5a.1 sprint-gating** (atomic-migration half only) | Sprint 31.91 Session 5a.1 |
 | **DEF-214** | Apr 27 debrief Finding 1 | EOD verification timing race + side-blind classification | **Sprint 31.91 Session 5a.1 sprint-gating** — Requirement 0.5 | Sprint 31.91 Session 5a.1 |
 | **DEF-215** | Apr 27 debrief Finding 2 | Reconciliation per-cycle log spam | DEFERRED with sharp revisit trigger | Deferred |
+| **DEF-216** | S2c.2 CI failure on `1a14258` (verdict commit) | `tests/core/test_regime_history.py::test_get_regime_summary` ET-midnight rollover race. Pre-existing latent flake from Sprint 27.6 (file last touched `dc50fda`); same DEF-150/167/205 family of time-of-day arithmetic flakes | **RESOLVED in impromptu hotfix `c36a30c`** — anchor all snapshot timestamps to noon ET of current ET trading date; query date derived from same anchor; CI history corroborates mechanism (1a14258 FAIL 04:00 UTC, 87b6c85 SUCCESS 04:11 UTC edge, c36a30c SUCCESS 04:21 UTC past window) | RESOLVED — mark in CLAUDE.md at sprint-end doc-sync |
 
 ### Filed pre-Sprint 31.91, status unchanged
 
 | DEF | Status |
 |---|---|
-| DEF-204 | Reconciliation drift / phantom-short mechanism — **detection layer + count-filter layer + entry-gate layer LIVE post-S2c.1**; auto-clear (2c.2), operator override (2d), DEF-158 retry-path side-check (3) still pending |
+| DEF-204 | Reconciliation drift / phantom-short mechanism — **detection layer + count-filter layer + entry-gate layer + auto-clear LIVE post-S2c.2**; operator override (2d), DEF-158 retry-path side-check (3) still pending |
 | DEF-014 | Alert observability gap — RESOLVES at Session 5e |
 | DEF-158 | Flatten retry side-blindness — RESOLVES in Session 3 |
-| DEF-177 | `RejectionStage` enum missing `MARGIN_CIRCUIT` and `phantom_short_gate` distinct values — S2c.1 judgment call #4 + review concern #3; cleanup gated to dedicated cross-domain session |
-| DEF-199 | EOD Pass 2 A1 fix preserved — UNCHANGED across S0–S2c.1 (byte-identical except documented appended alert emission inside SELL branch in S2b.2) |
+| DEF-177 | `RejectionStage` enum missing distinct values for `MARGIN_CIRCUIT` and `phantom_short_gate` — S2c.1 + S2c.2 overload `"risk_manager"`; cleanup gated to dedicated cross-domain session |
+| DEF-199 | EOD Pass 2 A1 fix preserved — UNCHANGED across S0–S2c.2 |
 
 ### Anticipated but NOT filed
 
 | Anticipated DEF | Reason not filed |
 |---|---|
-| DEF-208 | No fresh evidence requiring filing through S2c.1 |
+| DEF-208 | No fresh evidence requiring filing through S2c.2 |
 | DEF-210 | Same — original anticipated routing not opened by any session in flight |
 
 ---
@@ -134,6 +137,7 @@
 | **DEF-213 schema-extension half** | S2b.1 (PARTIAL — atomic emitter migration still S5a.1) | `SystemAlertEvent.metadata` field added |
 | **2b.2 cross-component coupling on `_broker_orphan_last_alerted_cycle`** | S2b.2 (read implementation complete; production wiring deferred to S5a.1+) | `HealthMonitor._order_manager` reads dict via `getattr` defensive pattern |
 | **Spec invariant 8 wrong attribution** (Check 0 around `risk_manager.py:335` — actually max-concurrent) | S2b.2 | Disclosed and reconciled per RULE-038 |
+| **DEF-216** ET-midnight rollover flake in `test_get_regime_summary` | Impromptu hotfix `c36a30c` (between S2c.2 and S2d) | Anchor all snapshot timestamps + query date to noon ET of current ET trading date; deterministic regardless of wall-clock execution time. Pre-existing latent flake from Sprint 27.6, unrelated to Sprint 31.91 work. Mark RESOLVED in CLAUDE.md at sprint-end doc-sync |
 
 ---
 
@@ -155,9 +159,11 @@
 | `HealthMonitor.set_order_manager()` production wiring at startup deferred — `main.py` is do-not-modify | RULE-007 deferral | S2b.2 Edge Case 1 | S5a.1+ migration |
 | Spec do-not-modify line range `:1670-1750` for `order_manager.py` does NOT actually contain SELL-detection branching | LOW (spec-anchor discrepancy) | S2b.2 RULE-038 #3 | Future impl prompts should reference structural anchor |
 | `logger.info` breakdown lines on margin reset site previously absent | INFORMATIONAL | S2b.2 Edge Case 4 | No existing log-line assertion picks them up |
-| **NEW (S2c.1):** Persistence failure leaves disk state stale until restart re-detection. In-memory state correct; done-callback logs WARNING; 60s reconciliation-cycle re-detection on restart bounds recovery | LOW (documented contract) | S2c.1 review concern #1 | DEC-345 fire-and-forget semantics |
-| **NEW (S2c.1):** `OrderManager.stop()` does not await `_pending_gate_persist_tasks` — same recovery path as above on graceful shutdown | LOW (same-family follow-on) | S2c.1 review concern #2 | Eligible for S2c.2 graceful-shutdown improvement |
-| **NEW (S2c.1):** `rejection_stage="risk_manager"` overload for `phantom_short_gate` mirrors margin-circuit pattern | LOW (DEF-177 covers split) | S2c.1 judgment call #4 + review concern #3 | When DEF-177 cross-domain `RejectionStage` enum work lands |
+| Persistence failure leaves disk state stale until restart re-detection | LOW (documented contract) | S2c.1 review concern #1 | DEC-345 fire-and-forget; 60s reconciliation cycle bounds recovery |
+| `OrderManager.stop()` does not await `_pending_gate_persist_tasks` | LOW (same-family follow-on) | S2c.1 review concern #2 | Eligible for S2d or future graceful-shutdown improvement |
+| `rejection_stage="risk_manager"` overload for `phantom_short_gate` mirrors margin-circuit pattern | LOW (DEF-177 covers split) | S2c.1 judgment call #4 + review concern #3 | When DEF-177 cross-domain `RejectionStage` enum work lands |
+| **NEW (S2c.2):** `_phantom_short_clear_cycles` not cleared in `reset_daily_state` (asymmetric with `_broker_orphan_long_cycles` which IS cleared) | LOW (defensible either way) | S2c.2 J-2 + reviewer soft observation #1 | Eligible for alignment in a future session |
+| **NEW (S2c.2):** LONG-shares branch (`broker_pos.side == OrderSide.BUY`) not directly exercised by 4 new auto-clear tests; structurally identical to zero-shares branch | LOW (small coverage gap) | S2c.2 reviewer soft observation #2 | Future test ("operator manually flattens phantom short → strategy fires legitimate long → 5 cycles → gate clears") would lock the LONG path |
 
 ---
 
@@ -180,11 +186,13 @@
 | Emitter-site line-number drift in `order_manager.py` | TRACKED | S5a.1 pre-flight grep canonical |
 | 4 emitter sites at S2b.2 close (all populate `metadata` from day one — zero S5a.1 migration burden) | TRACKED for S5a.1 grep | S5a.1 |
 | Pass 1 retry SELL `phantom_short` alert extension — consistency-gap follow-up | Future session | TBD |
-| **`HealthMonitor.set_order_manager()` production wiring at startup** | Watch | S5a.1+ — 5a.1 should invoke alongside consumer subscription wiring |
+| `HealthMonitor.set_order_manager()` production wiring at startup | Watch | S5a.1+ — 5a.1 should invoke alongside consumer subscription wiring |
 | Spec do-not-modify anchor for `order_manager.py` should reference structural `elif side == OrderSide.SELL:` rather than line numbers | TRACKED | Future impl prompts |
-| **NEW (S2c.1):** `OrderManager.stop()` graceful-shutdown await of `_pending_gate_persist_tasks` | Watch | Eligible for S2c.2 follow-on improvement |
-| **NEW (S2c.1):** `data/operations.db` is a NEW SQLite file introduced this sprint — must surface in sprint-end doc-sync for `architecture.md` storage table + `live-operations.md` operational reference | TRACKED | Sprint-end doc-sync |
-| **NEW (S2c.1):** `_phantom_short_gated_symbols` location on `OrderManager` is acceptable for Sprint 31.91 but eligible for relocation to a dedicated component per DEF-211 D2 IMPROMPTU-04 startup invariant gate refactor (Sprint 31.93) | OBSERVATIONAL | Sprint 31.93 |
+| `OrderManager.stop()` graceful-shutdown await of `_pending_gate_persist_tasks` | Watch | Eligible for S2d or future improvement |
+| `data/operations.db` is a NEW SQLite file introduced this sprint | TRACKED | Sprint-end doc-sync (architecture.md storage table + live-operations.md operational reference) |
+| `_phantom_short_gated_symbols` location on `OrderManager` is acceptable for Sprint 31.91 but eligible for relocation per DEF-211 D2 | OBSERVATIONAL | Sprint 31.93 |
+| **NEW (S2c.2):** `_phantom_short_clear_cycles` reset_daily_state symmetry with `_broker_orphan_long_cycles` | Watch | Future alignment session |
+| **NEW (S2c.2):** LONG-shares-clearing test coverage gap | Watch | Future session |
 
 ---
 
@@ -194,8 +202,8 @@
 |---|---|---|
 | Phase D Item 2 | EOD Pass 2 cancel-timeout failure-mode docs + test 7 | Session 1c (RESOLVED) |
 | Phase D Item 3 | Health + broker-orphan double-fire dedup → Option C hybrid | Session 2b.2 (RESOLVED — production wiring deferred S5a.1+) |
-| M4 cost-of-error asymmetry | Auto-clear threshold default = 5 | Session 2c.2 |
-| L3 always-fire-both-alerts | Aggregate at ≥10 + per-symbol always fire | Session 2d |
+| M4 cost-of-error asymmetry | Auto-clear threshold default = 5 | Session 2c.2 (RESOLVED — `broker_orphan_consecutive_clear_threshold: int = 5` with M4 rationale documented in field description + inline comment) |
+| L3 always-fire-both-alerts | Aggregate at ≥10 + per-symbol always fire | Session 2d (NEXT) |
 | MEDIUM #13 Alpaca anti-regression | `inspect.getsource` check (not line-number-based) | Session 5b |
 | HIGH #1 auto-resolution policy | Explicit per-alert-type predicates (8 entries) | Session 5a.2 |
 | HIGH #4 decomposed live-enable gate | 4 criteria (1, 2, 3a, 3b) | Session 4 |
@@ -224,6 +232,10 @@ Already landed in Tier 3 #1 doc-sync per `df48e31`.
 ### 2026-04-27 — Per-Session Register Discipline → adopt + formalize in metarepo
 
 ARGUS register at `docs/sprints/sprint-31.91-reconciliation-drift/work-journal-register.md`. Workflow metarepo amendment at commit `606934e` (workflow v1.2.0).
+
+### 2026-04-28 — DEF-216 fix-now decision → impromptu hotfix between S2c.2 and S2d
+
+Operator chose to fix the ET-midnight rollover flake immediately rather than file-and-defer. Rationale: 5-line surgical fix, no production code touched, unblocks S2c.2 CI cleanly. Hotfix landed in `c36a30c` with 5/5 consecutive runs PASS verification.
 
 ---
 
@@ -274,6 +286,8 @@ ARGUS register at `docs/sprints/sprint-31.91-reconciliation-drift/work-journal-r
 1. Invoke `health_monitor.set_order_manager(self.order_manager)` when wiring HealthMonitor at startup (Option C cross-reference production activation per S2b.2 carry-forward)
 2. Subscribe HealthMonitor to `SystemAlertEvent` per its own scope (Requirement 1)
 
+S2d may add additional emitters (operator override, audit-log alerts) — these should populate `metadata` from day one matching the S2b.1/S2b.2 pattern.
+
 ---
 
 ## SQLite Storage (Sprint 31.91 New Surfaces)
@@ -281,6 +295,8 @@ ARGUS register at `docs/sprints/sprint-31.91-reconciliation-drift/work-journal-r
 | File | Source session | Schema | Purpose |
 |---|---|---|---|
 | `data/operations.db` | S2c.1 (NEW) | `phantom_short_gated_symbols` table (5 columns: `symbol PRIMARY KEY`, `engaged_at_utc`, `engaged_at_et`, `engagement_source`, `last_observed_short_shares`) | Persists per-symbol entry-gate state across ARGUS restarts |
+
+S2d MAY add a new table to `data/operations.db` for operator override audit-log (per Phase D / B22 runbook scope). If so, register will track at S2d close.
 
 Sprint-end doc-sync should add this to `architecture.md` storage table and `live-operations.md` operational reference.
 
@@ -297,18 +313,19 @@ Sprint-end doc-sync should add this to `architecture.md` storage table and `live
 7. ✅ Session 2b.1 (broker-orphan branch + `phantom_short` alert + cycle infrastructure) — CLEAR, commit `4119608`
 8. ✅ Session 2b.2 (4 count-filter sites + 1 alert-alignment site + Option C cross-reference) — CLEAR, commit `a6846c6`
 9. ✅ Session 2c.1 (per-symbol entry gate + handler + SQLite + M5 rehydration ordering) — CLEAR, commit `0c034b3`
-10. ⏳ **Session 2c.2 (clear-threshold + auto-clear, default 5)** ← NEXT
-11. Session 2d (operator override API + audit-log + always-both-alerts + B22 runbook)
-12. Session 3 (DEF-158 retry side-check + severity fix)
-13. Session 4 (mass-balance categorized + IMSR replay + decomposed live-enable gate)
-14. Session 5a.1 (HealthMonitor consumer + REST + acknowledgment) — sprint-gating DEF-213 (atomic-migration half) + DEF-214; ALSO must invoke `health_monitor.set_order_manager()` for Option C cross-reference production wiring
-15. Session 5a.2 (WebSocket + persistence + auto-resolution + retention/migration)
-16. Session 5b (IBKR emitter TODOs + E2E + Alpaca behavioral check)
-17. **Tier 3 #2** — combined diff 5a.1+5a.2+5b
-18. Session 5c (useAlerts hook + Dashboard banner)
-19. Session 5d (toast notification + acknowledgment UI flow)
-20. Session 5e (Observatory alerts panel + cross-page integration)
-21. Sprint close-out + doc-sync handoff
+10. ✅ Session 2c.2 (clear-threshold + auto-clear, default 5) — CLEAR, commit `24320e5`
+11. ✅ Impromptu hotfix DEF-216 (test_get_regime_summary ET-midnight rollover) — CLEAR, commit `c36a30c`
+12. ⏳ **Session 2d (operator override API + audit-log + always-both-alerts + B22 runbook)** ← NEXT (DEC-385 materializes here)
+13. Session 3 (DEF-158 retry side-check + severity fix)
+14. Session 4 (mass-balance categorized + IMSR replay + decomposed live-enable gate)
+15. Session 5a.1 (HealthMonitor consumer + REST + acknowledgment) — sprint-gating DEF-213 (atomic-migration half) + DEF-214; ALSO must invoke `health_monitor.set_order_manager()` for Option C cross-reference production wiring
+16. Session 5a.2 (WebSocket + persistence + auto-resolution + retention/migration)
+17. Session 5b (IBKR emitter TODOs + E2E + Alpaca behavioral check)
+18. **Tier 3 #2** — combined diff 5a.1+5a.2+5b
+19. Session 5c (useAlerts hook + Dashboard banner)
+20. Session 5d (toast notification + acknowledgment UI flow)
+21. Session 5e (Observatory alerts panel + cross-page integration)
+22. Sprint close-out + doc-sync handoff
 
 ---
 
@@ -320,12 +337,13 @@ When Session 5e clears, the Work Journal produces the doc-sync handoff per `temp
 - DEC-386 documentation (already done in Tier 3 #1 doc-sync; verify)
 - DEC-385 documentation (materializing at Session 2d)
 - DEC-388 documentation (materializing at Session 5e)
-- All 6 DEFs filed in this sprint integrated into CLAUDE.md
+- All 7 DEFs filed in this sprint integrated into CLAUDE.md (DEF-209/211/212/213/214/215/216)
 - DEF-213 final-resolved status (schema half S2b.1 + atomic-migration half S5a.1)
+- **DEF-216 RESOLVED via impromptu hotfix `c36a30c`** — fold into CLAUDE.md as a closed defect
 - RSK-DEC-386-DOCSTRING in `risk-register.md`
 - Architecture.md §3.3 + §3.7 OCA architecture (already done; verify) + §14 alert observability (new)
-- **Architecture.md storage table:** add `data/operations.db` introduced by S2c.1 (`phantom_short_gated_symbols` schema)
-- `live-operations.md` updates: OCA architecture operations section (already done; verify), DEF-214 EOD verification fix runbook, DEF-215 deferred revisit trigger, **conservative daily-flatten cessation criteria + revisit decision**, alert observability acknowledgment runbook, broker-orphan-LONG M2 exp-backoff schedule documentation, **3-site phantom_short emission taxonomy** (reconciliation / health.integrity_check / eod_flatten), **`data/operations.db` operational reference + phantom-short gate clear procedure**
+- **Architecture.md storage table:** add `data/operations.db` introduced by S2c.1 (`phantom_short_gated_symbols` schema; potentially additional S2d audit-log table)
+- `live-operations.md` updates: OCA architecture operations section (already done; verify), DEF-214 EOD verification fix runbook, DEF-215 deferred revisit trigger, **conservative daily-flatten cessation criteria + revisit decision**, alert observability acknowledgment runbook, broker-orphan-LONG M2 exp-backoff schedule documentation, **3-site phantom_short emission taxonomy** (reconciliation / health.integrity_check / eod_flatten), **`data/operations.db` operational reference + phantom-short gate clear procedure** (manual operator override per S2d), **B22 runbook for operator override**
 - `pre-live-transition-checklist.md`: Session 5a.1 as HARD live-trading prerequisite (already done; verify)
 - Session 5a.1 amendment header documenting Tier 3 #1-driven additions (already done; verify)
 - Apr 27 debrief findings folded (already done; verify)
