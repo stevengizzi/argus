@@ -264,6 +264,24 @@ class ReconciliationConfig(BaseModel):
         ),
     )
 
+    # Sprint 31.91 Session 2c.2 (D5, M4): consecutive-cycle threshold for
+    # auto-clearing the phantom_short entry gate. Counter increments on each
+    # reconciliation cycle that observes broker-non-short for a gated symbol;
+    # gate clears when the counter reaches this threshold. Counter resets on
+    # re-detection of the phantom short (preventing stuttering).
+    broker_orphan_consecutive_clear_threshold: int = Field(
+        default=5,
+        ge=1,
+        le=60,
+        description=(
+            "Number of consecutive reconciliation cycles observing broker-zero "
+            "shares before the phantom-short gate auto-clears for a symbol. "
+            "Default 5 (~5 minutes) per M4 cost-of-error asymmetry: false-clear "
+            "is more dangerous than false-hold. Was 3 in earlier sprint drafts; "
+            "raised to 5 during Phase A revisit. Range 1-60 (60 ~hourly cap)."
+        ),
+    )
+
 
 class TrailingStopConfig(BaseModel):
     """Configuration for trailing stop behavior (Sprint 28.5).

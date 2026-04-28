@@ -197,6 +197,11 @@ reconciliation:
   # on startup before OrderApprovedEvent subscription (M5 ordering).
   # When False, the alert still fires but no entries are blocked.
   broker_orphan_entry_gate_enabled: true
+  # Sprint 31.91 Session 2c.2 (M4): consecutive reconciliation cycles
+  # observing broker-non-short before the phantom_short gate auto-clears.
+  # Default 5 (~5 minutes) per M4 cost-of-error asymmetry — false-clear
+  # is more dangerous than false-hold. Range 1-60.
+  broker_orphan_consecutive_clear_threshold: 5
 
 # Observatory (Sprint 25 — The Observatory)
 # Immersive pipeline visualization page for operational visibility.

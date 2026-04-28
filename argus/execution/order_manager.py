@@ -412,6 +412,17 @@ class OrderManager:
         # (M5 rehydration ordering).
         self._phantom_short_gated_symbols: set[str] = set()
 
+        # Sprint 31.91 Session 2c.2: per-symbol consecutive-cycle counter for
+        # auto-clearing the phantom_short gate. Increments on each reconciliation
+        # cycle observing broker-non-short for a gated symbol; reaches the
+        # configured threshold (default 5 per M4) -> gate clears. Counter
+        # resets on re-detection of phantom short (preventing stuttering).
+        #
+        # M4 cost-of-error asymmetry: 5 cycles (~5 min) > 3 cycles (~3 min) because
+        # false-clear (gate releases while short persists) is more dangerous than
+        # false-hold (gate stays engaged a few extra cycles).
+        self._phantom_short_clear_cycles: dict[str, int] = {}
+
         # Sprint 31.91 Session 2c.1: path to the operations.db file that
         # backs the phantom-short entry-gate state. Default is
         # ``data/operations.db``; main.py may override based on
@@ -3983,6 +3994,89 @@ class OrderManager:
             logger.info(
                 "Broker-orphan LONG resolved (broker reports zero): %s",
                 symbol,
+            )
+
+        # Sprint 31.91 Session 2c.2 (D5, M4): auto-clear logic for the
+        # phantom_short entry gate. For each gated symbol, observe broker
+        # state this cycle:
+        #   - broker reports SHORT  -> reset clear-counter (re-detection;
+        #     prevents stuttering near-clear/re-engage cycles).
+        #   - broker reports zero   -> increment clear-counter; clear gate
+        #     if counter reaches the configured threshold.
+        #   - broker reports LONG   -> increment clear-counter (original
+        #     phantom-short condition has resolved); clear gate at threshold.
+        # Snapshot the gated set before iterating so the clear-path mutation
+        # below cannot raise RuntimeError on set-changed-during-iteration.
+        clear_threshold = (
+            self._reconciliation_config.broker_orphan_consecutive_clear_threshold
+        )
+        gated_to_clear: list[str] = []
+        for symbol in list(self._phantom_short_gated_symbols):
+            broker_pos = broker_positions.get(symbol)
+            broker_is_short = (
+                broker_pos is not None and broker_pos.side == OrderSide.SELL
+            )
+            if broker_is_short:
+                # Re-detection — RESET the clear counter so a transient
+                # broker-zero observation cannot count toward auto-clear
+                # while the phantom short is still active at the broker.
+                if symbol in self._phantom_short_clear_cycles:
+                    self._phantom_short_clear_cycles.pop(symbol)
+                    logger.info(
+                        "Phantom-short gate clear-counter RESET for %s "
+                        "(broker still reports short; counter back to 0).",
+                        symbol,
+                    )
+                continue  # gate stays engaged
+            current = self._phantom_short_clear_cycles.get(symbol, 0) + 1
+            self._phantom_short_clear_cycles[symbol] = current
+            if broker_pos is None:
+                logger.info(
+                    "Phantom-short gate clear-counter for %s: cycle %d/%d "
+                    "(broker reports zero shares).",
+                    symbol,
+                    current,
+                    clear_threshold,
+                )
+            else:
+                # broker_pos.side == OrderSide.BUY — LONG. Original phantom
+                # short has resolved (operator may have flattened then a
+                # legitimate long entered, or another path created it).
+                logger.info(
+                    "Phantom-short gate clear-counter for %s: cycle %d/%d "
+                    "(broker reports LONG shares=%d, not short).",
+                    symbol,
+                    current,
+                    clear_threshold,
+                    broker_pos.shares,
+                )
+            if current >= clear_threshold:
+                gated_to_clear.append(symbol)
+
+        for symbol in gated_to_clear:
+            self._phantom_short_gated_symbols.discard(symbol)
+            self._phantom_short_clear_cycles.pop(symbol, None)
+            # Persist the removal. Fire-and-forget so reconciliation isn't
+            # blocked; if the write fails, the next reconciliation cycle
+            # would re-detect any still-active phantom short and re-engage.
+            persist_task = asyncio.create_task(
+                self._remove_gated_symbol_from_db(symbol)
+            )
+            self._pending_gate_persist_tasks.add(persist_task)
+
+            def _on_persist_done(t: "asyncio.Task[None]", _sym: str = symbol) -> None:
+                self._pending_gate_persist_tasks.discard(t)
+                _log_persist_task_exception(t, _sym)
+
+            persist_task.add_done_callback(_on_persist_done)
+            logger.warning(
+                "Phantom-short gate AUTO-CLEARED for %s after %d consecutive "
+                "broker-non-short cycles. Symbol may now receive new entries. "
+                "If this clearance is in error, re-detection via reconciliation "
+                "will re-engage the gate automatically once the phantom short "
+                "reappears at the broker.",
+                symbol,
+                clear_threshold,
             )
 
         self._last_reconciliation = ReconciliationResult(
