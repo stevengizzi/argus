@@ -736,6 +736,22 @@ class DatabentoConfig(BaseModel):
     # Circuit breaker — halt new trades if no data received within this window
     stale_data_timeout_seconds: float = 30.0
 
+    # Heartbeat publish cadence for the DatabentoHeartbeatEvent producer
+    # consumed by HealthMonitor's databento_dead_feed auto-resolution
+    # predicate (Sprint 31.91 Impromptu B, DEF-221). Suppressed while the
+    # data feed is in reconnect / dead-feed state.
+    heartbeat_publish_interval_seconds: float = Field(
+        default=30.0,
+        gt=0.0,
+        le=300.0,
+        description=(
+            "Interval at which DatabentoDataService publishes "
+            "DatabentoHeartbeatEvent when the feed is healthy. "
+            "Suppressed during reconnect loop. "
+            "Sprint 31.91 Impromptu B (DEF-221)."
+        ),
+    )
+
     # Historical data cache directory (DEC-085)
     historical_cache_dir: str = "data/databento_cache"
 

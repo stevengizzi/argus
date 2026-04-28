@@ -25,6 +25,7 @@ from argus.core.clock import Clock, SystemClock
 from argus.core.config import DatabentoConfig, DataServiceConfig
 from argus.core.events import (
     CandleEvent,
+    DatabentoHeartbeatEvent,
     DataResumedEvent,
     DataStaleEvent,
     IndicatorEvent,
@@ -156,6 +157,11 @@ class DatabentoDataService(DataService):
         self._symbols_needing_warmup: set[str] = set()
         self._warmup_lock = threading.Lock()  # Thread-safe access from reader thread
 
+        # Sprint 31.91 Impromptu B (DEF-221): producer side of the
+        # DatabentoHeartbeatEvent → databento_dead_feed auto-resolution
+        # pipeline. Spawned in start(), cancelled in stop().
+        self._heartbeat_publish_task: asyncio.Task | None = None
+
     # ──────────────────────────────────────────────
     # DataService ABC Implementation
     # ──────────────────────────────────────────────
@@ -209,6 +215,11 @@ class DatabentoDataService(DataService):
 
         # 7. Start data heartbeat (periodic INFO log for visibility)
         self._heartbeat_task = asyncio.create_task(self._data_heartbeat())
+
+        # 8. Start DatabentoHeartbeatEvent publisher (Impromptu B / DEF-221)
+        self._heartbeat_publish_task = asyncio.create_task(
+            self._heartbeat_publish_loop()
+        )
 
         logger.info(
             "DatabentoDataService started: dataset=%s, symbols=%d, schemas=[%s, %s]",
@@ -442,6 +453,12 @@ class DatabentoDataService(DataService):
             self._heartbeat_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await self._heartbeat_task
+
+        # Cancel DatabentoHeartbeatEvent publisher (Impromptu B / DEF-221)
+        if self._heartbeat_publish_task and not self._heartbeat_publish_task.done():
+            self._heartbeat_publish_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await self._heartbeat_publish_task
 
         logger.info("DatabentoDataService stopped")
 
@@ -1142,6 +1159,52 @@ class DatabentoDataService(DataService):
                 )
             else:
                 logger.info(heartbeat_msg)
+
+    async def _heartbeat_publish_loop(self) -> None:
+        """Publish DatabentoHeartbeatEvent on a fixed cadence while feed healthy.
+
+        Sprint 31.91 Impromptu B (DEF-221): producer side of the
+        DatabentoHeartbeatEvent → ``databento_dead_feed`` auto-resolution
+        pipeline. The auto-resolution predicate at
+        ``argus/core/alert_auto_resolution.py::_databento_heartbeat_predicate``
+        requires three consecutive heartbeats to clear an active dead-feed
+        alert.
+
+        Suppression contract: heartbeats are ONLY published when the feed
+        is healthy. "Healthy" reuses the pre-existing state combination
+        ``self._running and not self._stale_published`` — no new state
+        attribute is introduced for this task (Impromptu B scope boundary).
+        ``self._stale_published`` is owned by ``_stale_data_monitor`` and
+        flips to True when no messages have arrived for
+        ``stale_data_timeout_seconds``; it flips back to False on
+        DataResumed. This means once the reconnect loop exhausts and the
+        feed dies, ``_stale_published`` becomes True within the stale
+        timeout and heartbeats stop — preventing premature auto-resolution
+        of the dead-feed alert.
+        """
+        interval = self._config.heartbeat_publish_interval_seconds
+        while self._running:
+            await asyncio.sleep(interval)
+            if not self._running:
+                break
+            if self._stale_published:
+                # Reconnect-loop / dead-feed state — suppress.
+                continue
+            elapsed = (
+                time.monotonic() - self._last_message_time
+                if self._last_message_time
+                else 0.0
+            )
+            try:
+                await self._event_bus.publish(
+                    DatabentoHeartbeatEvent(
+                        seconds_since_last_message=elapsed,
+                    )
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to publish DatabentoHeartbeatEvent"
+                )
 
     # ──────────────────────────────────────────────
     # Historical Data / Parquet Cache (DEC-085)

@@ -52,6 +52,7 @@ from argus.core.config import (
 )
 from argus.core.event_bus import EventBus
 from argus.core.events import (
+    DatabentoHeartbeatEvent,
     IBKRReconnectedEvent,
     OrderFilledEvent,
     ReconciliationCompletedEvent,
@@ -972,3 +973,226 @@ class TestAlpacaBoundary:
             "this test must be removed AS PART OF the retirement "
             "sprint, not separately."
         )
+
+
+# ---------------------------------------------------------------------------
+# 4. Sprint 31.91 Impromptu B (DEF-221) — real Databento producer chain
+# ---------------------------------------------------------------------------
+
+
+class TestE2EDatabentoDeadFeedAutoResolveWithRealProducer:
+    """Drives the production Databento emitter chain end-to-end.
+
+    Distinct from ``TestE2EDatabentoDeadFeed`` (above), which fabricates
+    the ``SystemAlertEvent``: this test exercises the actual
+    ``_run_with_reconnection`` exhaustion path AND the actual
+    ``_heartbeat_publish_loop`` task, validating that DEF-217 (correct
+    ``alert_type`` literal at the producer site) and DEF-221
+    (DatabentoHeartbeatEvent producer wiring) together deliver a working
+    auto-resolution pipeline.
+    """
+
+    @pytest.mark.asyncio
+    async def test_databento_dead_feed_auto_resolves_via_real_heartbeats(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        event_bus: EventBus,
+        health_monitor: HealthMonitor,
+        operations_db: str,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """Real producer → consume → REST → suppress while dead → 3 real
+        heartbeats → auto-resolve.
+
+        Pinned assertions (load-bearing):
+        - The dead-feed alert reaches HealthMonitor with
+          ``alert_type='databento_dead_feed'`` (validates DEF-217 fix in
+          production code path — a regressed literal here would surface
+          as ``alert_type='max_retries_exceeded'`` and the auto-resolution
+          policy entry would silently never apply).
+        - Zero ``DatabentoHeartbeatEvent`` instances are published while
+          ``self._stale_published`` is True (validates suppression
+          contract during reconnect / dead-feed state).
+        - At least three ``DatabentoHeartbeatEvent`` instances are
+          published once the feed recovers (sufficient to satisfy the
+          predicate at
+          ``alert_auto_resolution._databento_heartbeat_predicate``).
+        - The alert ends up archived via ``audit_kind=auto_resolution``.
+        """
+        import sys
+
+        from argus.core.config import DatabentoConfig, DataServiceConfig
+        from argus.data.databento_data_service import DatabentoDataService
+        from tests.mocks.mock_databento import (
+            MockErrorMsg,
+            MockHistoricalClient,
+            MockLiveClient,
+            MockOHLCVMsg,
+            MockSymbolMappingMsg,
+            MockTradeMsg,
+        )
+
+        class _MockDatabentoModule:
+            Live = MockLiveClient
+            Historical = MockHistoricalClient
+            OHLCVMsg = MockOHLCVMsg
+            TradeMsg = MockTradeMsg
+            SymbolMappingMsg = MockSymbolMappingMsg
+            ErrorMsg = MockErrorMsg
+
+        monkeypatch.setitem(sys.modules, "databento", _MockDatabentoModule())
+        monkeypatch.setenv("DATABENTO_API_KEY", "test-key")
+
+        # Capture every DatabentoHeartbeatEvent on the bus so we can
+        # count and time-correlate them against state transitions.
+        heartbeats: list[DatabentoHeartbeatEvent] = []
+
+        async def _capture_heartbeat(event: DatabentoHeartbeatEvent) -> None:
+            heartbeats.append(event)
+
+        event_bus.subscribe(DatabentoHeartbeatEvent, _capture_heartbeat)
+
+        ws_queue = health_monitor.subscribe_state_changes()
+
+        # Tiny intervals so the test completes in well under a second.
+        databento_config = DatabentoConfig(
+            api_key_env_var="DATABENTO_API_KEY",
+            dataset="XNAS.ITCH",
+            symbols=["AAPL"],
+            reconnect_max_retries=1,
+            reconnect_base_delay_seconds=0.01,
+            reconnect_max_delay_seconds=0.05,
+            stale_data_timeout_seconds=10.0,
+            heartbeat_publish_interval_seconds=0.05,
+        )
+        data_config = DataServiceConfig()
+
+        service = DatabentoDataService(
+            event_bus=event_bus,
+            config=databento_config,
+            data_config=data_config,
+        )
+        # Skip the historical warm-up — irrelevant to this test.
+        service._warm_up_indicators = AsyncMock()  # type: ignore[method-assign]
+
+        # First call to _connect_live_session succeeds (so start() returns
+        # cleanly and the heartbeat task spawns); subsequent calls inside
+        # the reconnect loop fail until retries are exhausted.
+        connect_calls: list[int] = []
+        original_connect = service._connect_live_session
+
+        async def _connect_succeeds_then_fails() -> None:
+            connect_calls.append(1)
+            if len(connect_calls) == 1:
+                await original_connect()
+            else:
+                raise ConnectionError("mock reconnect failure")
+
+        service._connect_live_session = _connect_succeeds_then_fails  # type: ignore[method-assign]
+
+        # Engage the suppression invariant from t=0 so we can prove
+        # heartbeats stay quiet across the entire reconnect window.
+        service._stale_published = True
+
+        await service.start(["AAPL"], ["1m"])
+        try:
+            # Drive the reconnect loop to exhaustion. retries=1 +
+            # base_delay=0.01s + cap=0.05s → the production
+            # SystemAlertEvent fires within ~50ms; budget generously
+            # for asyncio scheduling under xdist load.
+            await asyncio.sleep(0.3)
+            await event_bus.drain()
+
+            # WS push for the real-producer dead-feed alert.
+            ws_msg = await asyncio.wait_for(ws_queue.get(), timeout=2.0)
+            assert ws_msg["type"] == "alert_active"
+            # Load-bearing: the literal must round-trip exactly. A
+            # regressed DEF-217 fix would surface here as
+            # ``max_retries_exceeded`` and the assertion would fire.
+            assert (
+                ws_msg["alert"]["alert_type"] == "databento_dead_feed"
+            ), (
+                "Production emitter must publish "
+                "alert_type='databento_dead_feed' (validates DEF-217 in "
+                "the real reconnect-exhaustion code path; a drift to "
+                "'max_retries_exceeded' would silently break the "
+                "auto-resolution policy lookup)."
+            )
+            alert_id = ws_msg["alert"]["alert_id"]
+
+            # REST `/active` lists the alert.
+            resp = await client.get(
+                "/api/v1/alerts/active", headers=auth_headers
+            )
+            assert resp.status_code == 200
+            assert any(a["alert_id"] == alert_id for a in resp.json())
+
+            # Suppression contract: zero heartbeats published while the
+            # feed is in dead state. Wait several intervals to confirm.
+            heartbeats_before_recovery = len(heartbeats)
+            await asyncio.sleep(0.25)  # ~5 intervals at 0.05s
+            assert len(heartbeats) == heartbeats_before_recovery, (
+                "Heartbeats must not publish while _stale_published is "
+                "True (suppression contract for the reconnect / "
+                "dead-feed state)."
+            )
+
+            # Mock recovery: clear the staleness flag and freshen the
+            # last-message marker, mirroring what the stale_data_monitor
+            # does on a DataResumed transition.
+            service._stale_published = False
+            service._last_message_time = time_module.monotonic()
+
+            # Wait for the auto-resolution WS push. Each iteration is
+            # ~one heartbeat interval; cap the total wait at ~2s.
+            ws_resolve_msg: dict | None = None
+            for _ in range(40):
+                try:
+                    msg = await asyncio.wait_for(
+                        ws_queue.get(), timeout=0.1
+                    )
+                except asyncio.TimeoutError:
+                    continue
+                if (
+                    msg.get("type") == "alert_auto_resolved"
+                    and msg.get("alert", {}).get("alert_id") == alert_id
+                ):
+                    ws_resolve_msg = msg
+                    break
+
+            assert ws_resolve_msg is not None, (
+                "Expected alert_auto_resolved WS push within the "
+                "heartbeat-driven auto-resolution window."
+            )
+            assert ws_resolve_msg["alert"]["state"] == "archived"
+
+            # The predicate requires three healthy heartbeats; verify
+            # the producer actually delivered ≥3.
+            assert len(heartbeats) >= 3, (
+                f"Expected ≥3 DatabentoHeartbeatEvents during recovery, "
+                f"got {len(heartbeats)}."
+            )
+
+            # REST `/active` no longer lists the alert.
+            resp_after = await client.get(
+                "/api/v1/alerts/active", headers=auth_headers
+            )
+            assert all(
+                a["alert_id"] != alert_id for a in resp_after.json()
+            )
+
+            # Audit row confirms the auto_resolution path (vs operator
+            # ack).
+            async with aiosqlite.connect(operations_db) as db:
+                cursor = await db.execute(
+                    "SELECT audit_kind, operator_id "
+                    "FROM alert_acknowledgment_audit WHERE alert_id = ?",
+                    (alert_id,),
+                )
+                row = await cursor.fetchone()
+            assert row is not None
+            assert row[0] == "auto_resolution"
+            assert row[1] == "auto"
+        finally:
+            await service.stop()
