@@ -207,6 +207,35 @@ This is a temporary mount for 5c; Session 5e moves it to `Layout.tsx` for cross-
 
 **Coverage target:** ≥90% for new code per spec D11 acceptance.
 
+### Requirement N — DEF-220 disposition: `acknowledgment_required_severities` field
+
+**Anchor:** in `argus/core/config.py`, the `AlertsConfig` Pydantic model and its `acknowledgment_required_severities` field.
+
+**Pre-flight grep-verify:**
+```bash
+grep -n "acknowledgment_required_severities" argus/core/config.py
+# Expected: 1 hit (the field definition)
+
+grep -rn "acknowledgment_required_severities" argus/ --include="*.py" | grep -v config.py
+# Expected: 0 hits — the field has no consumers (this is the DEF)
+```
+
+**Disposition decision:** the recommendation per Tier 3 #2 is REMOVAL (the per-alert-type `PolicyEntry.operator_ack_required` already encodes the equivalent control). However, this session's frontend implementation may surface a use case for the field. Decide one of:
+
+**Option A — Remove the field** (recommended if no frontend use case surfaces):
+1. Delete the field from `AlertsConfig` in `argus/core/config.py`.
+2. Update tests that reference the field to use `PolicyEntry.operator_ack_required` instead.
+3. Search for any docs/sprint-spec references to the field and update accordingly.
+
+**Option B — Wire the field** (only if Session 5c's frontend introduces a need):
+1. Add a consumer in the route layer that gates auto-archive based on severity match against the field.
+2. Add tests covering the gate behavior.
+3. Document the composition with `PolicyEntry.operator_ack_required` (which takes precedence).
+
+**Decision documentation:** Session 5c's close-out must explicitly state which option was chosen and why.
+
+**DEF transition:** DEF-220 → "RESOLVED-IN-SPRINT, Session 5c (Option A: removal)" or "RESOLVED-IN-SPRINT, Session 5c (Option B: wired at <consumer site>)".
+
 ## Definition of Done
 
 - [ ] `useAlerts.ts` mirrors `useObservatory.ts` hybrid pattern.
@@ -219,6 +248,7 @@ This is a temporary mount for 5c; Session 5e moves it to `Layout.tsx` for cross-
 - [ ] Mounted on `Dashboard.tsx` (temporary placement; 5e moves to Layout).
 - [ ] 10 Vitest tests; ≥90% coverage on new code.
 - [ ] Operator decision documented: warning severity in banner OR toast-only (default: toast-only).
+- [ ] DEF-220 disposition (Option A or Option B) decided and applied; close-out documents the choice.
 - [ ] CI green; Vitest baseline ≥ Session 5b + 10.
 - [ ] Tier 2 review (frontend reviewer template) verdict CLEAR.
 - [ ] Close-out at `docs/sprints/sprint-31.91-reconciliation-drift/session-5c-closeout.md`.
@@ -230,6 +260,7 @@ Standard structure plus:
 - **WebSocket contract verification:** cite the backend's actual WS message shapes (from 5a.2's `argus/ws/alerts.py`) and confirm the frontend hook handles all of them.
 - **Banner severity-rendering decision:** state explicitly which severities render in banner (default: critical only). If warning is also rendered, document the styling.
 - **Coverage report:** paste Vitest coverage summary for `useAlerts.ts` + `AlertBanner.tsx`.
+- **DEF transition claimed:** DEF-220 → "RESOLVED-IN-SPRINT, Session 5c" (transition applied at sprint-close per `docs/sprints/sprint-31.91-reconciliation-drift/pre-impromptu-doc-sync-manifest.md`).
 
 ```json
 {

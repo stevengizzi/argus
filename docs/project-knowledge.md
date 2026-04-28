@@ -239,6 +239,8 @@ Three-tier architecture: Claude.ai (strategic + planning) → Autonomous Sprint 
 
 **Full runner documentation:** `workflow/protocols/autonomous-sprint-runner.md` (modules, notifications, conformance checks, session-boundary diff validation, compaction risk scoring DEC-275). Universal protocols, templates, and the runner live in the `workflow/` submodule (https://github.com/stevengizzi/claude-workflow); ARGUS-specific rules remain in `.claude/rules/`.
 
+**Workflow protocols:** ARGUS sprint workflow uses the `claude-workflow` metarepo (https://github.com/stevengizzi/claude-workflow). The metarepo uses **per-file semantic versioning** — each protocol/template/schema evolves on its own version line, **not** a global metarepo-wide version. Key protocols at the time of last sprint planning: `protocols/sprint-planning.md` (v1.2.0), `protocols/in-flight-triage.md` (v1.3.0), `protocols/mid-sprint-doc-sync.md` (v1.0.0, NEW 2026-04-28); key templates: `templates/implementation-prompt.md` (v1.5.0, structural-anchor amendment 2026-04-28), `templates/doc-sync-automation-prompt.md` (v1.2.0). See `bootstrap-index.md` in the metarepo for the canonical index. Cross-cutting amendments are tracked per-file in commit history (this is the **per-file pointer** model) rather than as a metarepo-wide version bump.
+
 ---
 
 ## Reference Documents

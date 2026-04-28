@@ -79,34 +79,55 @@ Per the mid-sprint-doc-sync protocol (`protocols/mid-sprint-doc-sync.md`):
 
 ## Step 1 — Update `CLAUDE.md` DEF table
 
-### Edit 1a — Add 9 new DEF rows
+### Edit 1a — Add 10 DEF rows (1 backfill + 9 new)
 
-**Anchor:** the DEF table in `CLAUDE.md` under the heading `## Open Defect Registry` (or `## DEFs` or similar — the actual heading varies; locate by the table containing existing DEF-216).
+**Anchor:** the DEF table in `CLAUDE.md` under the heading `## Open Defect Registry` (or `## DEFs` or similar — the actual heading varies; locate by the table containing existing DEF rows).
 
 **Pre-flight grep-verify:**
 ```bash
-grep -n "^| DEF-216 " CLAUDE.md
-# Expected: 1 hit; this is the most recently filed DEF and the structural anchor
-# for new rows (insert AFTER this row to maintain numerical order).
+grep -nE "^\| DEF-21[0-9] " CLAUDE.md
+# Expected: rows for DEF-210 through DEF-215 at minimum. The highest existing row
+# anchors the insertion point (insert AFTER it to maintain numerical order).
 ```
 
-If the row for DEF-216 is not at the expected anchor location, find the actual location by:
+**Important context:** DEF-216 was an IMPROMPTU-10 hotfix (commit `c36a30c`) that resolved successfully but was never added to the DEF table as a row. This pre-sync includes a BACKFILL row for DEF-216 as the first of 10 inserted rows, followed by 9 new rows from Tier 3 #2 (DEF-217 through DEF-225).
+
+**Sub-step 1a.1 — Read the IMPROMPTU-10 closeout to extract DEF-216's canonical description:**
 ```bash
-grep -nE "DEF-21[0-6]" CLAUDE.md | head
+cat docs/sprints/sprint-31.9/IMPROMPTU-10-closeout.md 2>/dev/null | head -100
+git log -1 --format="%B" c36a30c
+ls docs/sprints/sprint-31.91-reconciliation-drift/ | grep -iE "216|impromptu-10|hotfix"
 ```
 
-After the existing DEF-216 row, insert the 9 new rows in numerical order:
+From the closeout artifact's "Finding addressed" / "Defect summary" / equivalent section, extract DEF-216's:
+- One-line summary (for column 2 "Item")
+- Resolution attribution (commit SHA + which session/impromptu)
+- Severity (likely MEDIUM-HIGH given operator-elevated trajectory per project context)
+
+If the closeout does not exist OR does not contain a clear DEF-216 description, HALT and surface — better to leave DEF-216 unrecorded than backfill it incorrectly. The operator can address DEF-216 separately.
+
+**Sub-step 1a.2 — Construct the DEF-216 backfill row** using ARGUS's 4-column schema with structured prefix:
 
 ```markdown
-| DEF-217 | OPEN | Sprint 31.91 Impromptu A | HIGH | Databento dead-feed alert_type producer/consumer string mismatch — `argus/data/databento_data_service.py` Databento dead-feed emitter publishes `alert_type="max_retries_exceeded"` but auto-resolution policy table in `argus/core/alert_auto_resolution.py` keys on `"databento_dead_feed"`. Strings do not match; policy entry is dead code in production. Surfaced by Tier 3 #2 (2026-04-28). MUST land before live transition. Routing: Impromptu A (alert observability hardening). |
-| DEF-218 | OPEN | Sprint 31.91 Impromptu A | MEDIUM | `eod_residual_shorts` + `eod_flatten_failed` alert types (emitted at `argus/execution/order_manager.py`) missing from auto-resolution policy table. Both sit ACTIVE indefinitely until operator ack. Surfaced by Tier 3 #2 (2026-04-28). Suggested resolution: add explicit `PolicyEntry` rows; both `NEVER_AUTO_RESOLVE` + `operator_ack_required=True`. Routing: Impromptu A. |
-| DEF-219 | OPEN | Sprint 31.91 Impromptu A | MEDIUM | Policy table exhaustiveness invariant not enforced by tests. The hardcoded `expected = {...}` set in `test_policy_table_is_exhaustive` is a snapshot, not a regression guard against producer-side drift. Would have caught DEF-217 + DEF-218 at test time. Surfaced by Tier 3 #2 (2026-04-28). Resolution: AST/tokenize-based regression guard scanning production for `SystemAlertEvent(alert_type=<literal>)` and asserting each literal is a policy-table key. Routing: Impromptu A (bundled with DEF-217 + DEF-218 fixes). |
-| DEF-220 | OPEN | Sprint 31.91 Session 5c | LOW | `AlertsConfig.acknowledgment_required_severities` field at `argus/core/config.py` has no consumer. Field is documentation-only. Per-alert-type `PolicyEntry.operator_ack_required` already encodes the equivalent control. Disposition decision: wire (gate at route or auto-resolve layer) OR remove (rely on per-alert-type field). Recommendation: removal. Surfaced by Tier 3 #2 (2026-04-28). Routing: Session 5c (frontend session naturally opens AlertsConfig territory). |
-| DEF-221 | OPEN | Sprint 31.91 Impromptu B | MEDIUM | `DatabentoHeartbeatEvent` producer wiring — data-layer health poller emits the event consumed by `databento_dead_feed` auto-resolution predicate. No specific sprint home named in S5a.2 closeout. Pairs with DEF-217 (Impromptu A) for end-to-end auto-resolution validation with a real producer. Surfaced by Tier 3 #2 (2026-04-28). Routing: Impromptu B (Databento heartbeat producer). |
-| DEF-222 | OPEN | DEFERRED — gated by future producers | MEDIUM (latent) | Predicate-handler subscriptions wired in `HealthMonitor.start()` BEFORE `rehydrate_alerts_from_db()`. Informational today: rehydration loop has no `await` points, no producers exist for the 3 deferred-emission events. When producers land for `ReconciliationCompletedEvent` / `IBKRReconnectedEvent` / `DatabentoHeartbeatEvent`, audit and likely defer `_subscribe_predicate_handlers()` to AFTER rehydration. Surfaced by Tier 3 #2 (2026-04-28). Routing: sprint-gating on whichever producer-wiring sprint lands first (post-31.9-component-ownership / post-31.9-reconnect-recovery / data-layer). |
-| DEF-223 | OPEN | Sprint 31.91 Impromptu C | LOW | Migration framework adoption sweep across the 7 ARGUS SQLite DBs other than `operations.db` (`catalyst.db`, `evaluation.db`, `regime_history.db`, `learning.db`, `vix_landscape.db`, `counterfactual.db`, `experiments.db`). Each DB's existing DDL works today; the sweep wraps each in a v1 Migration to establish migration framework as the canonical home for schema evolution. Mechanical work (~200 LOC + tests). Surfaced by Tier 3 #2 (2026-04-28). Routing: Impromptu C. |
-| DEF-224 | OPEN | Sprint 31.91 Impromptu A | LOW | Duplicate `_AUDIT_DDL` between `argus/api/routes/alerts.py` (idempotent inline DDL on every acknowledge call) and `argus/data/migrations/operations.py` (canonical migration framework owner). Both are `CREATE TABLE IF NOT EXISTS` so coexistence is safe but the schema is defined twice. Resolution: delete from route layer; rely on migration framework's startup run. Surfaced by Tier 3 #2 (2026-04-28). Routing: Impromptu A (cleanup bundled with hardening pass). |
-| DEF-225 | OPEN | Sprint 31.91 Impromptu A | LOW | `ibkr_auth_failure` lacks dedicated E2E auto-resolution test. Structurally covered today by Test 4 (same predicate shape: `IBKRReconnectedEvent` clears both `ibkr_disconnect` and `ibkr_auth_failure`); a dedicated test covering the `OrderFilledEvent` clearing leg would close the symmetry gap. Surfaced by Tier 3 #2 (2026-04-28). Routing: Impromptu A (test-hygiene bundled with hardening pass). |
+| DEF-216 | <one-line summary from closeout> | <originating session/sprint, e.g., "Sprint 31.91 IMPROMPTU-10 (2026-04-XX)"> | **Status:** RESOLVED-IN-SPRINT — Sprint 31.91 IMPROMPTU-10 — Severity: <X>. <Brief description of the defect from the closeout's Finding section, ~1-3 sentences>. Resolution attribution: commit `c36a30c`. |
+```
+
+Apply judgment: keep the Context column under ~400 characters total. If the closeout's description is much longer, summarize.
+
+**Sub-step 1a.3 — After DEF-216 backfill, insert the 9 new Tier 3 #2 rows:**
+
+After the existing highest DEF row (e.g., DEF-215) AND the new DEF-216 backfill row, insert in numerical order (using ARGUS's 4-column schema with structured prefix):
+
+```markdown
+| DEF-217 | Databento dead-feed alert_type producer/consumer string mismatch | Tier 3 #2 architectural review (2026-04-28) | **Status:** OPEN — Routing: Sprint 31.91 Impromptu A — Severity: HIGH. `argus/data/databento_data_service.py` Databento dead-feed emitter publishes `alert_type="max_retries_exceeded"` but auto-resolution policy table in `argus/core/alert_auto_resolution.py` keys on `"databento_dead_feed"`. Strings do not match; policy entry is dead code in production. MUST land before live transition. Routing: Impromptu A (alert observability hardening). |
+| DEF-218 | EOD policy table missing entries (eod_residual_shorts + eod_flatten_failed) | Tier 3 #2 architectural review (2026-04-28) | **Status:** OPEN — Routing: Sprint 31.91 Impromptu A — Severity: MEDIUM. `eod_residual_shorts` + `eod_flatten_failed` alert types (emitted at `argus/execution/order_manager.py`) missing from auto-resolution policy table. Both sit ACTIVE indefinitely until operator ack. Suggested resolution: add explicit `PolicyEntry` rows; both `NEVER_AUTO_RESOLVE` + `operator_ack_required=True`. Routing: Impromptu A. |
+| DEF-219 | Policy table exhaustiveness regression guard not test-enforced | Tier 3 #2 architectural review (2026-04-28) | **Status:** OPEN — Routing: Sprint 31.91 Impromptu A — Severity: MEDIUM. Policy table exhaustiveness invariant not enforced by tests. The hardcoded `expected = {...}` set in `test_policy_table_is_exhaustive` is a snapshot, not a regression guard against producer-side drift. Would have caught DEF-217 + DEF-218 at test time. Resolution: AST/tokenize-based regression guard scanning production for `SystemAlertEvent(alert_type=<literal>)` and asserting each literal is a policy-table key. Routing: Impromptu A (bundled with DEF-217 + DEF-218 fixes). |
+| DEF-220 | `acknowledgment_required_severities` field has no consumer | Tier 3 #2 architectural review (2026-04-28) | **Status:** OPEN — Routing: Sprint 31.91 Session 5c — Severity: LOW. `AlertsConfig.acknowledgment_required_severities` field at `argus/core/config.py` has no consumer. Field is documentation-only. Per-alert-type `PolicyEntry.operator_ack_required` already encodes the equivalent control. Disposition decision: wire (gate at route or auto-resolve layer) OR remove (rely on per-alert-type field). Recommendation: removal. Routing: Session 5c (frontend session naturally opens AlertsConfig territory). |
+| DEF-221 | DatabentoHeartbeatEvent producer wiring | Tier 3 #2 architectural review (2026-04-28) | **Status:** OPEN — Routing: Sprint 31.91 Impromptu B — Severity: MEDIUM. `DatabentoHeartbeatEvent` producer wiring — data-layer health poller emits the event consumed by `databento_dead_feed` auto-resolution predicate. No specific sprint home named in S5a.2 closeout. Pairs with DEF-217 (Impromptu A) for end-to-end auto-resolution validation with a real producer. Routing: Impromptu B (Databento heartbeat producer). |
+| DEF-222 | Predicate-handler subscribe-before-rehydrate audit | Tier 3 #2 architectural review (2026-04-28) | **Status:** DEFERRED — gated on future producers — Severity: MEDIUM (latent). Predicate-handler subscriptions wired in `HealthMonitor.start()` BEFORE `rehydrate_alerts_from_db()`. Informational today: rehydration loop has no `await` points, no producers exist for the 3 deferred-emission events. When producers land for `ReconciliationCompletedEvent` / `IBKRReconnectedEvent` / `DatabentoHeartbeatEvent`, audit and likely defer `_subscribe_predicate_handlers()` to AFTER rehydration. Routing: sprint-gating on whichever producer-wiring sprint lands first (post-31.9-component-ownership / post-31.9-reconnect-recovery / data-layer). |
+| DEF-223 | Migration framework adoption sweep across 7 SQLite DBs | Tier 3 #2 architectural review (2026-04-28) | **Status:** OPEN — Routing: Sprint 31.91 Impromptu C — Severity: LOW. Migration framework adoption sweep across the 7 ARGUS SQLite DBs other than `operations.db` (`catalyst.db`, `evaluation.db`, `regime_history.db`, `learning.db`, `vix_landscape.db`, `counterfactual.db`, `experiments.db`). Each DB's existing DDL works today; the sweep wraps each in a v1 Migration to establish migration framework as the canonical home for schema evolution. Mechanical work (~200 LOC + tests). Routing: Impromptu C. |
+| DEF-224 | Duplicate `_AUDIT_DDL` between routes layer and migration framework | Tier 3 #2 architectural review (2026-04-28) | **Status:** OPEN — Routing: Sprint 31.91 Impromptu A — Severity: LOW. Duplicate `_AUDIT_DDL` between `argus/api/routes/alerts.py` (idempotent inline DDL on every acknowledge call) and `argus/data/migrations/operations.py` (canonical migration framework owner). Both are `CREATE TABLE IF NOT EXISTS` so coexistence is safe but the schema is defined twice. Resolution: delete from route layer; rely on migration framework's startup run. Routing: Impromptu A (cleanup bundled with hardening pass). |
+| DEF-225 | `ibkr_auth_failure` lacks dedicated E2E auto-resolution test | Tier 3 #2 architectural review (2026-04-28) | **Status:** OPEN — Routing: Sprint 31.91 Impromptu A — Severity: LOW. Structurally covered today by Test 4 (same predicate shape: `IBKRReconnectedEvent` clears both `ibkr_disconnect` and `ibkr_auth_failure`); a dedicated test covering the `OrderFilledEvent` clearing leg would close the symmetry gap. Routing: Impromptu A (test-hygiene bundled with hardening pass). |
 ```
 
 ### Edit 1b — Annotate DEF-175
@@ -1137,7 +1158,7 @@ Verdict artifact: `docs/sprints/sprint-31.91-reconciliation-drift/tier-3-review-
 
 | File | Change shape | Sprint-close transition owed |
 |---|---|---|
-| `CLAUDE.md` | 9 new DEF rows added (DEF-217 through DEF-225); DEF-175 row annotated with main.py + set_order_manager motivators. | Each new DEF row's Status column transitions OPEN → RESOLVED-IN-SPRINT per its routing; DEF-175 row remains OPEN (existing scope, post-31.9-component-ownership sprint owns). |
+| `CLAUDE.md` | 10 DEF rows added: DEF-216 backfill (RESOLVED, IMPROMPTU-10 commit `c36a30c`) + DEF-217 through DEF-225 (OPEN with routing). All rows reshape Status/Routing/Severity into the existing 4-column table's Context column as a structured `**Status:** <X> — Routing: <Y> — Severity: <Z>.` prefix. DEF-175 row annotated with main.py + set_order_manager motivators. | Each new OPEN DEF row's Context "Status:" field transitions OPEN → RESOLVED-IN-SPRINT per its routing at sprint-close; DEF-216 row already at RESOLVED (backfill); DEF-175 row remains OPEN. |
 | `docs/project-knowledge.md` | Stale "Workflow protocol version: 1.2.0" reference replaced with per-file versioning pointer language; cross-references to current per-protocol versions added. | None (pointer language is forward-compatible; sprint-close should NOT need to re-edit). |
 | `docs/sprints/sprint-31.91-reconciliation-drift/work-journal-register.md` | Last Refresh table updated; Tier 3 #2 PHASE BOUNDARY section replaced with "Tier 3 #2 — COMPLETE"; DECs section updated (DEC-388 deferral to sprint-close); 9 new DEF rows in DEFs table; Session Order section revised with 6 new rows (Tier 3 #2 + pre-sync + Impromptu A + Impromptu B + Session 5c + Impromptu C); Carry-Forward Watchlist updated to reflect new DEF routings. | Final Last Refresh update at sprint-close; final test count refresh; final DEC reservation transitions; archive of register at sprint-close. |
 | `docs/sprints/sprint-31.91-reconciliation-drift/sprint-spec.md` | D9b auto-resolution policy table extended from 8 → 10 entries (eod_residual_shorts + eod_flatten_failed); D15 deliverable added (Impromptu B); D16 deliverable added (Impromptu C); AC blocks for D15 and D16 added. | No further sprint-close updates expected (the spec is now complete for the revised sprint shape). |
@@ -1374,9 +1395,17 @@ ls docs/sprints/sprint-31.91-reconciliation-drift/sprint-31.91-impromptu-a-alert
    docs/sprints/sprint-31.91-reconciliation-drift/work-journal-handoff.md
 # Expected: 5 files, all exist
 
-# 2. CLAUDE.md DEF rows
-grep -c "^| DEF-21[7-9]\|^| DEF-22[0-5]" CLAUDE.md
-# Expected: 9
+# 2. CLAUDE.md DEF rows (10 total: DEF-216 backfill + DEF-217 through DEF-225)
+grep -cE "^\| DEF-216 |^\| DEF-21[7-9] |^\| DEF-22[0-5] " CLAUDE.md
+# Expected: 10
+
+# 2a. Structured Status prefix present in new rows (4-column schema, prefix in Context column)
+grep -E "^\| DEF-21[7-9] |^\| DEF-22[0-5] " CLAUDE.md | grep -c "\*\*Status:\*\*"
+# Expected: 9 (the 9 new Tier 3 #2 rows; DEF-216 backfill uses RESOLVED-IN-SPRINT prefix)
+
+# 2b. DEF-216 backfill landed with RESOLVED status
+grep -E "^\| DEF-216 " CLAUDE.md | grep -c "RESOLVED-IN-SPRINT"
+# Expected: 1
 
 # 3. work-journal-register.md updates
 grep "Tier 3 #2 — COMPLETE" docs/sprints/sprint-31.91-reconciliation-drift/work-journal-register.md
@@ -1436,7 +1465,9 @@ routes 7 of 9 new DEFs as RESOLVED-IN-SPRINT (Impromptus A+B+C + Session 5c)
 + 1 via Session 5c + 1 DEFERRED.
 
 Files touched (11):
-- CLAUDE.md: 9 new DEF rows (DEF-217 through DEF-225) + DEF-175 annotation
+- CLAUDE.md: 10 DEF rows added (DEF-216 backfill from IMPROMPTU-10 commit c36a30c +
+  DEF-217 through DEF-225 from Tier 3 #2); all in ARGUS's 4-column schema with
+  structured Status/Routing/Severity prefix in Context column; DEF-175 annotated
 - docs/project-knowledge.md: stale workflow-version reference replaced with
   per-file versioning pointer language (the metarepo uses per-file versioning,
   not a global version)

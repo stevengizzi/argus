@@ -371,6 +371,10 @@ per-alert-type):
 | `ibkr_auth_failure` | successful subsequent IBKR-authenticated operation | No (auto-resolves) |
 | `databento_dead_feed` | 3 healthy heartbeats | No (auto-resolves) |
 | `phantom_short_startup_engaged` (aggregate alert) | all engaged symbols cleared OR 24h elapsed | **Yes** (ack required for 24h auto-archive) |
+| `eod_residual_shorts` | NEVER auto-resolves (forensic clarity for EOD-bounded short residue) | **Yes** (ack required) |
+| `eod_flatten_failed` | NEVER auto-resolves (failed flatten requires operator attention) | **Yes** (ack required) |
+
+> **Note (added 2026-04-28 by Tier 3 #2 doc-sync):** the `eod_residual_shorts` + `eod_flatten_failed` rows reflect resolution of DEF-218 by Impromptu A. Until Impromptu A lands, these alert types are emitted by `argus/execution/order_manager.py` but lack policy-table entries. The exhaustiveness regression guard (DEF-219, also Impromptu A) ensures this kind of producer/consumer drift is caught at test time going forward.
 
 **Retention policy and VACUUM** (per third-pass MEDIUM #9):
 - `phantom_short_override_audit` and `alert_acknowledgment_audit`
@@ -513,6 +517,42 @@ filter, banner cross-page persistence, toast cross-page behavior.
 filed). Architecture doc gains §14 (alert observability) describing
 the HealthMonitor consumer + WebSocket fan-out + REST endpoint
 architecture as a reference pattern for future emitters.
+
+#### D15 — Databento heartbeat producer + DEF-217 end-to-end validation (Impromptu B)
+
+**Triggered by:** Tier 3 #2 amended verdict 2026-04-28 disposition; resolves DEF-221 + validates DEF-217 fix end-to-end.
+
+**Producer wiring:** add a periodic heartbeat-publishing task to `argus/data/databento_data_service.py` that publishes `DatabentoHeartbeatEvent(provider="databento")` when the data feed is healthy. The task fires on a configurable interval (default: every 30 seconds during market hours; idle when feed is in dead-feed reconnect-loop state). Configuration field added to `DatabentoConfig`: `heartbeat_publish_interval_seconds: float = 30.0`.
+
+**Integration:** the existing dead-feed reconnect loop suppresses heartbeat emission while reconnecting; on successful reconnect, the heartbeat task resumes (giving the `databento_dead_feed` predicate's "3 consecutive healthy heartbeats" condition a path to fire).
+
+**End-to-end validation tests** (in `tests/integration/test_alert_pipeline_e2e.py`, NEW class `TestE2EDatabentoDeadFeedAutoResolveWithRealProducer`):
+- Drive Databento feed into dead-feed state via the production `databento_data_service` reconnect-loop.
+- Assert the production emitter publishes `SystemAlertEvent(alert_type="databento_dead_feed")` (post-DEF-217 fix).
+- Drive feed recovery; assert 3 heartbeats fire; assert auto-resolution per policy table.
+- This is the FIRST test in the suite that exercises the production Databento alert chain end-to-end without fabricating the SystemAlertEvent directly.
+
+**Coupling note:** Impromptu B depends on Impromptu A having landed (DEF-217 fix; the validation test assumes the production emitter publishes `databento_dead_feed`, not `max_retries_exceeded`).
+
+#### D16 — Migration framework adoption sweep (Impromptu C)
+
+**Triggered by:** Tier 3 #2 amended verdict 2026-04-28 disposition; resolves DEF-223.
+
+**Scope:** wrap the existing schema DDL of the 7 ARGUS SQLite DBs other than `operations.db` into v1 Migration objects under the migration framework introduced by Session 5a.2:
+
+- `data/catalyst.db` → new `argus/data/migrations/catalyst.py`
+- `data/evaluation.db` → new `argus/data/migrations/evaluation.py`
+- `data/regime_history.db` → new `argus/data/migrations/regime_history.py`
+- `data/learning.db` → new `argus/data/migrations/learning.py`
+- `data/vix_landscape.db` → new `argus/data/migrations/vix_landscape.py`
+- `data/counterfactual.db` → new `argus/data/migrations/counterfactual.py`
+- `data/experiments.db` → new `argus/data/migrations/experiments.py`
+
+Each per-DB module follows the `argus/data/migrations/operations.py` pattern: `SCHEMA_NAME` constant, `_migration_001_up` body that wraps existing DDL, `_migration_001_down` advisory inverse, `MIGRATIONS: list[Migration]`. Each module's existing service code calls `apply_migrations(db, schema_name=SCHEMA_NAME, migrations=MIGRATIONS)` at startup before any other DDL operation.
+
+**Per-DB tests:** each new migration module gets a corresponding `tests/data/migrations/test_<schema_name>.py` covering: (a) v1 idempotence, (b) `schema_version` row present after apply, (c) existing-DB-without-framework still works (CREATE TABLE IF NOT EXISTS pattern preserves existing data).
+
+**Mechanical scope:** estimated ~200-300 LOC across 7 module files + 7 test files. Bounded refactor; no behavior changes to existing DBs. The architectural value is consistency — future schema changes to any of the 7 DBs adopt the migration framework rather than ad-hoc DDL.
 
 ### Acceptance Criteria
 
@@ -713,6 +753,24 @@ architecture as a reference pattern for future emitters.
 - DEF-014 marked CLOSED in CLAUDE.md DEF table.
 - Architecture doc §14 added describing alert observability.
 - DEC-388 (alert observability) filed in decision-log.
+
+#### AC for D15 — Databento heartbeat producer (Impromptu B)
+
+- [ ] `DatabentoConfig.heartbeat_publish_interval_seconds` field present with default 30.0 and Pydantic constraints (gt=0, le=300).
+- [ ] Heartbeat task spawned by `databento_data_service` start; cancelled by stop.
+- [ ] Heartbeat suppressed during reconnect-loop; resumes on successful reconnect.
+- [ ] `TestE2EDatabentoDeadFeedAutoResolveWithRealProducer` E2E test green (drives production emitter, NOT fabricated event).
+- [ ] All existing Databento tests still pass (no regression).
+- [ ] DEF-221 RESOLVED status; DEF-217 end-to-end validation confirmed.
+
+#### AC for D16 — Migration framework adoption sweep (Impromptu C)
+
+- [ ] 7 new migration modules under `argus/data/migrations/`: catalyst, evaluation, regime_history, learning, vix_landscape, counterfactual, experiments.
+- [ ] Each module follows the `operations.py` pattern (SCHEMA_NAME, _migration_001_up, _migration_001_down, MIGRATIONS list).
+- [ ] Each owning service calls `apply_migrations` at startup before other DDL.
+- [ ] 7 corresponding test files; all green.
+- [ ] Existing service tests for each DB still pass (no behavior regression).
+- [ ] DEF-223 RESOLVED status.
 
 ### Performance Considerations
 

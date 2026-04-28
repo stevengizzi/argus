@@ -12,13 +12,13 @@
 
 | Field | Value |
 |---|---|
-| **Refreshed at** | 2026-04-28, end-of-Session-5b verdict |
-| **Anchor commit** | `75c125e` (S5b Tier 2 review CLEAR_WITH_NOTES) + `b324707` (impl) |
-| **Sessions complete** | 0, 1a, 1b, 1c, 2a, 2b.1, 2b.2, 2c.1, 2c.2 (+ impromptu DEF-216 hotfix), 2d, 3, 4 (+ in-sprint S4 integration-marker hotfix), 5a.1, 5a.2, 5b |
-| **Tier 3 reviews complete** | #1 (PROCEED) |
-| **Active session** | None — between sessions; **Tier 3 #2 phase boundary now ACTIVE** (Session 5c does NOT begin until Tier 3 #2 lands per `escalation-criteria.md` §A1.5) |
-| **Sprint phase** | All 4 architectural tracks complete + validation-infrastructure layer + **Track D BACKEND COMPLETE (S5a.1 + S5a.2 + S5b)**. Frontend (S5c/d/e) gated behind Tier 3 #2 |
-| **Workflow protocol version** | 1.2.0 (per-session register discipline formalized) |
+| **Refreshed at** | 2026-04-28, post-Tier-3-#2-disposition pre-impromptu doc-sync |
+| **Anchor commit** | `<HEAD after this sync's commits>` (pre-impromptu doc-sync); upstream of `75c125e` (S5b Tier 2) and the Tier 3 #2 verdict amendment |
+| **Sessions complete** | 0, 1a, 1b, 1c, 2a, 2b.1, 2b.2, 2c.1, 2c.2 (+ DEF-216 hotfix), 2d, 3, 4, 5a.1, 5a.2, 5b |
+| **Tier 3 reviews complete** | #1 (PROCEED), #2 (PROCEED with conditions; AMENDED 2026-04-28) |
+| **Active session** | None — between sessions; **Impromptu A is next** per amended Tier 3 #2 verdict |
+| **Sprint phase** | Backend SEALED post-Tier-3-#2; pre-frontend-hardening phase ACTIVE (Impromptus A+B+C land before S5c) |
+| **Workflow protocol version** | 1.3.0 (mid-sprint doc-sync protocol + structural anchors); `tier-3-review.md` independently at 1.0.2 |
 
 ---
 
@@ -33,31 +33,27 @@
 
 ---
 
-## Tier 3 #2 PHASE BOUNDARY (Pre-Session-5c)
+## Tier 3 #2 — COMPLETE (Phase Boundary Resolved)
 
-**Tier 3 #2 architectural review** is required BEFORE Session 5c begins. Per S5b closeout pre-amble + reviewer F6, this is a phase boundary per `escalation-criteria.md` §A1.5; the alert-observability backend is sealed by Tier 3 #2, NOT by any individual Tier 2 verdict.
+**Tier 3 #2 architectural review** completed 2026-04-28. Verdict: PROCEED with conditions (amended). Verdict artifact at `docs/sprints/sprint-31.91-reconciliation-drift/tier-3-review-2-verdict.md` (amended version).
 
-**Combined-diff scope:**
-```
-git diff 5f6b2a6..HEAD -- argus/api/routes/alerts.py \
-  argus/api/websocket/alerts_ws.py argus/api/server.py \
-  argus/api/routes/__init__.py argus/api/websocket/__init__.py \
-  argus/core/alert_auto_resolution.py argus/core/config.py \
-  argus/core/events.py argus/core/health.py \
-  argus/data/databento_data_service.py argus/data/migrations/ \
-  argus/execution/ibkr_broker.py argus/execution/order_manager.py \
-  argus/main.py tests/api/test_alerts.py tests/api/test_alerts_5a2.py \
-  tests/core/test_events.py tests/execution/order_manager/test_def214_eod_verify.py \
-  tests/integration/test_alert_pipeline_e2e.py
-```
+**Outcomes of Tier 3 #2:**
 
-**Tier 3 #2 expected outcomes:**
-- Validate combined backend architecture (3-session subsprint)
-- Resolve `ibkr_auth_failure` E2E coverage matrix gap (S5b reviewer F2 flagged for Tier 3 #2 to validate)
-- Address any architectural concerns about migration framework introduction, persistence-on-consume pattern, threshold-provider injection, deferred-emission events, predicate-handler subscribe-before-rehydrate observation (S5a.2 F1)
-- Ratify scoped-exception accumulation on `main.py` (6 scoped exceptions in this sprint)
-- Possibly file new DEFs for any concerns raised
-- May materialize architectural decisions (foundation for DEC-388 at S5e)
+- Backend architecture sealed (no architectural concerns).
+- DEC-388 materialization DEFERRED to sprint-close (Pattern B per `protocols/mid-sprint-doc-sync.md` v1.3.0); draft text in verdict.
+- DEC-385 unchanged — remains scheduled for sprint-close write per existing plan.
+- 9 new DEFs filed (DEF-217 through DEF-225), 7 routed RESOLVED-IN-SPRINT (Impromptus A+B+C + Session 5c), 1 deferred (DEF-222), 1 routed via Session 5c (DEF-220).
+- DEF-175 annotated with main.py + set_order_manager motivators.
+- Workflow metarepo bumped to v1.3.0 (mid-sprint doc-sync protocol + structural-anchor amendment).
+
+**Conditions for Session 5c entry (NEW — replaces prior "NONE"):**
+
+- Impromptu A landed CLEAR (DEF-217 + DEF-218 + DEF-219 + DEF-224 + DEF-225 RESOLVED-IN-SPRINT).
+- Impromptu B landed CLEAR (DEF-221 RESOLVED-IN-SPRINT; end-to-end Databento auto-resolution validated with the DEF-217 fix).
+
+DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
+
+**Pre-impromptu doc-sync manifest** at `docs/sprints/sprint-31.91-reconciliation-drift/pre-impromptu-doc-sync-manifest.md` is the mechanical handoff to sprint-close per `protocols/mid-sprint-doc-sync.md` v1.0.0.
 
 ---
 
@@ -107,7 +103,7 @@ git diff 5f6b2a6..HEAD -- argus/api/routes/alerts.py \
 
 | DEC | Description | Sessions | Materializes at |
 |---|---|---|---|
-| DEC-388 | Alert observability architecture (resolves DEF-014). **Backend complete at S5b**; foundation includes: HealthMonitor consumer + REST + WS fan-out + SQLite persistence + auto-resolution policy + retention + migration framework + 11 alert types covered + 15 emitter sites all populating metadata | 5a.1+5a.2+5b+5c+5d+5e | Session 5e close-out (after Tier 3 #2 + frontend layer) |
+| DEC-388 | Alert observability architecture (resolves DEF-014). Backend complete at S5b; hardening complete after Impromptus A+B+C; frontend complete at S5e. Cross-references DEFs being resolved IN-SPRINT (DEF-217/218/219/220/221/223/224/225) plus deferred DEF-222 + DEF-014. | 5a.1+5a.2+5b + Impromptus A+B+C + 5c+5d+5e | **Sprint-close (Pattern B per `protocols/mid-sprint-doc-sync.md` v1.3.0)** — was Tier 3 #2; deferred per Tier 3 #2 amended verdict 2026-04-28 |
 
 ### Freed
 
@@ -131,6 +127,15 @@ git diff 5f6b2a6..HEAD -- argus/api/routes/alerts.py \
 | **DEF-215** | Apr 27 debrief Finding 2 | Reconciliation per-cycle log spam | DEFERRED with sharp revisit trigger | Deferred |
 | **DEF-216** | S2c.2 CI failure | `test_get_regime_summary` ET-midnight rollover race | RESOLVED in impromptu hotfix `c36a30c` | Mark RESOLVED in CLAUDE.md at sprint-end |
 | **DEF-208** | S4 spec Phase D Item 1 grep | Live-trading test fixture missing | Filed; routed for future session | Future session |
+| **DEF-217** | Tier 3 #2 Concern A | Databento dead-feed alert_type producer/consumer string mismatch (HIGH severity correctness defect; MUST land before live) | OPEN — Impromptu A | Sprint 31.91 Impromptu A |
+| **DEF-218** | Tier 3 #2 Concern D | `eod_residual_shorts` + `eod_flatten_failed` missing from policy table | OPEN — Impromptu A | Sprint 31.91 Impromptu A |
+| **DEF-219** | Tier 3 #2 Concern B | Policy table exhaustiveness regression guard not test-enforced | OPEN — Impromptu A | Sprint 31.91 Impromptu A |
+| **DEF-220** | Tier 3 #2 Concern C / Item 4 | `acknowledgment_required_severities` field has no consumer (wire vs remove disposition) | OPEN — Session 5c | Sprint 31.91 Session 5c |
+| **DEF-221** | Tier 3 #2 Concern F / Item 7 | `DatabentoHeartbeatEvent` producer wiring (data-layer health poller) | OPEN — Impromptu B | Sprint 31.91 Impromptu B |
+| **DEF-222** | Tier 3 #2 Item 2 | Predicate-handler subscribe-before-rehydrate audit when producers land | DEFERRED — sprint-gating | Producer-wiring sprint TBD |
+| **DEF-223** | Tier 3 #2 Item 8 | Migration framework adoption sweep across 7 other separate DBs | OPEN — Impromptu C | Sprint 31.91 Impromptu C |
+| **DEF-224** | Tier 3 #2 Concern E | Duplicate `_AUDIT_DDL` between routes layer and migration framework | OPEN — Impromptu A | Sprint 31.91 Impromptu A |
+| **DEF-225** | Tier 3 #2 Item 1 | `ibkr_auth_failure` dedicated E2E auto-resolution test | OPEN — Impromptu A | Sprint 31.91 Impromptu A |
 
 ### Filed pre-Sprint 31.91, status changes
 
@@ -275,7 +280,7 @@ git diff 5f6b2a6..HEAD -- argus/api/routes/alerts.py \
 
 | Item | Status | Lands in |
 |---|---|---|
-| **Tier 3 #2 architectural review** | **REQUIRED BEFORE S5c** | Operator-triggered phase boundary per `escalation-criteria.md` §A1.5 |
+| **Tier 3 #2 architectural review** | ✅ COMPLETE 2026-04-28; Lands in: pre-impromptu doc-sync (this commit) | Pre-impromptu doc-sync (this commit) |
 | **Daily-flatten cessation** | Conservative criteria #1 + #2 + #3 SATISFIED post-S4; criteria #4 + #5 pending | Sprint-end + 5 paper-session-clean window |
 | Operator daily-flatten | REQUIRED, NOT OPTIONAL | Active until criterion #5 |
 | Banner mount on `Dashboard.tsx` (5c) | Watch | 5e (relocate to `Layout.tsx`) |
@@ -299,18 +304,21 @@ git diff 5f6b2a6..HEAD -- argus/api/routes/alerts.py \
 | Mass-balance script regex extension for trail/escalation paths | LOW priority | Future session |
 | Item 7 historical doc references in frozen artifacts | OBSERVATIONAL | Opportunistic doc-hygiene pass |
 | **CLAUDE.md test count baseline refresh** (currently `5,080`; actual operator-local 5,232) | ADMINISTRATIVE | Sprint-end doc-sync |
-| **Predicate-handler subscriptions wired before rehydration** — defer when producers land | DESIGN | Future sprint when producers land |
-| **Duplicate `_AUDIT_DDL` in `argus/api/routes/alerts.py`** cleanup | LOW (cleanup) | Future cleanup |
 | **`ReconciliationCompletedEvent` producer wiring** (deferred-emission) | DEFERRED | post-31.9 component-ownership sprint |
 | **`IBKRReconnectedEvent` producer wiring** (deferred-emission) | DEFERRED | `post-31.9-reconnect-recovery` sprint (DEF-194/195/196) |
-| **`DatabentoHeartbeatEvent` producer wiring** (deferred-emission) | DEFERRED | Data-layer health poller |
-| **Migration framework adoption** for other separate DBs | OPPORTUNISTIC | Future sprints when those DBs need schema changes |
 | **Doc-sync sweep check** for deferred-emission docstrings | LOW priority | Future tooling |
-| **NEW (S5b):** `ibkr_auth_failure` dedicated E2E auto-resolution test (gap acknowledged; structurally covered by Test 4) | LOW | Tier 3 #2 to validate gap closure; future session if dedicated test desired |
-| **NEW (S5b):** `acknowledgment_required_severities` gate consumer wiring (S5a.2 reviewer recommendation; NOT addressed in S5b) | DESIGN | S5c/d/e or future session |
-| **NEW (S5b):** Compose auto-resolution policy with `eod_residual_shorts` + `eod_flatten_failed` emitter pair (S5a.2 reviewer recommendation; NOT addressed in S5b) | DESIGN | S5c/d/e or future session |
 | **NEW (S5b):** `phantom_short_startup_engaged` 24h-elapsed branch E2E (would require time-mocking inside the predicate) | LOW | Future test-hygiene session |
 | **NEW (S5b):** Conftest fixture duplication ~50 LOC | LOW (cleanup-eligible) | Future test-hygiene session |
+| **DEF-217** Databento alert_type mismatch fix + end-to-end auto-resolution validation | OPEN — bundled in Impromptu A + Impromptu B | Sprint 31.91 in-sprint resolution |
+| **DEF-218** EOD policy table additions | OPEN — Impromptu A | Sprint 31.91 in-sprint resolution |
+| **DEF-219** Policy table exhaustiveness regression guard | OPEN — Impromptu A | Sprint 31.91 in-sprint resolution |
+| **DEF-220** `acknowledgment_required_severities` disposition | OPEN — Session 5c | Sprint 31.91 in-sprint resolution |
+| **DEF-221** `DatabentoHeartbeatEvent` producer wiring | OPEN — Impromptu B | Sprint 31.91 in-sprint resolution |
+| **DEF-222** Predicate-handler subscribe-before-rehydrate audit | DEFERRED — gated on future producers | Producer-wiring sprint TBD |
+| **DEF-223** Migration framework adoption sweep | OPEN — Impromptu C | Sprint 31.91 in-sprint resolution |
+| **DEF-224** Duplicate `_AUDIT_DDL` cleanup | OPEN — Impromptu A | Sprint 31.91 in-sprint resolution |
+| **DEF-225** `ibkr_auth_failure` dedicated E2E test | OPEN — Impromptu A | Sprint 31.91 in-sprint resolution |
+| Workflow metarepo amendment v1.2.0 → v1.3.0 | ✅ COMPLETE 2026-04-28 | claude-workflow repo (separate flow) |
 
 ---
 
@@ -472,30 +480,34 @@ S5b zero `main.py` edits. S5c/d/e likely zero `main.py` edits (frontend layer). 
 
 ---
 
-## Session Order (Sequential — Strict)
+## Session Order (Sequential — Strict, REVISED post-Tier-3-#2)
 
-1. ✅ Session 0 (cancel_all_orders API) — CLEAR, commit `9b7246c`
-2. ✅ Session 1a (bracket OCA + Error 201 defensive) — CLEAR, commit `b25b419`
-3. ✅ Session 1b (standalone-SELL OCA + Error 201 graceful) — CLEAR, commit `6009397`
-4. ✅ Session 1c (broker-only paths + reconstruct docstring) — CLEAR, commit `49beae2`
+1. ✅ Session 0 — CLEAR, commit `9b7246c`
+2. ✅ Session 1a — CLEAR, commit `b25b419`
+3. ✅ Session 1b — CLEAR, commit `6009397`
+4. ✅ Session 1c — CLEAR, commit `49beae2`
 5. ✅ **Tier 3 #1** — PROCEED, verdict commit `df48e31`. **DEC-386 materialized.**
-6. ✅ Session 2a (typed reconciliation contract) — CLEAR, commit `813fc3c`
-7. ✅ Session 2b.1 (broker-orphan branch + `phantom_short` alert + cycle infrastructure) — CLEAR, commit `4119608`
-8. ✅ Session 2b.2 (4 count-filter sites + 1 alert-alignment site + Option C cross-reference) — CLEAR, commit `a6846c6`
-9. ✅ Session 2c.1 (per-symbol entry gate + handler + SQLite + M5 rehydration ordering) — CLEAR, commit `0c034b3`
-10. ✅ Session 2c.2 (clear-threshold + auto-clear, default 5) — CLEAR, commit `24320e5`
+6. ✅ Session 2a — CLEAR, commit `813fc3c`
+7. ✅ Session 2b.1 — CLEAR, commit `4119608`
+8. ✅ Session 2b.2 — CLEAR, commit `a6846c6`
+9. ✅ Session 2c.1 — CLEAR, commit `0c034b3`
+10. ✅ Session 2c.2 — CLEAR, commit `24320e5`
 11. ✅ Impromptu hotfix DEF-216 — CLEAR, commit `c36a30c`
-12. ✅ Session 2d (operator override API + audit-log + L3 + L15 + B22) — CLEAR, commit `93f56cd`. **DEC-385 materialized; Track B COMPLETE.**
-13. ✅ Session 3 (DEF-158 retry side-check) — CLEAR, commit `a11c001`. **DEF-158 RESOLVED; Track C COMPLETE.**
-14. ✅ Session 4 (mass-balance + IMSR replay + decomposed live-enable gate) — CLEAR, barrier `da325a0`. **DEF-204 falsifiably validated; validation-infrastructure layer COMPLETE.**
-15. ✅ Session 5a.1 (HealthMonitor consumer + AlertsConfig + REST + acknowledgment) — CLEAR, commit `0236e27`. **DEF-213 + DEF-214 RESOLVED.**
-16. ✅ Session 5a.2 (WS + persistence + auto-resolution + retention + migration framework) — CLEAR, commit `9475d91`. **3 S5a.1 carry-forwards (F2/F3/F4) RESOLVED.**
-17. ✅ **Session 5b** (IBKR emitter TODOs + E2E pipeline tests + behavioral Alpaca anti-regression) — CLEAR_WITH_NOTES, commit `b324707`. **DEF-014 producer side RESOLVED; Track D backend COMPLETE.**
-18. ⏳ **Tier 3 #2** — combined diff 5a.1+5a.2+5b ← **NEXT (phase boundary; required before S5c)**
-19. Session 5c (useAlerts hook + Dashboard banner)
-20. Session 5d (toast notification + acknowledgment UI flow)
-21. Session 5e (Observatory alerts panel + cross-page integration). **DEC-388 materializes.**
-22. Sprint close-out + doc-sync handoff. **DEC-385, DEC-386, DEC-388 written to `decision-log.md`.**
+12. ✅ Session 2d — CLEAR, commit `93f56cd`. **DEC-385 materialized in code (write deferred to sprint-close).**
+13. ✅ Session 3 — CLEAR, commit `a11c001`. **DEF-158 RESOLVED.**
+14. ✅ Session 4 — CLEAR, barrier `da325a0`. **DEF-204 falsifiably validated.**
+15. ✅ Session 5a.1 — CLEAR, commit `0236e27`. **DEF-213 + DEF-214 RESOLVED.**
+16. ✅ Session 5a.2 — CLEAR, commit `9475d91`.
+17. ✅ Session 5b — CLEAR_WITH_NOTES, commit `b324707`. **DEF-014 producer side RESOLVED; backend SEALED.**
+18. ✅ **Tier 3 #2** — PROCEED with conditions (amended), verdict commit `<this sync's verdict-amendment commit>`. **9 new DEFs filed, 7 routed in-sprint.**
+19. ✅ **Pre-impromptu doc-sync** — this commit; manifest at `pre-impromptu-doc-sync-manifest.md`.
+20. ⏳ **Impromptu A** (alert observability hardening: DEF-217 + DEF-218 + DEF-219 + DEF-224 + DEF-225) — Tier 2 inline. Impl prompt: `sprint-31.91-impromptu-a-alert-hardening-impl.md`.
+21. ⏳ **Impromptu B** (Databento heartbeat producer + DEF-217 end-to-end validation: DEF-221) — Tier 2 inline. Impl prompt: `sprint-31.91-impromptu-b-databento-heartbeat-impl.md`. **CONDITION: Impromptu A landed CLEAR.**
+22. ⏳ **Session 5c** (`useAlerts` hook + Dashboard banner + DEF-220 disposition) — Tier 2 inline. Impl prompt: `sprint-31.91-session-5c-impl.md` (amended). **CONDITION: Impromptus A and B landed CLEAR.**
+23. ⏳ **Impromptu C** (migration framework adoption sweep: DEF-223) — Tier 2 inline. Impl prompt: `sprint-31.91-impromptu-c-migration-framework-sweep-impl.md`.
+24. ⏳ Session 5d (toast + acknowledgment UI flow) — unchanged.
+25. ⏳ Session 5e (Observatory alerts panel + cross-page integration) — unchanged. **DEF-014 closes here.**
+26. ⏳ Sprint-close doc-sync — reads `pre-impromptu-doc-sync-manifest.md` per `protocols/mid-sprint-doc-sync.md` v1.0.0; writes DEC-385 + DEC-388; transitions all RESOLVED-IN-SPRINT DEFs.
 
 ---
 
