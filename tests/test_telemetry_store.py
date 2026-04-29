@@ -5,10 +5,12 @@ Sprint 24.5, Session 3.5.
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -226,9 +228,14 @@ async def test_periodic_retention_invokes_cleanup_old_events(
     initialize() leaves the old-row in place after the wait window — this
     assertion catches the regression. Wall-clock cost ~0.2s.
     """
-    monkeypatch.setattr(EvaluationEventStore, "RETENTION_INTERVAL_SECONDS", 0.05)
     db_path = str(tmp_path / "periodic.db")
     s = EvaluationEventStore(db_path)
+    # Sprint 31.915 (DEC-389): RETENTION_INTERVAL_SECONDS migrated from
+    # class-constant to EvaluationStoreConfig.retention_interval_seconds,
+    # synced into ``self.RETENTION_INTERVAL_SECONDS`` in __init__. The
+    # original IMPROMPTU-10 test monkeypatched the class constant; we
+    # override the instance attribute (which production reads) directly.
+    monkeypatch.setattr(s, "RETENTION_INTERVAL_SECONDS", 0.05)
     await s.initialize()
     try:
         old_ts = datetime.now(_ET) - timedelta(days=10)
@@ -436,3 +443,222 @@ async def test_rest_no_date_uses_buffer(
     data = response.json()
     assert len(data) == 1
     assert data[0]["reason"] == "volume above threshold"
+
+
+# ---------------------------------------------------------------------------
+# Sprint 31.915 — DEC-389 / DEF-231 / DEF-232 / DEF-233 / DEF-234 regression
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_retention_days_is_config_driven(tmp_path: Path) -> None:
+    """G2 / DEF-234 / DEC-389: retention_days reflects EvaluationStoreConfig."""
+    from argus.core.config import EvaluationStoreConfig
+
+    cfg = EvaluationStoreConfig(retention_days=3)
+    s = EvaluationEventStore(str(tmp_path / "cfgdriven.db"), config=cfg)
+    await s.initialize()
+    try:
+        assert s._config.retention_days == 3
+    finally:
+        await s.close()
+
+
+@pytest.mark.asyncio
+async def test_retention_logs_zero_deletion_path(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """G3 / DEF-231: zero-deletion branch emits an INFO log line.
+
+    Mental revert (delete the ``else: logger.info(...)`` branch in
+    ``cleanup_old_events``) → this test fails because no INFO line is
+    captured. The pre-Sprint-31.915 production code took this path
+    silently between Apr 22–27, masking that retention was firing.
+    """
+    import logging as _logging
+
+    caplog.set_level(_logging.INFO, logger="argus.strategies.telemetry_store")
+    s = EvaluationEventStore(str(tmp_path / "zerodel.db"))
+    await s.initialize()
+    try:
+        caplog.clear()
+        await s.cleanup_old_events()  # empty DB → 0 deletions
+        msgs = [rec.message for rec in caplog.records]
+        assert any(
+            "0 rows matched" in m for m in msgs
+        ), f"Expected zero-deletion INFO log; got: {msgs}"
+    finally:
+        await s.close()
+
+
+@pytest.mark.asyncio
+async def test_retention_logs_success_path(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """G3 + G1 regression / DEF-231: positive-deletion branch logs an INFO line.
+
+    Phase A H3 mechanism guard: the production silent-failure mode on
+    Apr 27→28 was that VACUUM raised mid-cleanup, propagating up and
+    skipping the success-path INFO line that previously lived AFTER the
+    VACUUM call. Sprint 31.915's fix moves the deletion-INFO BEFORE the
+    VACUUM attempt so a vacuum failure cannot eat the deletion record.
+
+    Mental revert (move the ``logger.info("retention deleted ...")`` line
+    back to AFTER ``await self._vacuum()``) → this test still PASSES under
+    happy-path VACUUM, but the H4 sibling guard
+    ``test_retention_logs_success_even_when_vacuum_fails`` would fail.
+    """
+    import logging as _logging
+
+    caplog.set_level(_logging.INFO, logger="argus.strategies.telemetry_store")
+    s = EvaluationEventStore(str(tmp_path / "succpath.db"))
+    await s.initialize()
+    try:
+        old_ts = datetime.now(_ET) - timedelta(days=10)
+        await s.write_event(_make_event(timestamp=old_ts))
+        caplog.clear()
+        await s.cleanup_old_events()
+        msgs = [rec.message for rec in caplog.records]
+        assert any(
+            "retention deleted 1 rows" in m for m in msgs
+        ), f"Expected success-path INFO log; got: {msgs}"
+    finally:
+        await s.close()
+
+
+@pytest.mark.asyncio
+async def test_retention_logs_success_even_when_vacuum_fails(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Phase A H3 / DEF-231: deletion-INFO survives a VACUUM raising mid-cleanup.
+
+    Production Apr 27→28 mechanism reproducer. Forces ``_vacuum`` to
+    raise ``OSError`` AFTER the DELETE has committed; pre-Sprint-31.915
+    code would swallow the deletion log because the INFO line was on the
+    wrong side of the await. Post-Sprint-31.915 the deletion-INFO fires
+    BEFORE VACUUM, so it survives.
+    """
+    import logging as _logging
+
+    caplog.set_level(_logging.INFO, logger="argus.strategies.telemetry_store")
+    s = EvaluationEventStore(str(tmp_path / "vacfail.db"))
+    await s.initialize()
+
+    async def _failing_vacuum() -> None:
+        raise OSError("ENOSPC: simulated disk pressure during VACUUM")
+
+    s._vacuum = _failing_vacuum  # type: ignore[method-assign]
+    try:
+        old_ts = datetime.now(_ET) - timedelta(days=10)
+        await s.write_event(_make_event(timestamp=old_ts))
+        caplog.clear()
+        with pytest.raises(OSError):
+            await s.cleanup_old_events()
+        msgs = [rec.message for rec in caplog.records]
+        assert any(
+            "retention deleted 1 rows" in m for m in msgs
+        ), f"Expected deletion INFO before VACUUM raised; got: {msgs}"
+        # Observability fields updated even though VACUUM raised.
+        assert s._last_retention_deleted_count == 1
+        assert s._last_retention_run_at_et is not None
+    finally:
+        await s.close()
+
+
+@pytest.mark.asyncio
+async def test_pre_vacuum_disk_headroom_check_aborts_when_insufficient(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """G4 / DEF-232: VACUUM aborts loudly when free disk < 2x DB size."""
+    import logging as _logging
+    import shutil as _shutil
+    from collections import namedtuple
+
+    caplog.set_level(_logging.WARNING, logger="argus.strategies.telemetry_store")
+    s = EvaluationEventStore(str(tmp_path / "headroom_short.db"))
+    await s.initialize()
+    try:
+        # Simulate a disk with effectively zero free space.
+        DiskUsage = namedtuple("DiskUsage", "total used free")
+        monkeypatch.setattr(
+            _shutil, "disk_usage", lambda _p: DiskUsage(10**9, 10**9 - 1, 1)
+        )
+        # Track whether the post-headroom-check VACUUM logic ran. The
+        # synchronous VACUUM path uses asyncio.to_thread + sqlite3; if the
+        # check aborts correctly, neither the close-aiosqlite step nor the
+        # to_thread call should run.
+        called: dict[str, bool] = {"to_thread_invoked": False}
+
+        async def _spy_to_thread(func: Any, *args: Any, **kwargs: Any) -> None:
+            called["to_thread_invoked"] = True
+
+        monkeypatch.setattr(asyncio, "to_thread", _spy_to_thread)
+
+        caplog.clear()
+        await s._vacuum()
+        msgs = [rec.message for rec in caplog.records]
+        assert any(
+            "headroom check FAILED" in m for m in msgs
+        ), f"Expected pre-VACUUM headroom WARNING; got: {msgs}"
+        assert called["to_thread_invoked"] is False, (
+            "VACUUM proceeded despite insufficient headroom — non-bypassable "
+            "check broken (RULE-039)."
+        )
+        # Connection should still be alive — we aborted BEFORE closing it.
+        assert s._conn is not None
+    finally:
+        await s.close()
+
+
+@pytest.mark.asyncio
+async def test_pre_vacuum_disk_headroom_check_proceeds_when_sufficient(
+    tmp_path: Path,
+) -> None:
+    """G4 / DEF-232: VACUUM proceeds when free disk >= 2x DB size (happy path)."""
+    s = EvaluationEventStore(str(tmp_path / "headroom_ok.db"))
+    await s.initialize()
+    try:
+        # tmp_path almost certainly has plenty of headroom. Confirm the
+        # connection is still alive after VACUUM (reopened post-vacuum).
+        await s._vacuum()
+        assert s._conn is not None
+    finally:
+        await s.close()
+
+
+@pytest.mark.asyncio
+async def test_get_health_snapshot_exposes_required_fields(tmp_path: Path) -> None:
+    """G5 / DEF-233: get_health_snapshot returns the synchronous slice."""
+    s = EvaluationEventStore(str(tmp_path / "snap.db"))
+    await s.initialize()
+    try:
+        snap = s.get_health_snapshot()
+        assert "size_mb" in snap
+        assert "last_retention_run_at_et" in snap  # null on fresh init
+        assert "last_retention_deleted_count" in snap  # null on fresh init
+        assert snap["last_retention_run_at_et"] is None
+        assert snap["last_retention_deleted_count"] is None
+        # Async sibling for freelist
+        freelist = await s.get_freelist_pct()
+        assert isinstance(freelist, float)
+        assert 0.0 <= freelist <= 100.0
+    finally:
+        await s.close()
+
+
+@pytest.mark.asyncio
+async def test_health_snapshot_updates_after_retention(tmp_path: Path) -> None:
+    """G5 / DEF-233: observability fields update after cleanup_old_events."""
+    s = EvaluationEventStore(str(tmp_path / "snapupd.db"))
+    await s.initialize()
+    try:
+        old_ts = datetime.now(_ET) - timedelta(days=10)
+        await s.write_event(_make_event(timestamp=old_ts))
+        await s.cleanup_old_events()
+        snap = s.get_health_snapshot()
+        assert snap["last_retention_run_at_et"] is not None
+        assert snap["last_retention_deleted_count"] == 1
+    finally:
+        await s.close()

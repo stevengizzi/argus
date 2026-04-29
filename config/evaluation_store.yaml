@@ -1,0 +1,30 @@
+# data/evaluation.db retention + observability policy.
+# Sprint 31.915 — supersedes implicit DEF-197 closure constants (DEC-389).
+#
+# Standalone overlay registered in `_STANDALONE_SYSTEM_OVERLAYS`
+# (argus/core/config.py) and merged into SystemConfig.evaluation_store
+# at boot. Bare-field shape — DO NOT wrap in an `evaluation_store:`
+# top-level block (DEC-384 / FIX-02 convention).
+
+# Retention: how many ET trading days of evaluation_events to keep.
+# Lowered from 7 (IMPROMPTU-10 default) to 2 per DEC-389; aligns
+# steady-state ~10 GB with the operator's disk environment. Range: [1, 30].
+retention_days: 2
+
+# Periodic retention task cadence in seconds. Default 4 hours = 14400.
+retention_interval_seconds: 14400
+
+# Startup-reclaim VACUUM gates: only triggers when the DB exceeds
+# startup_reclaim_min_size_mb AND freelist ratio exceeds
+# startup_reclaim_freelist_ratio.
+startup_reclaim_min_size_mb: 500
+startup_reclaim_freelist_ratio: 0.5
+
+# WARNING threshold for post-init size check.
+size_warning_threshold_mb: 2000
+
+# Pre-VACUUM disk-headroom safety (DEF-232). VACUUM is aborted (with
+# WARNING) if free disk space on the volume is less than
+# pre_vacuum_headroom_multiplier × current DB size. Default 2.0 —
+# VACUUM INTO temp-copy can reach 2× source size.
+pre_vacuum_headroom_multiplier: 2.0

@@ -3015,12 +3015,77 @@ The Sprint 31.91 carry-forward routing reference is `docs/sprints/sprint-31.91-r
 
 ---
 
+## Sprint 31.915 — `evaluation.db` Retention Mechanism + Observability (April 28-29, 2026)
+
+Single-session impromptu sprint (full-protocol). Pulled forward ahead of
+Sprint 31.92 (component-ownership) per operator disposition 2026-04-28
+following the Apr 28 disk-pressure investigation: `data/evaluation.db`
+reached 25.6 GB, filled `/private/tmp` to ENOSPC, blocked Claude Code's
+Bash tool twice in a 24-hour window, and forced a manual nuke of the DB
+to relieve disk pressure.
+
+**Phase A diagnostic** ruled out the prompt's primary hypothesis (H1,
+aiosqlite `cursor.rowcount` post-commit) — `rowcount` returns the correct
+deleted-row count BOTH before and after `commit()` on the in-tree
+driver. Confirmed H3: production silent-failure mode was that
+`await self._vacuum()` raised mid-cleanup (likely ENOSPC under operator's
+tight disk environment), propagating up and skipping the success-path
+INFO line that previously lived AFTER the VACUUM call. Findings at
+`dev-logs/2026-04-28_retention-mechanism-diagnostic.md`.
+
+**Phase B implementation:**
+- New `EvaluationStoreConfig` Pydantic model in `argus/core/config.py` +
+  `config/evaluation_store.yaml` standalone overlay (DEC-384 pattern,
+  registered in `_STANDALONE_SYSTEM_OVERLAYS`); default
+  `retention_days = 2` (was 7).
+- Deletion-INFO emitted BEFORE `await self._vacuum()` so vacuum failures
+  cannot eat the deletion record.
+- Zero-deletion path always logs (`retention scanned (cutoff X, 0 rows
+  matched)`).
+- Pre-VACUUM disk-headroom check (non-bypassable per RULE-039).
+- `/health.evaluation_db.{size_mb, last_retention_run_at_et,
+  last_retention_deleted_count, freelist_pct}` subfield wired via
+  `HealthMonitor.register_evaluation_store()`.
+
+**Phase C deliverables:**
+- 8 new tests in `tests/test_telemetry_store.py` + 2 new in
+  `tests/api/test_health.py` (+10 pytest delta).
+- 1-line surgical adaptation to existing IMPROMPTU-10
+  `test_periodic_retention_invokes_cleanup_old_events` (monkeypatch
+  target migrated from class constant to instance attribute).
+- Operator runbook at `docs/operations/evaluation-db-runbook.md` (2 pages,
+  documents `VACUUM INTO` procedure + nuclear `rm` fallback +
+  chicken-and-egg disk-pressure trap + sibling-process FD-pinning trap).
+
+**DEC + DEF activity:**
+- DEC-389 — Config-Driven `evaluation.db` Retention Policy +
+  Observability Subfields (active).
+- DEF-231 / DEF-232 / DEF-233 / DEF-234 — RESOLVED-IN-SPRINT.
+- DEF-235 — OPEN-DEFERRED (test-zombie FD-pin pattern observed during
+  Apr 28 incident triage; sibling-class to DEF-049).
+
+**Test delta:** 5,269 → 5,279 pytest (+10); Vitest unchanged (913).
+**Anchor commit:** TBD at sprint close.
+
+**Headlines:**
+- Phase A diagnostic conclusively ruled out the prompt's primary
+  hypothesis (H1) and confirmed an alternative mechanism (H3) — fix shape
+  was adapted accordingly.
+- Pre-VACUUM disk-headroom check is non-bypassable per RULE-039 (no
+  `--skip-headroom` flag, no env var, no `try/except/pass` around the
+  headroom calculation).
+- Sprint 31.8 VACUUM regression tests preserved unmodified by retaining
+  class constants as DEPRECATED aliases synchronized from `_config` in
+  `__init__`.
+
+---
+
 ## Sprint Statistics
 
 - **Total sprints:** 36 full + 46 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5, 31.75, 31.91) + 10 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3, DEF-151 Fix Apr 4, Sweep Impromptu Apr 3–5, Lifespan Hang Apr 20, Eval DB VACUUM Apr 20, DEF-158 Duplicate SELL Apr 20, DEF-159 Reconstruction Trade Fix Apr 20, Parquet Cache Consolidation Apr 20) + 1 campaign-close (Sprint 31.9: 11 named sessions + 3 paper-session debriefs) + 5 in-sprint impromptus during Sprint 31.91 (DEF-216 hotfix, Impromptu A, Impromptu B, Impromptu C, post-S5e catalog hotfix)
 - **Total sessions:** ~594+ Claude Code sessions (Sprint 31.91 added 25 implementation sessions + 2 Tier 3 reviews + 2 in-sprint hotfixes)
-- **Total tests:** 5,269 pytest + 913 Vitest = 6,182 total
-- **Total decisions:** 387 (DEC-001 through DEC-388; DEC-387 freed during Sprint 31.91 planning. Sprint 31.91 added DEC-385 + DEC-386 + DEC-388. No new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, 31.5, DEF-151 fix, Sweep Impromptu, 31.8 impromptus, 31.85 Parquet consolidation, or Sprint 31.9 campaign-close — those campaigns followed established patterns)
+- **Total tests:** 5,279 pytest + 913 Vitest = 6,192 total
+- **Total decisions:** 388 (DEC-001 through DEC-389; DEC-387 freed during Sprint 31.91 planning. Sprint 31.91 added DEC-385 + DEC-386 + DEC-388. Sprint 31.915 added DEC-389. No new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, 31.5, DEF-151 fix, Sweep Impromptu, 31.8 impromptus, 31.85 Parquet consolidation, or Sprint 31.9 campaign-close — those campaigns followed established patterns)
 - **Calendar days (active dev):** ~68 (Feb 14 – Apr 5, 2026 + Apr 14, Apr 20, 2026 + Apr 22 – Apr 28, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)

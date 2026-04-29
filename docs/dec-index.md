@@ -1,7 +1,7 @@
 # ARGUS — Decision Index
 
-> 387 decisions (DEC-001 through DEC-388; DEC-387 freed during Sprint 31.91 planning)
-> Generated: April 28, 2026 (Sprint 31.91 D14 doc-sync — DEC-385 Side-Aware Reconciliation Contract + DEC-388 Alert Observability Architecture materialized at sprint-close) | Source: `docs/decision-log.md`
+> 388 decisions (DEC-001 through DEC-389; DEC-387 freed during Sprint 31.91 planning)
+> Generated: April 28, 2026 (Sprint 31.915 — DEC-389 Config-Driven `evaluation.db` Retention; supersedes implicit DEF-197 closure) | Source: `docs/decision-log.md`
 > Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry | ⊘ Reserved | ⊗ Freed
 
 
@@ -517,4 +517,8 @@ DEC-385 / 386 / 388 written for Sprint 31.91. DEC-387 freed at Tier 3 #1 close. 
 - ⊗ **DEC-387**: FREED at Tier 3 #1 close (reserved during Sprint 31.91 planning but not consumed).
 - ● **DEC-388**: Alert Observability Architecture — multi-emitter consumer pattern with HealthMonitor as central consumer, 5 layers: (L1 Producer) 15 emitter sites populating `SystemAlertEvent.metadata`; (L2 Consumer) `POLICY_TABLE` with 13 entries + 4 predicate handlers + AST regression guard; (L3 Storage) `data/operations.db` 5 tables + restart recovery via `rehydrate_alerts_from_db()` + migration framework (extended at Impromptu C to all 8 ARGUS SQLite DBs, sprint-spec D16 fulfilled); (L4 REST + WebSocket) 4 REST endpoints + JWT-authenticated `/ws/v1/alerts`; (L5 Frontend) `useAlerts` hook + `AlertBanner` (S5c) + `AlertToast`/`AlertToastStack`/`AlertAcknowledgmentModal` (S5d) + `AlertsPanel` Observatory + `AppShell.tsx` cross-page mount (S5e). Resolves DEF-014 (PRIMARY DEFECT, October 2025). 8 of 9 Tier-3-#2-spawned DEFs RESOLVED-IN-SPRINT (DEF-217/218/219/220/221/223/224/225); 1 deferred (DEF-222). Sprint-close materialization 2026-04-28 per Pattern B per Tier 3 #2 amended verdict. Cross-refs: DEC-385 (parallel architectural closure; L2 metadata schema is shared structural foundation), DEC-386 (parallel closure pattern), DEC-345 (separate-DB pattern for `operations.db`), DEC-328 (test discipline; lesson learned at post-S5e catalog hotfix → process-evolution.md F.1).
 
-Next DEC: 387 (385/388 reserved as noted above).
+## Sprint 31.915 — `evaluation.db` Retention Mechanism + Observability (April 28, 2026)
+
+- ● **DEC-389**: Config-Driven `evaluation.db` Retention — `EvaluationStoreConfig` Pydantic model in `argus/core/config.py` + `config/evaluation_store.yaml` standalone overlay (registered in `_STANDALONE_SYSTEM_OVERLAYS`, DEC-384 pattern). Default `retention_days = 2` (was implicit 7 from IMPROMPTU-10's hardcoded class constant). Class constants retained as DEPRECATED aliases synchronized from `_config` in `__init__` for Sprint 31.8 VACUUM regression-test compat. The 4-hour periodic-task pattern from IMPROMPTU-10 (DEF-197 closure) is preserved; only the cadence + threshold defaults change. Phase A diagnostic ruled out the prompt's primary hypothesis (H1, aiosqlite `cursor.rowcount` post-commit) and confirmed H3 (vacuum-raises-eats-success-INFO); fix landed deletion-INFO before VACUUM, zero-deletion path always logs, pre-VACUUM disk-headroom check non-bypassable per RULE-039, `/health.evaluation_db` subfields surfaced. Cross-refs: DEF-234 (resolved by this DEC), DEF-197 (IMPROMPTU-10's closure of unbounded-growth surface — supersedes implicit policy without invalidating mechanism), DEF-231/232/233 (companion observability/safety DEFs resolved in same session), DEC-384 (standalone-overlay registry pattern), DEC-345 (separate-DB pattern).
+
+Next DEC: 390 (387 freed as noted above).

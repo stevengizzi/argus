@@ -25,6 +25,21 @@ class ComponentStatusResponse(BaseModel):
     details: str
 
 
+class EvaluationDbHealth(BaseModel):
+    """Sprint 31.915 (DEF-233): observability subfield for ``data/evaluation.db``.
+
+    All four fields are nullable so the endpoint stays well-formed when
+    the EvaluationEventStore has not been registered with HealthMonitor
+    (test fixtures, boot race before phase 10.3) or before the first
+    retention iteration has fired (fresh boot).
+    """
+
+    size_mb: float | None
+    last_retention_run_at_et: str | None
+    last_retention_deleted_count: int | None
+    freelist_pct: float | None
+
+
 class HealthResponse(BaseModel):
     """System health response."""
 
@@ -36,6 +51,7 @@ class HealthResponse(BaseModel):
     last_data_received: str | None
     paper_mode: bool
     timestamp: str
+    evaluation_db: EvaluationDbHealth
 
 
 @router.get("", response_model=HealthResponse)
@@ -100,6 +116,9 @@ async def get_health(
         # IBKR is the only live broker; Alpaca and Simulated are paper/test
         paper_mode = state.config.broker_source != BrokerSource.IBKR
 
+    # Sprint 31.915 (DEF-233): pull evaluation_db observability subfield.
+    eval_db_payload = await state.health_monitor.get_evaluation_db_health()
+
     return HealthResponse(
         status=overall_status.value,
         uptime_seconds=uptime_seconds,
@@ -109,4 +128,5 @@ async def get_health(
         last_data_received=last_data_received,
         paper_mode=paper_mode,
         timestamp=datetime.now(UTC).isoformat(),
+        evaluation_db=EvaluationDbHealth(**eval_db_payload),
     )

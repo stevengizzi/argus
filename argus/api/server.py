@@ -326,13 +326,25 @@ async def _init_telemetry_store(app_state: AppState) -> Teardown | None:
 
         data_dir = app_state.config.data_dir if app_state.config else "data"
         db_path = str(Path(data_dir) / "evaluation.db")
-        telemetry_store = EvaluationEventStore(db_path)
+        # Sprint 31.915 (DEC-389): retention policy is config-driven via
+        # SystemConfig.evaluation_store. ``app_state.config`` may be None
+        # in standalone init paths — fall back to defaults in that case.
+        eval_cfg = (
+            app_state.config.evaluation_store if app_state.config is not None else None
+        )
+        telemetry_store = EvaluationEventStore(db_path, config=eval_cfg)
         await telemetry_store.initialize()
         await telemetry_store.cleanup_old_events()
         app_state.telemetry_store = telemetry_store
 
         for strategy in app_state.strategies.values():
             strategy.eval_buffer.set_store(telemetry_store)
+
+        # Sprint 31.915 (DEF-233): wire store into HealthMonitor so /health
+        # surfaces evaluation_db.{size_mb, last_retention_run_at_et,
+        # last_retention_deleted_count, freelist_pct} subfields.
+        if app_state.health_monitor is not None:
+            app_state.health_monitor.register_evaluation_store(telemetry_store)
 
         logger.info("EvaluationEventStore initialized and wired to strategy buffers")
     except Exception as e:

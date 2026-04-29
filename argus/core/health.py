@@ -216,6 +216,12 @@ class HealthMonitor:
         # this session's do-not-modify list, so production wiring is deferred.
         self._order_manager: OrderManager | None = None
 
+        # Sprint 31.915 (DEF-233): EvaluationEventStore handle for the
+        # /health endpoint's ``evaluation_db`` subfield. Wired via
+        # ``register_evaluation_store()`` from main.py / api/server.py.
+        # ``None`` → /health renders the subfield with all-null defaults.
+        self._evaluation_store: EvaluationEventStore | None = None
+
         # Component health registry
         self._components: dict[str, ComponentHealth] = {}
 
@@ -1090,6 +1096,39 @@ class HealthMonitor:
 
             # Check every 60 seconds
             await asyncio.sleep(60)
+
+    def register_evaluation_store(self, store: EvaluationEventStore) -> None:
+        """Register the EvaluationEventStore handle for /health rendering.
+
+        Sprint 31.915 (DEF-233): /health surfaces the evaluation_db
+        subfield by reading observability state from the store. Wired
+        once at boot by main.py's lifespan phase 10.3 and by
+        api/server.py's standalone telemetry-store init path.
+        """
+        self._evaluation_store = store
+
+    async def get_evaluation_db_health(self) -> dict[str, Any]:
+        """Return the evaluation_db subfield payload for /health.
+
+        Sprint 31.915 (DEF-233). Combines the synchronous snapshot
+        (size_mb, last_retention_run_at_et, last_retention_deleted_count)
+        with the async freelist_pct read. Returns all-null defaults when
+        the store has not been registered (e.g. test fixtures, or boot
+        race before phase 10.3).
+        """
+        if self._evaluation_store is None:
+            return {
+                "size_mb": None,
+                "last_retention_run_at_et": None,
+                "last_retention_deleted_count": None,
+                "freelist_pct": None,
+            }
+        snapshot = self._evaluation_store.get_health_snapshot()
+        freelist_pct = await self._evaluation_store.get_freelist_pct()
+        return {
+            **snapshot,
+            "freelist_pct": round(freelist_pct, 3),
+        }
 
     def set_order_manager(self, order_manager: OrderManager) -> None:
         """Wire the OrderManager handle for Pattern A.4 cross-reference.

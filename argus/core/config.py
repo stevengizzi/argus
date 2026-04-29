@@ -207,6 +207,7 @@ class HealthConfig(BaseModel):
             return ""
         return os.environ.get(self.heartbeat_url_env, "")
 
+
     @property
     def alert_webhook_url(self) -> str:
         """Resolve alert webhook URL from environment variable."""
@@ -215,6 +216,25 @@ class HealthConfig(BaseModel):
         if not self.alert_webhook_url_env:
             return ""
         return os.environ.get(self.alert_webhook_url_env, "")
+
+
+class EvaluationStoreConfig(BaseModel):
+    """Retention + observability policy for ``data/evaluation.db`` (DEC-389).
+
+    Sprint 31.915 — supersedes the IMPROMPTU-10 hardcoded class constants
+    (``RETENTION_DAYS = 7`` etc.) on ``EvaluationEventStore``. Loaded from
+    ``config/evaluation_store.yaml`` via the standalone-overlay registry
+    (``_STANDALONE_SYSTEM_OVERLAYS``, DEC-384 pattern).
+    """
+
+    retention_days: int = Field(default=2, ge=1, le=30)
+    retention_interval_seconds: int = Field(default=4 * 60 * 60, ge=60)
+    startup_reclaim_min_size_mb: int = Field(default=500, ge=1)
+    startup_reclaim_freelist_ratio: float = Field(default=0.5, ge=0.0, le=1.0)
+    size_warning_threshold_mb: int = Field(default=2000, ge=1)
+    pre_vacuum_headroom_multiplier: float = Field(default=2.0, ge=1.0, le=10.0)
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class AlertsConfig(BaseModel):
@@ -628,6 +648,8 @@ class SystemConfig(BaseModel):
     historical_query: HistoricalQueryConfig = Field(default_factory=HistoricalQueryConfig)
     # Alert observability configuration (Sprint 31.91 D9a, DEF-014)
     alerts: AlertsConfig = Field(default_factory=AlertsConfig)
+    # Evaluation store retention/observability (Sprint 31.915, DEC-389)
+    evaluation_store: EvaluationStoreConfig = Field(default_factory=EvaluationStoreConfig)
 
     @field_validator("timezone")
     @classmethod
@@ -1721,6 +1743,8 @@ _STANDALONE_SYSTEM_OVERLAYS: tuple[tuple[str, str], ...] = (
     ("regime_intelligence", "regime.yaml"),
     ("vix_regime", "vix_regime.yaml"),
     ("historical_query", "historical_query.yaml"),
+    # Sprint 31.915 (DEC-389) — evaluation.db retention + observability.
+    ("evaluation_store", "evaluation_store.yaml"),
 )
 
 

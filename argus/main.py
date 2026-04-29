@@ -935,7 +935,10 @@ class ArgusSystem:
         logger.info("[10.3/12] Initializing telemetry store...")
         try:
             eval_db_path = str(Path(config.system.data_dir) / "evaluation.db")
-            self._eval_store = EvaluationEventStore(eval_db_path)
+            self._eval_store = EvaluationEventStore(
+                eval_db_path,
+                config=config.system.evaluation_store,
+            )
             await self._eval_store.initialize()
             await self._eval_store.cleanup_old_events()
             for strategy in self._orchestrator.get_strategies().values():
@@ -944,6 +947,10 @@ class ArgusSystem:
             self._health_monitor.update_component(
                 "evaluation_store", ComponentStatus.HEALTHY
             )
+            # Sprint 31.915 (DEF-233): wire store into HealthMonitor so
+            # /health surfaces evaluation_db.{size_mb, last_retention_run_at_et,
+            # last_retention_deleted_count, freelist_pct} subfields.
+            self._health_monitor.register_evaluation_store(self._eval_store)
         except Exception as e:
             logger.error("Failed to initialize EvaluationEventStore: %s", e)
             self._eval_store = None
