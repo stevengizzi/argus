@@ -124,7 +124,7 @@ grep -n 'AC5.3' docs/sprints/sprint-31.92-def204-round-2/sprint-spec.md
 
 **Verified by:** Operator before Phase D prompt generation. The amendment lands as a single commit with message `[sprint-31.92] sprint-spec: amend AC5.3 — composite validation via Pytest, not standalone script`.
 
-### B2. Doc Update Checklist self-amendment (this file)
+### B2. Design Summary amendment (design-summary.md)
 
 After B1 lands, this checklist needs a one-line update to remove the now-obsolete `validate_def204_round2_composite.py` reference. The change is:
 
