@@ -14,12 +14,12 @@
 
 | Field | Value |
 |---|---|
-| **Refreshed at** | 2026-04-28, post-Session-5d CLEAR |
-| **Anchor commit** | `66d0b04` (S5d impl) + `1c08bf0` (S5d Tier 2 review verdict); upstream `97ea5d3` (post-Impromptu-C register refresh) + `3fefda8` (Impromptu C impl) |
-| **Sessions complete** | 0, 1a, 1b, 1c, 2a, 2b.1, 2b.2, 2c.1, 2c.2 (+ DEF-216 hotfix), 2d, 3, 4, 5a.1, 5a.2, 5b, Impromptu A, Impromptu B, Session 5c, Impromptu C, **Session 5d** |
+| **Refreshed at** | 2026-04-28, post-Session-5e CLEAR + post-catalog-hotfix CI green |
+| **Anchor commit** | `4c737d5` (catalog hotfix); upstream `42f9958` (S5e Tier 2 review CLEAR) + `7efd0a0` (S5e impl); CI green on `4c737d5` |
+| **Sessions complete** | 0, 1a, 1b, 1c, 2a, 2b.1, 2b.2, 2c.1, 2c.2 (+ DEF-216 hotfix), 2d, 3, 4, 5a.1, 5a.2, 5b, Impromptu A, Impromptu B, Session 5c, Impromptu C, Session 5d, **Session 5e (+ catalog hotfix `4c737d5`)** |
 | **Tier 3 reviews complete** | #1 (PROCEED), #2 (PROCEED with conditions; AMENDED 2026-04-28) |
-| **Active session** | None — between sessions; **Session 5e is next** (CONDITION MET: S5d landed CLEAR ✅). S5e is the FINAL implementation session before sprint-close |
-| **Sprint phase** | Backend SEALED + Backend HARDENING (Impromptu A) + Producer Wiring (Impromptu B) + Frontend Layer 1 (S5c) + Migration Framework Adoption (Impromptu C) + **Frontend Layer 2 (Session 5d — toast + ack-error modal) COMPLETE**; Frontend Layer 3 (S5e — Observatory + Layout relocation + DEF-014 closure) is ALL THAT REMAINS |
+| **Active session** | None — between sessions; **Sprint implementation track COMPLETE.** Next: Work Journal sprint close-out + doc-sync (D14) per `protocols/mid-sprint-doc-sync.md` v1.0.0 + `templates/work-journal-closeout.md` v1.4.0 + `templates/doc-sync-automation-prompt.md` v1.2.0 |
+| **Sprint phase** | **ALL IMPLEMENTATION COMPLETE.** Backend SEALED + Backend HARDENING (Impromptu A) + Producer Wiring (Impromptu B) + Frontend Layer 1 (S5c) + Migration Framework Adoption (Impromptu C) + Frontend Layer 2 (S5d) + Frontend Layer 3 (S5e) + post-S5e catalog freshness hotfix. Sprint ready for Work Journal sprint close-out → doc-sync (D14) |
 | **Workflow protocol version** | 1.3.0 (mid-sprint doc-sync protocol + structural anchors); `tier-3-review.md` independently at 1.0.2 |
 
 ---
@@ -29,7 +29,7 @@
 - **Sprint:** `sprint-31.91-reconciliation-drift`
 - **Predecessor:** Sprint 31.9 (sealed 2026-04-24)
 - **Mode:** HITL on `main`
-- **Primary defects:** DEF-204 (reconciliation drift / phantom-short — all architectural layers LIVE + falsifiable validation gate LIVE), DEF-014 (alert observability gap — **producer side RESOLVED at S5b**; full RESOLUTION at Session 5e)
+- **Primary defects:** DEF-204 (reconciliation drift / phantom-short — all architectural layers LIVE + falsifiable validation gate LIVE), DEF-014 (alert observability gap — **producer side RESOLVED at S5b**; **FULLY RESOLVED at Session 5e** with frontend banner + toast + Observatory panel + cross-page persistence + audit-trail endpoint)
 - **Operational mitigation:** Operator runs `scripts/ibkr_close_all_positions.py` daily — REQUIRED, NOT OPTIONAL. Cessation criteria #1 + #2 + #3 SATISFIED post-S4; #4 + #5 still pending
 - **Reserved DECs at planning:** DEC-385 (MATERIALIZED at S2d), DEC-386 (MATERIALIZED at Tier 3 #1), DEC-387 (FREED), DEC-388 (alert observability architecture, MATERIALIZES at S5e — backend layer now complete + ready for Tier 3 #2 seal)
 
@@ -85,15 +85,17 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | After Impromptu B | 5,238 (+1) | 5,277 | 866 | +158 |
 | After Session 5c | 5,238 (+0) | 5,277 | 886 (+20) | +158 pytest, +20 Vitest |
 | After Impromptu C | 5,266 (+28) | 5,305 | 886 | +186 pytest, +20 Vitest |
-| **After Session 5d** | **5,266 (+0)** | **5,305** | **902 (+16)** | **+186 pytest, +36 Vitest** |
+| After Session 5d | 5,266 (+0) | 5,305 | 902 (+16) | +186 pytest, +36 Vitest |
+| After Session 5e | 5,269 (+3) | 5,308 | 913 (+11) | +189 pytest, +47 Vitest |
+| **After catalog hotfix `4c737d5`** | **5,269 (+0)** | **5,308** | **913 (+0)** | **+189 pytest, +47 Vitest** |
 
-**Sprint cumulative delta:** +186 pytest, +36 Vitest.
+**Sprint cumulative delta:** +189 pytest, +47 Vitest. Catalog hotfix was a docs-only fix (no test count change; `tests/docs/test_architecture_api_catalog_freshness.py` flipped from RED→GREEN but the test count itself didn't change).
 
-**Bookkeeping discipline note:** S5a.2 + S5b + Impromptu A + Impromptu B + S5c + Impromptu C + S5d closeouts cited tests_added matching actual delta (7 consecutive sessions clean); S5a.1's +21 vs +18 cosmetic discrepancy was a one-off and the RULE-038 sub-bullet feedback was internalized cleanly. S5c was the first non-zero Vitest delta of the sprint (+20); S5d added +16 more.
+**Bookkeeping discipline note:** S5a.2 + S5b + Impromptu A + Impromptu B + S5c + Impromptu C + S5d + S5e closeouts cited tests_added matching actual delta (8 consecutive sessions clean); S5a.1's +21 vs +18 cosmetic discrepancy was a one-off. S5e closeout correctly disclosed +11 Vitest + +3 pytest scoped delta (`tests/api/test_alerts.py`); the +3 was missed in my prior register absorption (corrected here from 5,266 → 5,269). S5e ran scoped tests only (`tests/api/test_alerts.py` + `tests/api/test_auth.py` + Vitest) per closeout § Test Output, NOT full suite; the catalog freshness gate (DEF-168 regression guard) only fires on full suite, so the missing audit endpoint in `docs/architecture.md` slipped through to CI. Hotfix `4c737d5` regenerated the catalog row; full local suite verification (5,269 pytest passing, 0 failed) confirmed clean. **Sprint-wide carry-forward observation: DEC-328 mandates full-suite verification at sprint entry, each close-out, and final review — scoped-only at Tier 1 boundary (S5e closeout) was the gap.**
 
 **Test_main.py baseline drift:** Pre-existing 27 pass / 5 skip / 12 fail. Documented in CLAUDE.md DEF-048 lineage.
 
-**ADMINISTRATIVE NOTE:** CLAUDE.md test count baseline still cites `5,080`; actual operator-local now 5,266 pytest + 902 Vitest. Sprint-end doc-sync MUST refresh both baselines.
+**ADMINISTRATIVE NOTE:** CLAUDE.md test count baseline still cites `5,080`; actual operator-local now 5,269 pytest + 913 Vitest. Sprint-end doc-sync (D14) MUST refresh both baselines.
 
 ---
 
@@ -145,13 +147,16 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | **DEF-225** | Tier 3 #2 Item 1 | `ibkr_auth_failure` dedicated E2E auto-resolution test | **RESOLVED-IN-SPRINT (Impromptu A, anchor `e78a994`)** — claim applied at sprint-close | Sprint 31.91 Impromptu A (LANDED) |
 | **DEF-226** | S5d closeout J4 | Full focus-trap on `AlertAcknowledgmentModal` (Tab cycles within modal). Currently only initial-focus on textarea + Escape closes; mirrors existing `ConfirmModal` pattern | OPEN — DEFERRED (LOW priority) | Future UI accessibility audit pass, or WCAG conformance becomes deployment requirement |
 | **DEF-227** | S5d closeout J3 | Wire authenticated operator-id into `AlertToastStack` and `AlertAcknowledgmentModal`. Currently hardcoded `operator_id = "operator"` (matches `AlertBanner`'s pattern from S5c) | OPEN — DEFERRED (LOW priority) | When auth context / multi-operator login feature lands |
+| **DEF-228** | S5e closeout J3 | Backend `/api/v1/alerts/history` endpoint to grow `until` query parameter so the client doesn't have to filter the upper bound after fetching. Currently `useAlertHistory` calls `/history?since=<from>` and applies `created_at_utc <= range.to` as a client-side filter. When the backend grows `until`, the call site does not change | OPEN — DEFERRED (LOW priority) | Opportunistic — next backend-alerts session |
+| **DEF-229** | S5e closeout | Observatory pagination polish for `AlertsPanel` when historical dataset is large (e.g., 6 months × thousands of alerts). Current implementation renders all returned rows. Suggested fix: virtualization (`@tanstack/react-virtual`) on `AlertsTable` body | OPEN — DEFERRED (LOW priority) | Observed slowness or operator complaint |
+| **DEF-230** | S5e closeout | Audit-loading state and error-toast for `useAlertAuditTrail`. Current implementation surfaces "audit-empty" placeholder for both empty + error responses (network failure on `/audit` GET would currently render as "no acknowledgment audit entries"). Suggested fix: thread `error` through hook return; render "Audit unavailable: <error>" line in modal | OPEN — DEFERRED (LOW priority) | Operator complaint or production observability gap surfaces |
 
 ### Filed pre-Sprint 31.91, status changes
 
 | DEF | Status |
 |---|---|
 | DEF-204 | All architectural layers LIVE post-S3 + falsifiable validation gate LIVE post-S4. Empirical validation pending at first OCA-effective paper session (Apr 28+) |
-| DEF-014 | **Alert observability gap — producer side RESOLVED at S5b** (2 IBKR emitters wired). Backend layer COMPLETE (5a.1 + 5a.2 + 5b). FULL DEF-014 closure at Session 5e (frontend banner + toast + Observatory panel) |
+| DEF-014 | **Alert observability gap — FULLY RESOLVED via Session 5e** (anchor commit `7efd0a0`). Producer side resolved at S5b (2 IBKR emitters wired). Backend sealed at S5b (5a.1 + 5a.2 + 5b). Backend hardening at Impromptus A + B. Migration framework adoption at Impromptu C. Frontend Layer 1 (`useAlerts` hook + Dashboard banner) at S5c. Frontend Layer 2 (toast + ack-error modal) at S5d. Frontend Layer 3 at S5e (`AlertsPanel` + `AppShell.tsx` cross-page mount + Observatory toggle + `/audit` endpoint scope expansion + cross-page invariant 17 structurally pinned). Sprint-close transitions claim per `pre-impromptu-doc-sync-manifest.md` |
 | DEF-158 | Flatten retry side-blindness — RESOLVED in S3. Mark RESOLVED at sprint-end |
 | DEF-177 | `RejectionStage` enum missing distinct values — overload `"risk_manager"`; cleanup gated to dedicated cross-domain session |
 | DEF-199 | EOD Pass 2 A1 fix preserved — UNCHANGED across S0–S5b |
@@ -249,6 +254,14 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | **S5d — S5c F4 NOTE (5xx ack-error path not behaviorally tested)** | S5d | `AlertAcknowledgmentModal` provides error-with-retry UI for non-404 ack failures; tested at `AlertAcknowledgmentModal.test.tsx::handles network failure with retry` |
 | **S5d — Toast queue cap at 5 oldest-dropped + duplicate-ack mechanism** | S5d | `slice(-5).reverse()` math walked through by reviewer; oldest dropped, newest visually on top in DOM. Duplicate-ack via `result.acknowledged_by !== submitted operator_id` (no 409 in actual backend per RULE-038 drift #5) |
 | **S5d — Modal accessibility (V1)** | S5d | `role="dialog"`, `aria-modal="true"`, `aria-labelledby` matching heading id, initial focus on textarea, Escape closes; mirrors `ConfirmModal` pattern; full focus-trap deferred to DEF-226 |
+| **S5e — Frontend Layer 3 (Observatory + cross-page integration)** | S5e | `AlertsPanel.tsx` (411 LOC) + `useAlertHistory` + `useAlertAuditTrail` sub-hooks + Observatory toggle overlay; 8 component Vitest specs + 3 integration specs; CLEAR verdict; +11 Vitest tests |
+| **S5e — `AppShell.tsx` cross-page mount** | S5e | `AlertBanner` + `AlertToastStack` mounted at AppShell layer (z-40 sticky banner + z-50 toast stack); 5 in-Dashboard mounts removed (banner + toast both at the same 5 sites — total 10 mount sites cleaned up); regression invariant 17 structurally pinned by `AppShell.alerts.test.tsx:163-184` (Dashboard → TradeLog → Performance navigation, banner persists across all transitions) |
+| **S5e — DEF-014 FULLY RESOLVED** | S5e | Alert observability gap closed end-to-end: producer (S5b) + backend storage + REST + WS (5a.1+5a.2+5b) + hardening (Impromptu A) + producer wiring (Impromptu B) + migration framework (Impromptu C) + frontend banner+hook (S5c) + toast+ack-error modal (S5d) + Observatory panel + cross-page mount + audit endpoint (S5e). Sprint-close transitions claim per manifest |
+| **S5e — RULE-007 scope expansion: backend `/audit` endpoint** | S5e | Per spec's halt-and-fix directive (lines 124-132): endpoint did NOT exist in 5a.1 deliverables; added in S5e bundled (vs separate Impromptu D). Reviewer accepted: purely additive (new GET handler + AuditEntryResponse Pydantic model + 3 backend tests); proportionate to scope (separate Impromptu D would have been ~150 LOC overhead). +3 pytest tests in `tests/api/test_alerts.py` |
+| **S5e — Banner mount on `Dashboard.tsx` (5c carry-forward)** | S5e | Removed all 5 in-Dashboard banner mounts; relocated to `AppShell.tsx` layout level for cross-page persistence |
+| **S5e — Toast mount on `Dashboard.tsx` (5d carry-forward)** | S5e | Removed all 5 in-Dashboard toast mounts; relocated to `AppShell.tsx` layout level for cross-page persistence (paired with banner) |
+| **S5e — Layout-level cross-page persistence (regression invariant 17)** | S5e | Structural pin at `AppShell.alerts.test.tsx:163`: navigates Dashboard → TradeLog → Performance via `useNavigate`-captured ref + `act()`; asserts `screen.getByRole('alert')` after each navigation. Test fails if mount is reverted to per-page |
+| **Catalog hotfix `4c737d5` — `docs/architecture.md` API catalog freshness** | post-S5e CI hotfix | S5e introduced `GET /api/v1/alerts/{alert_id}/audit` but `docs/architecture.md` API catalog wasn't regenerated. Catalog freshness gate (`tests/docs/test_architecture_api_catalog_freshness.py`, DEF-168 regression guard) caught this on full-suite CI on `7efd0a0`. One-line addition to **alerts** block; verified via `python scripts/generate_api_catalog.py --verify` (now reports OK); local full suite now 5,269 passed / 0 failed. CI green. Single commit; no Tier 2 review (mechanical script-driven regeneration); no DEF assignment |
 
 ---
 
@@ -322,6 +335,12 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | **NEW (S5d):** RULE-038 judgment calls J1-J4 acknowledged | RULE-038 acknowledged (reviewer ACCEPTED all 4) | S5d closeout J1-J4 | Mirror tests across both files; single mount per render branch (5 mount sites in Dashboard); duplicate-ack via `acknowledged_by` mismatch (no 409 in backend); focus-trap mirrors `ConfirmModal` pattern (full trap deferred to DEF-226) |
 | **NEW (S5d):** 5 in-Dashboard `AlertToastStack` mount sites; sister to existing 5-banner-mount entry | TRACKED (5e relocation) | Closeout J2 + reviewer | Remove all 5 toast mounts at S5e along with 5 banner mounts; relocate both to `Layout.tsx` |
 | **NEW (S5d):** RULE-038 drift count: 7 prompt-vs-current-code drifts disclosed (frontend path, alert shape, hook contract, 404 handling, 409-vs-200 backend behavior, test command, DEF numbering) | RULE-038 exemplary (reviewer-rated) | S5d closeout RULE-038 section + reviewer V1-V7 verification | All 7 verified real, none scope-changing; 4 verified by reviewer via grep; new DEFs 226/227 verified clean (no collision) |
+| **NEW (S5e):** `AlertDetailView` modal exit animation likely does not play (carry-over from S5d INFO-1 same `{X && <Modal/>}` pattern) | INFO (non-blocking) | S5e reviewer INFO-1 | Cosmetic only; consider wrapping modals in `<AnimatePresence>` at AppShell level in future cleanup |
+| **NEW (S5e):** `AlertDetailView` and `AlertToastStack` both at z-50 (last-render-wins via DOM order — detail modal mounts in Observatory route subtree which renders after AppShell-level toasts) | INFO (non-blocking) | S5e reviewer INFO-2 | Same coexistence pattern as S5d's modal-vs-toasts; accepted as V1 behavior |
+| **NEW (S5e):** RULE-038 drift count: 6 prompt-vs-current-code drifts disclosed (frontend path, layout file name, page count verified, test command, `/audit` endpoint pre-existence, DEF numbering) | RULE-038 exemplary (reviewer-rated) | S5e closeout RULE-038 section + reviewer specific scrutiny finding #1 | All 6 verified real, none scope-changing; new DEFs 228/229/230 verified clean (no collision) |
+| **NEW (S5e):** RULE-007 scope expansion explicitly acknowledged — backend `/audit` endpoint added bundled in S5e per spec's halt-and-fix directive (vs separate Impromptu D) | RULE-007 acknowledged (reviewer ACCEPTED) | S5e closeout § Scope Expansion + reviewer specific scrutiny finding | Purely additive (new GET handler + AuditEntryResponse Pydantic model + 3 backend tests); proportionate to scope; spec-authorized via halt-and-fix |
+| **NEW (S5e):** 4 judgment calls J1-J4 disposed correctly | RULE-038 acknowledged (reviewer ACCEPTED all 4) | S5e closeout J1-J4 | (J1) AlertsPanel mount: toggle overlay vs 5th view (avoids invading 5 files for side-panel concern); (J2) date-range default = last 7 days, UTC day boundaries (alert ledger is UTC-anchored); (J3) backend `/history` `until` filter client-side — DEF-228 captures backend follow-up; (J4) `data-testid` mocking pattern preserves WebSocket isolation |
+| **NEW (catalog hotfix):** S5e Tier 2 closeout ran scoped tests only (`test_alerts.py` + Vitest) — DEC-328 mandates full suite at sprint entry, each close-out, and final review; the catalog freshness gate (`tests/docs/test_architecture_api_catalog_freshness.py`, DEF-168 regression guard) only fires on full suite | LOW (process-discipline carry-forward) | post-S5e catalog hotfix observation | Sprint-wide carry-forward: scoped runs at Tier 1 boundary miss freshness gates. Worth surfacing in next sprint planning as a process-improvement reminder. Hotfix `4c737d5` regenerated the catalog row; full local suite now 5,269 / 0 failed |
 
 ---
 
@@ -332,8 +351,8 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | **Tier 3 #2 architectural review** | ✅ COMPLETE 2026-04-28; Lands in: pre-impromptu doc-sync (this commit) | Pre-impromptu doc-sync (this commit) |
 | **Daily-flatten cessation** | Conservative criteria #1 + #2 + #3 SATISFIED post-S4; criteria #4 + #5 pending | Sprint-end + 5 paper-session-clean window |
 | Operator daily-flatten | REQUIRED, NOT OPTIONAL | Active until criterion #5 |
-| Banner mount on `Dashboard.tsx` (5c) | ✅ COMPLETE (5 mount sites covering all breakpoints + pre-market layout) | 5e (relocate to `Layout.tsx` for cross-page persistence) |
-| Toast mount on `Dashboard.tsx` (5d) | ✅ COMPLETE (5 mount sites covering all breakpoints + pre-market layout, paired with banner mounts) | 5e (relocate both banner + toast to `Layout.tsx` for cross-page persistence; remove all 10 in-Dashboard mounts) |
+| Banner mount on `Dashboard.tsx` (5c) | ✅ COMPLETE — Dashboard mounts removed at S5e; relocated to `AppShell.tsx` | (Done in S5e) |
+| Toast mount on `Dashboard.tsx` (5d) | ✅ COMPLETE — Dashboard mounts removed at S5e; relocated to `AppShell.tsx` (paired with banner) | (Done in S5e) |
 | `/api/v1/alerts/{id}/audit` endpoint surface | Watch — verify whether separate `/audit` endpoint still needed | 5e (consume) |
 | AlpacaBroker `_check_connected` AttributeError | DISCLOSED | Sprint 31.94 |
 | `BracketOrderResult.oca_group_id` exposure | OBSERVATIONAL | Future |
@@ -352,7 +371,7 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | Original Pass 1 retry SELL consistency gap at `:1777` | OBSERVATIONAL | Future session |
 | Mass-balance script regex extension for trail/escalation paths | LOW priority | Future session |
 | Item 7 historical doc references in frozen artifacts | OBSERVATIONAL | Opportunistic doc-hygiene pass |
-| **CLAUDE.md test count baseline refresh** (currently `5,080`; actual operator-local 5,266 pytest + 902 Vitest) | ADMINISTRATIVE | Sprint-end doc-sync |
+| **CLAUDE.md test count baseline refresh** (currently `5,080`; actual operator-local 5,269 pytest + 913 Vitest) | ADMINISTRATIVE | Sprint-end doc-sync (D14) |
 | **`ReconciliationCompletedEvent` producer wiring** (deferred-emission) | DEFERRED | post-31.9 component-ownership sprint |
 | **`IBKRReconnectedEvent` producer wiring** (deferred-emission) | DEFERRED | `post-31.9-reconnect-recovery` sprint (DEF-194/195/196) |
 | **Doc-sync sweep check** for deferred-emission docstrings | LOW priority | Future tooling |
@@ -369,6 +388,10 @@ DEF-220 disposition is folded INTO Session 5c (not a precondition for entry).
 | **DEF-225** `ibkr_auth_failure` dedicated E2E test | ✅ **RESOLVED-IN-SPRINT (Impromptu A, anchor `e78a994`)** | Sprint-close transitions claim |
 | **DEF-226** Full focus-trap on `AlertAcknowledgmentModal` | OPEN — DEFERRED (LOW) | Future UI accessibility audit pass or WCAG conformance trigger |
 | **DEF-227** Authenticated operator-id wiring into Toast/Modal | OPEN — DEFERRED (LOW) | When auth context / multi-operator login lands |
+| **DEF-228** Backend `/api/v1/alerts/history` `until` query parameter | OPEN — DEFERRED (LOW) | Opportunistic — next backend-alerts session |
+| **DEF-229** Observatory pagination polish for AlertsPanel (virtualization) | OPEN — DEFERRED (LOW) | Observed slowness or operator complaint |
+| **DEF-230** Audit-loading state and error-toast for `useAlertAuditTrail` | OPEN — DEFERRED (LOW) | Operator complaint or production observability gap surfaces |
+| **DEF-014** Alert observability gap (PRIMARY DEFECT) | ✅ **FULLY RESOLVED via Session 5e (anchor `7efd0a0`)** — producer + backend + hardening + migration framework + frontend (3 layers) + cross-page persistence + audit endpoint | Sprint-close transitions claim per `pre-impromptu-doc-sync-manifest.md` |
 | Workflow metarepo amendment v1.2.0 → v1.3.0 | ✅ COMPLETE 2026-04-28 | claude-workflow repo (separate flow) |
 
 ---
@@ -557,8 +580,9 @@ S5b zero `main.py` edits. S5c/d/e likely zero `main.py` edits (frontend layer). 
 22. ✅ **Session 5c** (`useAlerts` hook + Dashboard banner + DEF-220 disposition) — CLEAR_WITH_NOTES, anchor commit `3197472` + review verdict `41e49e7`. **DEF-220 RESOLVED-IN-SPRINT (Option A: REMOVAL).** First non-zero Vitest delta in sprint (+20). CI green at run `25078777514`.
 23. ✅ **Impromptu C** (migration framework adoption sweep: DEF-223) — CLEAR_WITH_NOTES, anchor commit `3fefda8`. **DEF-223 RESOLVED-IN-SPRINT** + sprint-spec D16 fulfilled (all 8 ARGUS SQLite DBs framework-managed). +28 pytest tests across 7 new test files. Three LOW deferred-fix carry-forwards (all pre-existing tech debt).
 24. ✅ **Session 5d** (toast + acknowledgment UI flow + ack-error modal) — CLEAR, anchor commit `66d0b04` + review verdict `1c08bf0`. **2 new DEFs filed (LOW): DEF-226 (full focus-trap), DEF-227 (auth-context operator_id).** Closes S5c F4 NOTE (5xx ack-error path now has UI surface). +16 Vitest tests; cleanest review of sprint (no concerns recorded).
-25. ⏳ Session 5e (Observatory alerts panel + Layout relocation + cross-page integration) — Impl prompt: `sprint-31.91-session-5e-impl.md`. ← **NEXT (FINAL implementation session before sprint-close).** **DEF-014 closes here.** Removes 10 in-Dashboard mount sites (5 banner + 5 toast); relocates both to `Layout.tsx` for cross-page persistence. Optional: wrap modal in `<AnimatePresence>` at Layout level to address S5d INFO-1.
-26. ⏳ Sprint-close doc-sync — reads `pre-impromptu-doc-sync-manifest.md` per `protocols/mid-sprint-doc-sync.md` v1.0.0; writes DEC-385 + DEC-388; transitions all RESOLVED-IN-SPRINT DEFs.
+25. ✅ **Session 5e** (Observatory alerts panel + AppShell cross-page mount + RULE-007 scope-expanded `/audit` endpoint) — CLEAR, anchor commit `7efd0a0` + review verdict `42f9958`. **DEF-014 FULLY RESOLVED.** 3 new DEFs filed (LOW): DEF-228 (backend `/history` `until` param), DEF-229 (Observatory pagination virtualization), DEF-230 (`useAlertAuditTrail` error-toast). Removed 10 in-Dashboard mount sites (5 banner + 5 toast); regression invariant 17 structurally pinned. +11 Vitest + +3 pytest tests; spec target ≥912 Vitest exceeded by 1 (913).
+26. ✅ **Catalog hotfix `4c737d5`** (post-S5e CI green) — `docs/architecture.md` API catalog regenerated to include `GET /api/v1/alerts/{alert_id}/audit` (introduced by S5e). Single-line addition to **alerts** block; verified via `python scripts/generate_api_catalog.py --verify` (now reports OK); local full suite 5,269 passed / 0 failed; CI green. No Tier 2 review (mechanical script-driven regeneration); no DEF assignment. Sprint-wide observation: scoped-only test runs at Tier 1 boundary miss freshness gates — DEC-328 mandates full suite at sprint entry, each close-out, and final review.
+27. ⏳ **Sprint-close doc-sync (D14)** — reads `pre-impromptu-doc-sync-manifest.md` per `protocols/mid-sprint-doc-sync.md` v1.0.0; writes DEC-385 + DEC-388 to `decision-log.md`; transitions all RESOLVED-IN-SPRINT DEFs (DEF-014 + DEF-217/218/219/220/221/223/224/225 + non-Tier-3-#2 DEF-216/213/214/158); writes DEC-388 entry to `dec-index.md`; `architecture.md` §14 alert observability subsystem section; refreshes CLAUDE.md test count baselines (5,080 → 5,269 pytest; 866 → 913 Vitest); `sprint-history.md` Sprint 31.91 entry; `SPRINT-31.91-SUMMARY.md` produced from this Work Journal handoff.
 
 ---
 
@@ -574,28 +598,28 @@ DEC writes:
 - **DEC-388 documentation (materializes at sprint-close per Pattern B; covers S5a.1+S5a.2+S5b+Impromptus A+B+C+S5c+S5d+S5e — extended policy table to 10 entries, regression guard established, route-layer DDL duplication removed, `ibkr_auth_failure` E2E coverage closed, Databento producer wired, migration framework adopted across 7 separate DBs, frontend banner + toast + Observatory panel landed)**
 
 DEF transitions (CLAUDE.md DEF table updates):
-- **19 DEFs filed in this sprint integrated into CLAUDE.md** (DEF-208/209/211/212/213/214/215/216 from pre-Tier-3-#2; DEF-217/218/219/220/221/222/223/224/225 from Tier 3 #2; DEF-226/227 from S5d)
+- **22 DEFs filed in this sprint integrated into CLAUDE.md** (DEF-208/209/211/212/213/214/215/216 from pre-Tier-3-#2; DEF-217/218/219/220/221/222/223/224/225 from Tier 3 #2; DEF-226/227 from S5d; DEF-228/229/230 from S5e)
 - DEF-213 marked FULLY RESOLVED (schema half S2b.1 + atomic-migration half S5a.1)
 - DEF-214 marked RESOLVED via S5a.1
 - DEF-216 marked RESOLVED via impromptu hotfix `c36a30c`
 - DEF-158 marked RESOLVED via S3 (commit `a11c001`)
-- **DEF-014 marked RESOLVED via S5e** (full closure once frontend lands)
+- **DEF-014 RESOLVED via Session 5e** (anchor commit `7efd0a0`) — full closure: producer (S5b) + backend storage + REST + WS (5a.1+5a.2+5b) + hardening (Impromptu A) + producer wiring (Impromptu B) + migration framework (Impromptu C) + frontend banner+hook (S5c) + toast+ack-error modal (S5d) + Observatory panel + cross-page mount + audit endpoint (S5e)
 - **DEF-217 marked RESOLVED-IN-SPRINT via Impromptu A** (anchor commit `e78a994`)
 - **DEF-218 marked RESOLVED-IN-SPRINT via Impromptu A** (anchor commit `e78a994`)
 - **DEF-219 marked RESOLVED-IN-SPRINT via Impromptu A** (anchor commit `e78a994`)
 - **DEF-224 marked RESOLVED-IN-SPRINT via Impromptu A** (anchor commit `e78a994`)
 - **DEF-225 marked RESOLVED-IN-SPRINT via Impromptu A** (anchor commit `e78a994`)
-- DEF-220 marked RESOLVED-IN-SPRINT via Session 5c (anchor TBD)
-- DEF-221 marked RESOLVED-IN-SPRINT via Impromptu B (anchor TBD)
-- DEF-223 marked RESOLVED-IN-SPRINT via Impromptu C (anchor TBD)
+- **DEF-220 marked RESOLVED-IN-SPRINT via Session 5c (Option A: REMOVAL)** (anchor commit `3197472`)
+- **DEF-221 marked RESOLVED-IN-SPRINT via Impromptu B** (anchor commit `8efa72e`)
+- **DEF-223 marked RESOLVED-IN-SPRINT via Impromptu C** (anchor commit `3fefda8`)
 - DEF-208/209/211/212/215/222 dispositions documented (deferred / sprint-gating routing) per Tier 3 #1 + #2 verdicts
-- **DEF-226 (full focus-trap) + DEF-227 (auth-context operator_id) filed at S5d as DEFERRED (LOW priority)** with clear future triggers (UI accessibility audit / WCAG conformance for 226; auth context / multi-operator login for 227)
+- **DEF-226 (full focus-trap) + DEF-227 (auth-context operator_id) + DEF-228 (backend `/history` `until` param) + DEF-229 (Observatory pagination virtualization) + DEF-230 (`useAlertAuditTrail` error-toast) filed at S5d/S5e as DEFERRED (LOW priority)** with clear future triggers
 
 Risk register:
 - RSK-DEC-386-DOCSTRING in `risk-register.md`
 
 CLAUDE.md:
-- Test count baseline refresh (currently `5,080`; actual operator-local 5,237 → final TBD post-S5e)
+- Test count baseline refresh (currently `5,080` pytest + `866` Vitest; final post-sprint values 5,269 pytest + 913 Vitest — operator-local verified post-catalog-hotfix)
 
 Architecture.md:
 - OCA architecture (already done; verify) + side-aware reconciliation contract per DEC-385 (new) + retry-path side-check section (new, S3) + validation infrastructure layer (S4) + alert observability per DEC-388 (S5a.1+S5a.2+S5b+Impromptus A+B+C+S5c+S5d+S5e)
