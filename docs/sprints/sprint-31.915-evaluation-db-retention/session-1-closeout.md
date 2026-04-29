@@ -236,10 +236,35 @@ argus/strategies/telemetry_store.py` → empty).
 - [x] `docs/sprint-history.md`: Sprint 31.915 row appended.
 - [x] Mid-sprint doc-sync manifest written.
 - [x] Close-out written to file.
-- [ ] Tier 2 review CLEAR or CONCERNS_RESOLVED.
-- [ ] Green CI URL cited in close-out.
+- [x] Tier 2 review **CLEAR** (verdict at `docs/sprints/sprint-31.915-evaluation-db-retention/session-1-review.md`, reviewer ran full pytest = 5,279 passing). Two informational (not concern) observations recorded — see "Tier 2 Review" section below.
+- [ ] Green CI URL cited in close-out (operator action; recorded post-CI).
 
 ---
+
+## Tier 2 Review
+
+**Verdict:** CLEAR (review file: `docs/sprints/sprint-31.915-evaluation-db-retention/session-1-review.md`).
+
+All 8 session-specific review focus items pass; all sprint-level
+regression-checklist items pass; no escalation criterion triggered.
+Reviewer ran the full pytest suite and observed `5279 passed,
+36 warnings in 70.21s, exit 0` — net delta +10 vs spec floor of +6.
+
+**Informational observations (not concerns):**
+
+1. `test_retention_days_is_config_driven` asserts
+   `s._config.retention_days` rather than `s.RETENTION_DAYS` — both equal
+   after `__init__` so the assertion is correct, but the production-read
+   path (which uses `self.RETENTION_DAYS`) could be more directly proven.
+   No code change needed; both reads resolve to the same value at
+   runtime.
+2. `doc-sync-manifest.md` text says "Header count = 389" while
+   `dec-index.md` reads "388 decisions (DEC-001 through DEC-389; DEC-387
+   freed during Sprint 31.91 planning)" — the manifest is referring to
+   the highest DEC number (389), the index file's "388 decisions" is the
+   active count (385 + 386 + 388 + 389 = 4 added to the prior 384, with
+   387 freed). Both representations are correct under their respective
+   interpretations; no fix needed.
 
 ## ---BEGIN-CLOSE-OUT---
 
