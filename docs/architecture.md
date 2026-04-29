@@ -1783,6 +1783,7 @@ All routes mount under the `/api/v1` prefix (see [argus/api/server.py](../argus/
 |----------|---------|
 | `GET    /api/v1/alerts/active` | Return alerts currently in ACTIVE or ACKNOWLEDGED state. |
 | `GET    /api/v1/alerts/history` | Return historical alerts within an optional ``since`` window. |
+| `GET    /api/v1/alerts/{alert_id}/audit` | Return the acknowledgment audit trail for one alert, oldest-first. |
 | `POST   /api/v1/alerts/{alert_id}/acknowledge` | Atomic + idempotent acknowledgment (200/404/200-late-ack). |
 
 **arena**
