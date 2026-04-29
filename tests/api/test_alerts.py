@@ -514,3 +514,98 @@ class TestAcknowledgeAlert:
             rows = await cursor.fetchall()
         assert len(rows) == 1
         assert rows[0][0] == "late_ack"
+
+
+# ---------------------------------------------------------------------------
+# 9. GET /audit — Sprint 31.91 Session 5e (D13 Observatory panel)
+# ---------------------------------------------------------------------------
+
+
+class TestGetAlertAuditTrail:
+    """GET /api/v1/alerts/{alert_id}/audit."""
+
+    @pytest.mark.asyncio
+    async def test_get_audit_returns_rows_in_audit_id_order(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        test_health_monitor: HealthMonitor,
+        app_state: AppState,
+        tmp_path: Path,
+    ) -> None:
+        """Audit endpoint returns all audit rows for the alert id, oldest-first."""
+        assert app_state.config is not None
+        app_state.config.data_dir = str(tmp_path)
+        await _migrate_operations_db(tmp_path / "operations.db")
+        alert = _seed_alert(test_health_monitor)
+
+        # Seed two audit rows (ack + duplicate_ack) directly so we don't
+        # depend on the acknowledge route's mutation path.
+        async with aiosqlite.connect(str(tmp_path / "operations.db")) as db:
+            await db.execute(
+                "INSERT INTO alert_acknowledgment_audit "
+                "(timestamp_utc, alert_id, operator_id, reason, audit_kind) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    "2026-04-28T10:00:00+00:00",
+                    alert.alert_id,
+                    "operator",
+                    "first acknowledgment",
+                    "ack",
+                ),
+            )
+            await db.execute(
+                "INSERT INTO alert_acknowledgment_audit "
+                "(timestamp_utc, alert_id, operator_id, reason, audit_kind) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (
+                    "2026-04-28T10:05:00+00:00",
+                    alert.alert_id,
+                    "operator",
+                    "duplicate from second tab",
+                    "duplicate_ack",
+                ),
+            )
+            await db.commit()
+
+        resp = await client.get(
+            f"/api/v1/alerts/{alert.alert_id}/audit",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert len(body) == 2
+        assert body[0]["audit_kind"] == "ack"
+        assert body[0]["reason"] == "first acknowledgment"
+        assert body[1]["audit_kind"] == "duplicate_ack"
+        # audit_id ascending.
+        assert body[0]["audit_id"] < body[1]["audit_id"]
+
+    @pytest.mark.asyncio
+    async def test_get_audit_returns_empty_list_for_unknown_alert_id(
+        self,
+        client: AsyncClient,
+        auth_headers: dict[str, str],
+        app_state: AppState,
+        tmp_path: Path,
+    ) -> None:
+        """Unknown alert id (or alert that was never acknowledged) → []."""
+        assert app_state.config is not None
+        app_state.config.data_dir = str(tmp_path)
+        await _migrate_operations_db(tmp_path / "operations.db")
+
+        resp = await client.get(
+            "/api/v1/alerts/never-existed/audit",
+            headers=auth_headers,
+        )
+        assert resp.status_code == 200
+        assert resp.json() == []
+
+    @pytest.mark.asyncio
+    async def test_get_audit_requires_auth(
+        self,
+        client: AsyncClient,
+    ) -> None:
+        """Unauthenticated request returns 401."""
+        resp = await client.get("/api/v1/alerts/some-id/audit")
+        assert resp.status_code == 401

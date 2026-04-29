@@ -13,6 +13,7 @@ import { ObservatoryLayout } from './ObservatoryLayout';
 import { ShortcutOverlay } from './ShortcutOverlay';
 import { MatrixView } from './views/MatrixView';
 import { TimelineView } from './views/TimelineView';
+import { AlertsPanel } from '../../components/AlertsPanel';
 import {
   useObservatoryKeyboard,
   type ObservatoryView,
@@ -38,6 +39,7 @@ export function ObservatoryPage() {
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
+  const [alertsPanelOpen, setAlertsPanelOpen] = useState(false);
 
   const funnelRef = useRef<FunnelViewHandle>(null);
 
@@ -159,6 +161,25 @@ export function ObservatoryPage() {
         isOpen={shortcutHelpOpen}
         onClose={() => setShortcutHelpOpen(false)}
       />
+
+      {/* Alerts panel toggle (Sprint 31.91 Session 5e — D13) */}
+      <button
+        type="button"
+        onClick={() => setAlertsPanelOpen((v) => !v)}
+        data-testid="observatory-alerts-toggle"
+        className="absolute bottom-4 left-4 z-20 bg-argus-surface-2 border border-argus-border text-argus-text text-xs px-3 py-1.5 rounded shadow hover:bg-argus-surface-3"
+      >
+        {alertsPanelOpen ? 'Hide Alerts' : 'Alerts'}
+      </button>
+
+      {alertsPanelOpen && (
+        <div
+          data-testid="observatory-alerts-overlay"
+          className="absolute inset-y-0 right-0 z-30 w-full md:w-[640px] bg-argus-bg border-l border-argus-border overflow-auto p-4 shadow-xl"
+        >
+          <AlertsPanel />
+        </div>
+      )}
     </div>
   );
 }

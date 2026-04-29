@@ -98,6 +98,21 @@ class AcknowledgeResponse(BaseModel):
     state: str
 
 
+class AuditEntryResponse(BaseModel):
+    """One row of the ``alert_acknowledgment_audit`` log.
+
+    ``audit_kind`` is one of ``ack`` / ``duplicate_ack`` / ``late_ack``
+    matching the values written by ``acknowledge_alert``.
+    """
+
+    audit_id: int
+    timestamp_utc: str
+    alert_id: str
+    operator_id: str
+    reason: str
+    audit_kind: str
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -260,6 +275,50 @@ async def get_alert_history(
     return [
         _alert_to_response(a)
         for a in state.health_monitor.get_alert_history(since=since_dt)
+    ]
+
+
+@router.get("/{alert_id}/audit", response_model=list[AuditEntryResponse])
+async def get_alert_audit_trail(
+    alert_id: str,
+    _auth: dict = Depends(require_auth),  # noqa: B008
+    state: AppState = Depends(get_app_state),  # noqa: B008
+) -> list[AuditEntryResponse]:
+    """Return the acknowledgment audit trail for one alert, oldest-first.
+
+    Reads ``alert_acknowledgment_audit`` rows for ``alert_id`` from
+    ``data/operations.db``. Returns an empty list if no audit rows exist
+    (e.g., the alert was never acknowledged or the alert id is unknown);
+    the operator-facing UI distinguishes these via the active-alerts list.
+
+    Sprint 31.91 Session 5e — D13 Observatory alerts panel detail view.
+    """
+    db_path = _resolve_operations_db_path(state)
+    async with aiosqlite.connect(db_path) as db:
+        db.row_factory = aiosqlite.Row
+        # Schema column is ``id`` (auto-increment PK); the wire field is
+        # ``audit_id`` to match ``AcknowledgeResponse.audit_id`` semantics.
+        cursor = await db.execute(
+            """
+            SELECT id AS audit_id, timestamp_utc, alert_id, operator_id,
+                   reason, audit_kind
+            FROM alert_acknowledgment_audit
+            WHERE alert_id = ?
+            ORDER BY id ASC
+            """,
+            (alert_id,),
+        )
+        rows = await cursor.fetchall()
+    return [
+        AuditEntryResponse(
+            audit_id=row["audit_id"],
+            timestamp_utc=row["timestamp_utc"],
+            alert_id=row["alert_id"],
+            operator_id=row["operator_id"],
+            reason=row["reason"],
+            audit_kind=row["audit_kind"],
+        )
+        for row in rows
     ]
 
 

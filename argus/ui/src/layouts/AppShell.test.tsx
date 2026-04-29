@@ -24,6 +24,8 @@ vi.mock('../features/copilot', () => ({
   CopilotPanel: () => null,
   CopilotButton: () => null,
 }));
+vi.mock('../components/AlertBanner', () => ({ AlertBanner: () => null }));
+vi.mock('../components/AlertToast', () => ({ AlertToastStack: () => null }));
 
 // Capture navigate calls
 const mockNavigate = vi.fn();

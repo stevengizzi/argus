@@ -18,6 +18,8 @@ import { useLiveStore } from '../stores/live';
 import { useCopilotUIStore } from '../stores/copilotUI';
 import { SymbolDetailPanel } from '../features/symbol';
 import { CopilotPanel, CopilotButton } from '../features/copilot';
+import { AlertBanner } from '../components/AlertBanner';
+import { AlertToastStack } from '../components/AlertToast';
 import { pageVariants } from '../utils/motion';
 
 interface AppShellProps {
@@ -120,6 +122,14 @@ export function AppShell({ paperMode = true }: AppShellProps) {
 
   return (
     <div className="flex h-dvh bg-argus-bg overflow-hidden">
+      {/* Cross-page alert observability mounts (Sprint 31.91 Session 5e — D13).
+          Banner sits sticky at the top of the visible area; toast is fixed-
+          positioned and lives outside flex flow. Both visible on every page. */}
+      <div className="absolute top-0 left-0 right-0 z-40 px-4 pt-2 min-[1024px]:left-16">
+        <AlertBanner />
+      </div>
+      <AlertToastStack />
+
       {/* Desktop sidebar */}
       <Sidebar paperMode={paperMode} />
 

@@ -55,6 +55,23 @@ export interface AcknowledgeResult {
   state: AlertState;
 }
 
+/** One row of the `alert_acknowledgment_audit` log. */
+export interface AlertAuditEntry {
+  audit_id: number;
+  timestamp_utc: string;
+  alert_id: string;
+  operator_id: string;
+  reason: string;
+  /** "ack" | "duplicate_ack" | "late_ack" — backend-defined string. */
+  audit_kind: string;
+}
+
+/** Inclusive ISO-8601 UTC range. `to` filtered client-side. */
+export interface AlertHistoryRange {
+  from: string;
+  to: string;
+}
+
 export interface UseAlertsResult {
   alerts: Alert[];
   connectionStatus: ConnectionStatus;
@@ -321,4 +338,78 @@ export function useAlerts(): UseAlertsResult {
   );
 
   return { alerts, connectionStatus, acknowledge };
+}
+
+// ---------------------------------------------------------------------------
+// Historical alerts (Sprint 31.91 Session 5e — D13 Observatory panel)
+// ---------------------------------------------------------------------------
+
+async function fetchAlertHistory(from: string): Promise<Alert[]> {
+  const token = getToken();
+  const headers: HeadersInit = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  // Backend supports `since` only (5a.1 surface). `to` filtered
+  // client-side until the backend grows an `until` parameter.
+  const url = `/api/v1/alerts/history?since=${encodeURIComponent(from)}`;
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    throw new Error(`Failed to fetch alert history: HTTP ${response.status}`);
+  }
+  return (await response.json()) as Alert[];
+}
+
+/**
+ * `useAlertHistory`: TanStack Query hook for the historical alert window.
+ *
+ * Backend's `/history` endpoint accepts only `since`; this hook fetches
+ * with `since=range.from` and applies the `range.to` upper bound
+ * client-side. If/when the backend grows `until`, the client-side filter
+ * becomes a no-op and the call site does not change.
+ */
+export function useAlertHistory(range: AlertHistoryRange) {
+  return useQuery<Alert[]>({
+    queryKey: ['alerts', 'history', range.from, range.to],
+    queryFn: async () => {
+      const all = await fetchAlertHistory(range.from);
+      // Inclusive upper bound by created_at_utc (ISO-8601 UTC).
+      return all.filter((a) => a.created_at_utc <= range.to);
+    },
+    enabled: Boolean(range.from && range.to),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Audit trail (per-alert acknowledgment history)
+// ---------------------------------------------------------------------------
+
+async function fetchAuditTrail(alert_id: string): Promise<AlertAuditEntry[]> {
+  const token = getToken();
+  const headers: HeadersInit = {};
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  const response = await fetch(
+    `/api/v1/alerts/${encodeURIComponent(alert_id)}/audit`,
+    { headers },
+  );
+  if (!response.ok) {
+    throw new Error(`Failed to fetch audit trail: HTTP ${response.status}`);
+  }
+  return (await response.json()) as AlertAuditEntry[];
+}
+
+/**
+ * `useAlertAuditTrail`: per-alert acknowledgment history.
+ *
+ * Returns an empty list for alerts that were never acknowledged. Used by
+ * `AlertDetailView` in the Observatory panel.
+ */
+export function useAlertAuditTrail(alert_id: string | null) {
+  return useQuery<AlertAuditEntry[]>({
+    queryKey: ['alerts', alert_id, 'audit'],
+    queryFn: () => fetchAuditTrail(alert_id as string),
+    enabled: alert_id !== null,
+  });
 }
