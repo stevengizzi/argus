@@ -4,7 +4,7 @@
 **Session:** 1 (single-session impromptu, full-protocol)
 **Date:** 2026-04-28 → 2026-04-29
 **Pre-session SHA:** `84d072b`
-**Post-session SHA:** TBD at commit
+**Post-session SHA:** `e58edec`
 **CI:** TBD (operator runs after review CLEAR)
 
 ---
@@ -250,7 +250,7 @@ session_title: evaluation.db Retention Mechanism + Observability
 self_assessment: MINOR_DEVIATIONS
 context_state: GREEN
 pre_session_sha: 84d072b
-post_session_sha: TBD
+post_session_sha: e58edec
 files_modified: 12
 files_new: 5
 tests_baseline: 5269
@@ -275,7 +275,7 @@ ci_run_url: TBD
   "self_assessment": "MINOR_DEVIATIONS",
   "context_state": "GREEN",
   "pre_session_sha": "84d072b",
-  "post_session_sha": "TBD",
+  "post_session_sha": "e58edec",
   "files_modified": [
     "CLAUDE.md",
     "argus/api/routes/health.py",
