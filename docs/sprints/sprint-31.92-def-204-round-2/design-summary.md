@@ -1,188 +1,775 @@
-# Sprint 31.92 — Design Summary
+# Sprint 31.92 — Design Summary (Phase B re-run)
 
-> **Phase B artifact (revised post-Round-1 adversarial review).** Captures the
-> sprint's design decisions, scope, and shape after Round 1 revisions applied
-> 2026-04-29. This artifact is the single-page snapshot Tier 2 reviewers and
-> Phase D prompt generators consult to confirm scope intent.
+> **Phase B re-run artifact** per `protocols/sprint-planning.md` v1.3.0 § Phase B.
+> Authored 2026-04-29 in response to Phase A Tier 3 verdict REVISE_PLAN
+> (`tier-3-review-1-verdict.md`) and the seven settled operator decisions
+> attached to the Phase B re-run prompt.
 >
-> **Revision history:** Round 1 authored 2026-04-28 with H1 cancel-and-await default; Round-1-revised 2026-04-29: Path #1 mechanism reversed to H2 amend-stop-price as PRIMARY DEFAULT (Round-1 C-3 disposition); ceiling enhanced with `cumulative_pending_sell_shares` reservation pattern (C-1); `is_reconstructed: bool` flag added for restart-safety (C-2); position-keyed suppression dict (H-2); broker-verification at suppression timeout (H-3); startup CRITICAL warning at AC4.6 (H-4); S1b spike scope expanded for hard-to-borrow microcap symbols (M-1); validation framing scoped to in-process logic only (M-2); composite validation as Pytest with JSON side-effect (M-3). Net session count UNCHANGED at 10. Net test count target raised from 53–65 to 75–95.
+> **Revision lineage:** Round 1 design summary 2026-04-28 → Round-1-revised
+> 2026-04-29 (3C+4H+3M dispositions) → Round 2 produced 1C+5H+5M+3L (operator
+> confirmed 14 dispositions; A14 fired) → Phase A re-entry FAI authored
+> (8 entries) + re-validation findings → Phase A Tier 3 review verdict
+> REVISE_PLAN (entry #9 + H-R2-1 scope extension + FAI #5 N≥100 + FAI #8
+> option (a) + ≥5 cross-layer tests + C-R2-1↔H-R2-2 coupling + 6 DEFs + 2 RSKs).
+> **This document is that revision.**
+>
+> **Substantive vs Structural Rubric (Phase B re-run mandatory):** triggers
+> #1 (Hypothesis Prescription modification — H-R2-2 halt-or-proceed gate),
+> #2 (FAI modification — entry #9 NEW; entries #3/#5/#8 status promoted to
+> unverified-with-falsifying-spike-scheduled), #6 (session breakdown
+> additions), #8 (halt-or-proceed gate language modified). **5 of 8 fired.**
+> Plus modified Hypothesis Prescription per H-R2-2 addendum. Re-run is
+> non-discretionary.
 
-## Goal
+---
 
-Close DEF-204's two empirically-falsifying mechanism paths from the 2026-04-28 paper-session debrief: (Path #1) trail-stop / bracket-stop concurrent-trigger race producing 182-share phantom short on BITU; (Path #2) locate-rejection-as-held retry storm producing 3,837-share phantom short on PCT. Add structural defense-in-depth via long-only SELL-volume ceiling with concurrency-safe pending-share reservation pattern + reconstructed-position refusal posture. Cleanly close DEF-212 `_OCA_TYPE_BRACKET` constant drift hygiene rider. Materialize as DEC-390 with structural closure framing (NOT aggregate percentage claims per process-evolution lesson F.5).
+## Sprint Goal
 
-## Sprint shape
+Close DEF-204's two empirically-falsifying mechanism paths from the
+2026-04-28 paper-session debrief — Path #1 (trail-stop / bracket-stop
+concurrent-trigger over-flatten on BITU) and Path #2 (locate-rejection-as-held
+retry storm on PCT) — via spike-driven mechanism selection (H2 amend-stop-price
+default / H4 hybrid fallback / H1 cancel-and-await last-resort) plus structural
+defense-in-depth: position-keyed locate suppression with broker-verified
+timeout, long-only SELL-volume ceiling with concurrency-safe pending-share
+reservation pattern (synchronous-update invariant extended to all bookkeeping
+callback paths per Tier 3 entry #9), reconstructed-position refusal posture,
+DEF-212 `_OCA_TYPE_BRACKET` constant drift fix with operator-visible rollback
+warning + `--allow-rollback` CLI gate. Materialize as DEC-390 with structural-
+closure framing (NOT aggregate percentage claims per process-evolution lesson
+F.5), backed by ≥5 cross-layer composition tests proving the failure of any
+one layer is caught by another.
 
-**Sprint scope:** 4-layer composition (mirrors DEC-385/386 layered-decomposition pattern):
+---
 
-- **L1 Path #1 mechanism (S2a + S2b):** `_trail_flatten` + `_resubmit_stop_with_retry` emergency-flatten branch + (conditionally) `_escalation_update_stop` close concurrent-trigger race via S1a-spike-selected mechanism — H2 amend-stop-price PRIMARY DEFAULT (preserves AMD-2 invariant; `modifyOrder` round-trip ≤50ms p95); H4 hybrid (try amend, fall back to cancel-and-await on rejection) if amend rejection rate 5–20%; H1 cancel-and-await as LAST-RESORT FALLBACK only if both H2 and H4 empirically infeasible.
-- **L2 Path #2 detection + position-keyed suppression + broker-verified timeout (S3a + S3b):** Add `_LOCATE_REJECTED_FINGERPRINT` constant + `_is_locate_rejection()` helper in `argus/execution/ibkr_broker.py`. Add position-keyed `OrderManager._locate_suppressed_until: dict[ULID, float]` (keyed by `ManagedPosition.id` for cross-position safety) + `_is_locate_suppressed()` helper. Wire detection at `place_order` exception in 4 standalone-SELL paths (`_flatten_position`, `_trail_flatten`, `_check_flatten_pending_timeouts`, `_escalation_update_stop`). Suppression-timeout fallback queries broker for actual position state BEFORE alert publication (eliminates false-positive class without coupling to `IBKRReconnectedEvent` consumer that doesn't exist until Sprint 31.94).
-- **L3 Long-only SELL-volume ceiling with pending-share reservation (S4a):** Add THREE fields on `ManagedPosition` — `cumulative_pending_sell_shares: int = 0` (incremented synchronously at place-time before `await`; closes asyncio yield-gap race), `cumulative_sold_shares: int = 0` (incremented at confirmed fill), `is_reconstructed: bool = False` (set True in `reconstruct_from_broker`; refuses ALL ARGUS-emitted SELLs on reconstructed positions until Sprint 31.94 D3). Ceiling check: `cumulative_pending_sell_shares + cumulative_sold_shares + requested_qty ≤ shares_total` AND `not position.is_reconstructed`. Guards 5 standalone-SELL emit sites; bracket placement explicitly excluded. New `POLICY_TABLE` entry for `sell_ceiling_violation` alert.
-- **L4 DEF-212 rider with operator-visible rollback warning (S4b):** `OrderManager.__init__` accepts `bracket_oca_type: int`; `argus/main.py` construction site passes `config.ibkr.bracket_oca_type`; 4 occurrences of `_OCA_TYPE_BRACKET` module constant replaced by `self._bracket_oca_type`; module constant deleted. Startup CRITICAL warning when `bracket_oca_type != 1`.
+## Session Breakdown
 
-**Sprint sequencing:** S1a + S1b spikes (parallelizable) → S2a → S2b → S3a → S3b → S4a → S4b → S5a → S5b. Strictly sequential post-spike; every implementation/validation session touches `argus/execution/order_manager.py`.
+**13 sessions total** (was 10): 2 spike sessions (S1a + S1b) gate Phase D
+implementation prompts; 8 implementation/validation sessions in the original
+Round-1 plan, expanded to 10 by Tier-3-mandated splits (S4a → S4a-i + S4a-ii;
+new S5c for cross-layer composition); plus 1 mid-sprint Tier 3 review event
+(M-R2-5, between S4a-ii and S5a/S5b). Strictly sequential post-spike; every
+implementation/validation session touches `argus/execution/order_manager.py`.
 
-**Falsifiable foundation:** S1a + S1b Phase A spike artifacts gate Phase D impl prompts. S5a + S5b validation artifacts gate sprint seal. Composite validation as Pytest test with JSON side-effect; daily CI updates artifact mtime for freshness.
+Compaction-risk re-validation per `protocols/sprint-planning.md` § Phase A
+step 8: every session post-mitigation scores ≤13.5 (Medium). Zero sessions
+at 14+. Phase B compaction-gate PASSED. Detailed scoring tables are Phase C
+artifact #3.
+
+### S1a (`s1a-spike-path1`): Path #1 Mechanism Spike — EXPANDED
+
+**Scope:** Phase A diagnostic spike on paper IBKR (account U24619949) —
+measure `IBKRBroker.modify_order` round-trip latency / rejection rate /
+deterministic propagation (H2 PRIMARY DEFAULT) AND `cancel_all_orders(symbol,
+await_propagation=True)` latency AND adversarial-axes (FAI #3 Decision 1) AND
+cancel-then-immediate-SELL stress at N≥100 (FAI #5 Decision 2). Single script,
+multiple measurement modes; emit JSON artifact evaluating H2/H4/H1 with
+worst-axis Wilson UB as decision input.
+
+- **Creates:** `scripts/spike_def204_round2_path1.py` (~280 LOC; expanded from
+  ~180 LOC), `scripts/spike-results/spike-def204-round2-path1-results.json`
+  (autogenerated; new schema fields `adversarial_axes_results`,
+  `worst_axis_wilson_ub`, `h1_propagation_n_trials=100`,
+  `h1_propagation_zero_conflict_in_100: bool`).
+- **Modifies:** none (read-only spike).
+- **Integrates:** N/A — outputs gate Phase D impl prompt for S2a/S2b.
+- **Compaction:** Medium 12 (1 file +2; 5 reads +5; external API +3; large
+  file +2). The N=100 strengthening is internal measurement; the adversarial
+  axes are additional measurement modes within the same script — neither
+  introduces a new file.
+
+### S1b (`s1b-spike-path2`): Path #2 Fingerprint + Hard-to-Borrow Window Spike
+
+**Scope:** Unchanged from Round-1-revised. Operator-curated ≥5 hard-to-borrow
+microcaps (PCT-class) × ≥10 trials per symbol; characterize fingerprint
+stability + case-A-vs-case-B differentiation + p99 release window.
+
+- **Creates:** `scripts/spike_def204_round2_path2.py`,
+  `scripts/spike-results/spike-def204-round2-path2-results.json`.
+- **Modifies:** none.
+- **Integrates:** N/A — outputs gate Phase D impl prompt for S3a/S3b.
+- **Compaction:** Medium 12.
+
+### S2a (`s2a-path1-trail-flatten`): Path #1 Fix in `_trail_flatten`
+
+**Scope:** Implement S1a-spike-selected mechanism (H2 PREFERRED / H4 / H1
+last-resort) in `_trail_flatten`; mechanism-conditional AMD-2 framing; AC1.6
+operator-audit logging if H1 or H4 selected.
+
+- **Creates:** `tests/execution/order_manager/test_def204_round2_path1.py`
+  (~100 LOC for 6 tests).
+- **Modifies:** `argus/execution/order_manager.py` (`_trail_flatten` only).
+- **Integrates:** S1a's mechanism-choice JSON.
+- **Compaction:** Medium 13–13.5.
+
+### S2b (`s2b-path1-emergency-flatten`): Path #1 in `_resubmit_stop_with_retry` + Conditional `_escalation_update_stop`
+
+**Scope:** Apply S2a's chosen mechanism to emergency-flatten branch (DEC-372
+retry-cap exhausted) and conditionally to `_escalation_update_stop`; H-R2-2
+HALT-ENTRY posture under H1-fallback-locate-reject (`halt_entry_until_operator_ack=True`).
+
+- **Creates:** none (extends `test_def204_round2_path1.py`).
+- **Modifies:** `argus/execution/order_manager.py`,
+  `tests/execution/order_manager/test_def204_round2_path1.py` (+7 tests).
+- **Integrates:** S2a helpers/mechanism choice.
+- **Compaction:** Medium 12.5.
+
+### S3a (`s3a-path2-helpers-and-config`): Path #2 Fingerprint + Position-Keyed Suppression Dict + Config Fields
+
+**Scope:** Add `_LOCATE_REJECTED_FINGERPRINT` constant + `_is_locate_rejection()`
+helper; add position-keyed `OrderManager._locate_suppressed_until: dict[ULID, float]`;
+add 3 OrderManagerConfig fields (`locate_suppression_seconds`,
+`long_only_sell_ceiling_enabled`, `long_only_sell_ceiling_alert_on_violation`)
++ new `pending_sell_age_watchdog_enabled` field (Decision 4 — `auto`/`enabled`/`disabled`).
+
+- **Creates:** `tests/execution/order_manager/test_def204_round2_path2.py`
+  (~100 LOC).
+- **Modifies:** `argus/execution/ibkr_broker.py`, `argus/execution/order_manager.py`,
+  `argus/core/config.py`, `config/order_management.yaml` (new field).
+- **Integrates:** S1b spike's fingerprint string + `recommended_locate_suppression_seconds`.
+- **Compaction:** Medium 13.
+
+### S3b (`s3b-path2-emit-sites-and-broker-verified-fallback`): Path #2 Wire-up + AC2.5 Refresh-Then-Verify + C-R2-1↔H-R2-2 Coupling
+
+**Scope:** Wire `_is_locate_rejection()` + `_is_locate_suppressed()` at all
+4 standalone-SELL paths (`_flatten_position`, `_trail_flatten`,
+`_check_flatten_pending_timeouts`, `_escalation_update_stop`); implement
+`Broker.refresh_positions()` ABC method (C-R2-1) + AC2.5 broker-verified
+suppression-timeout fallback with three branches (zero / expected-long /
+unexpected) + Branch 4 (`verification_stale: true`) on refresh failure;
+**enforce C-R2-1↔H-R2-2 coupling per Tier 3 item C** — if H1 is the active
+mechanism AND `Broker.refresh_positions()` raises or times out, mark
+position `halt_entry_until_operator_ack=True` (no further SELL attempts; no
+phantom short).
+
+- **Creates:** none (extends `test_def204_round2_path2.py`).
+- **Modifies:** `argus/execution/order_manager.py`, `argus/execution/broker.py`
+  (new ABC method `refresh_positions()`), `argus/execution/ibkr_broker.py`
+  (impl), `argus/execution/simulated_broker.py` (no-op or instant-success
+  impl); `tests/execution/order_manager/test_def204_round2_path2.py` (+8 tests).
+- **Integrates:** S3a's helpers + DEC-385's `phantom_short_retry_blocked` alert
+  emitter (reused, not modified).
+- **Compaction:** Medium 13 (post-mitigation; 2 of 10 logical tests deferred
+  to S5b composite).
+
+### S4a-i (`s4a-i-ceiling-with-pending-reservation`): Long-Only SELL-Volume Ceiling — Implementation
+
+**Scope:** Add 3 `ManagedPosition` fields (`cumulative_pending_sell_shares`,
+`cumulative_sold_shares`, `is_reconstructed`); implement atomic
+`_reserve_pending_or_fail()` synchronous method (H-R2-1) and `_check_sell_ceiling()`
+helper with `is_stop_replacement: bool` exemption (H-R2-5); guard 5 standalone-SELL
+emit sites per AC3.2; refuse all SELLs on `is_reconstructed=True`; wire
+`sell_ceiling_violation` POLICY_TABLE entry (14th); update AST exhaustiveness
+regression guard. **Auto-activate AC2.7 `_pending_sell_age_seconds` watchdog
+on first observed case-A in production paper trading per Decision 4** (config
+toggle `pending_sell_age_watchdog_enabled: auto` flips to `enabled` on first
+case-A event).
+
+- **Creates:** `tests/execution/order_manager/test_def204_round2_ceiling.py`
+  (~140 LOC).
+- **Modifies:** `argus/execution/order_manager.py`,
+  `argus/core/alert_auto_resolution.py` (POLICY_TABLE 14th entry).
+- **Integrates:** S3a's 2 ceiling config fields + new
+  `pending_sell_age_watchdog_enabled` field; existing DEC-388 alert observability.
+- **Compaction:** Medium 13.5 (post-mitigation per Round-1 option δ — 3
+  pre-flight reads, 7 effective tests; 2 logical tests deferred to S5b
+  composite for cross-coverage).
+
+### S4a-ii (`s4a-ii-callback-atomicity-and-reflective-call-ast`): Synchronous-Update Invariant on All Bookkeeping Paths + FAI #8 Reflective-Call Sub-Tests — NEW SESSION
+
+**Scope (NEW per Tier 3 items A + B + Decision 3):** Extend the H-R2-1 atomic-
+reserve protection pattern (AST-no-await scan + mocked-await injection
+regression) to all bookkeeping callback paths that mutate
+`cumulative_pending_sell_shares` or `cumulative_sold_shares`:
+`on_fill` (partial-fill transfer + full-fill transfer), `on_cancel`
+(decrement), `on_reject` (decrement), `_on_order_status` (status-driven
+mutations), and the `_check_sell_ceiling` multi-attribute read. Plus 3
+reflective-call sub-tests (FAI #8 option (a)) probing for AST-scan false-
+negative paths via (a) `**kw` unpacking, (b) computed-value flag assignment,
+(c) `getattr` reflective access.
+
+- **Creates:** `tests/execution/order_manager/test_def204_callback_atomicity.py`
+  (~120 LOC for 7 tests).
+- **Modifies:** `argus/execution/order_manager.py` (only if static-analysis
+  reveals an existing await between bookkeeping read and write — preferred
+  outcome is zero production-code change, with the test file establishing the
+  regression guard); regression-checklist invariant 13 + 24 amendments are
+  Phase C work.
+- **Integrates:** S4a-i's `_reserve_pending_or_fail` reference pattern.
+- **Compaction:** Medium 9.5 (1 file +2; 0–1 modified +0–1; 4 reads +4;
+  7 tests +3.5; complex integration NO — static-analysis tests; external API
+  NO; large new file NO).
+
+### Mid-Sprint Tier 3 Review (M-R2-5)
+
+**Scheduled at S4a-ii close-out, BEFORE S4b/S5a/S5b/S5c begin** per Round-2
+M-R2-5 disposition. Scope: architectural closure of DEC-390's 4-layer
+structure post-S4a-ii; cross-validation of pending-reservation pattern,
+ceiling, `is_reconstructed` posture, callback-path atomicity invariant, and
+reflective-call AST coverage. Tier 3 reviewer is a fresh Claude.ai
+conversation. **This is distinct from the Phase A Tier 3 already conducted**
+— two separate events, different inputs, different scopes per Tier 3
+verdict guidance #6.
+
+### S4b (`s4b-def212-rider-with-startup-warning-and-allow-rollback`): DEF-212 Rider + AC4.6 Startup Warning + AC4.7 `--allow-rollback`
+
+**Scope:** `OrderManager.__init__` accepts `bracket_oca_type: int`; emit
+ntfy.sh `system_warning` AND canonical-logger CRITICAL when
+`bracket_oca_type != 1` AND `--allow-rollback` flag present (H-R2-4 combined
+fix); exit code 2 when `bracket_oca_type != 1` AND flag absent (AC4.7);
+replace 4 `_OCA_TYPE_BRACKET` constant uses with `self._bracket_oca_type`;
+delete module constant; grep regression guard.
+
+- **Creates:** `tests/execution/order_manager/test_def212_oca_type_wiring.py`
+  (~120 LOC for 7+ tests including `--allow-rollback` present/absent paths).
+- **Modifies:** `argus/execution/order_manager.py`, `argus/main.py` (CLI flag
+  parsing + dual-channel emission).
+- **Integrates:** Existing `IBKRConfig.bracket_oca_type` Pydantic field.
+- **Compaction:** Medium 13.
+
+### S5a (`s5a-validation-path1`): Path #1 In-Process Falsifiable Validation
+
+**Scope:** Build `validate_def204_round2_path1.py` orchestrator + JSON
+artifact `sprint-31.92-validation-path1.json` (in-process logic validation
+ONLY per AC5.1 framing; NOT production safety evidence).
+
+- **Creates:** `scripts/validate_def204_round2_path1.py` (~150 LOC),
+  `scripts/spike-results/sprint-31.92-validation-path1.json`,
+  `tests/integration/test_def204_round2_validation.py` (~100 LOC for 4 tests).
+- **Modifies:** none.
+- **Integrates:** S2a + S2b + S4a-i.
+- **Compaction:** Medium 12.
+
+### S5b (`s5b-validation-path2-composite-and-restart`): Path #2 + Composite + Restart Validation
+
+**Scope:** Build `validate_def204_round2_path2.py`; composite Pytest
+integration tests producing `sprint-31.92-validation-composite.json` as
+side-effect (AC5.3); restart-during-active-position validation (AC5.4); + 3
+deferred ceiling-coverage tests + cross-position safety; daily CI workflow.
+
+- **Creates:** `scripts/validate_def204_round2_path2.py`,
+  `scripts/spike-results/sprint-31.92-validation-path2.json`,
+  `scripts/spike-results/sprint-31.92-validation-composite.json`.
+- **Modifies:** `tests/integration/test_def204_round2_validation.py` (+9
+  logical tests), `.github/workflows/` (daily composite test).
+- **Integrates:** S3a + S3b + S4a-i + S5a; Sprint 31.94 D3 inheritance pointer
+  for `is_reconstructed`.
+- **Compaction:** Medium 13.5.
+
+### S5c (`s5c-cross-layer-composition-tests`): Cross-Layer Composition Tests + `SimulatedBrokerWithRefreshTimeout` Fixture — NEW SESSION
+
+**Scope (NEW per Decision 5 + Tier 3 item E):** Implement the 5 cross-layer
+composition tests (CL-1 through CL-5; CL-6 explicitly OUT per Decision 5)
+that exercise scenarios where the failure of one layer is supposed to be
+caught by another. Add `SimulatedBrokerWithRefreshTimeout` fixture variant
+(DEF-SIM-BROKER-TIMEOUT-FIXTURE) — currently Branch 4 (`verification_stale: true`)
+is unreachable in in-process tests because `SimulatedBroker.refresh_positions()`
+is no-op or instant-success. The fixture enables in-process Branch 4 unit
+testing AND is consumed by CL-3.
+
+The 5 cross-layer tests:
+
+1. **CL-1 (L1 fails → L3 catches):** Force `_reserve_pending_or_fail` false
+   positive; verify ceiling-violation invariant catches at reconciliation.
+2. **CL-2 (L4 fails → L2 catches):** Force startup with
+   `bracket_oca_type != 1` AND `--allow-rollback`; verify emergency-flatten
+   branch (Layer 2 via `is_stop_replacement=False`) still ceiling-checks.
+3. **CL-3 (L3 + L5 cross-falsification):** Force `Broker.refresh_positions()`
+   timeout AND H1 selection; verify `halt_entry_until_operator_ack=True`
+   posture catches the composite (FAI #2 + #5).
+4. **CL-4 (L1 + L2):** Reservation succeeds but `is_stop_replacement` decision
+   is wrong (e.g., emergency-flatten misclassified as stop-replacement);
+   verify L3 ceiling catches the resulting over-flatten.
+5. **CL-5 (L2 + L3):** `is_stop_replacement` correctly disambiguates a
+   stop-replacement AND locate-suppression for the position is active;
+   verify the protective stop-replacement path is allowed AND that Branch 4
+   does not falsely fire on it.
+
+- **Creates:**
+  `tests/integration/conftest_refresh_timeout.py` (~80 LOC for the
+  SimulatedBrokerWithRefreshTimeout fixture + 1 Branch 4 unit test fixture);
+  appended scenarios to `tests/integration/test_def204_round2_validation.py`
+  (no new file for the CL tests themselves — they extend the integration test
+  module from S5a/S5b).
+- **Modifies:** `tests/integration/test_def204_round2_validation.py` (+5 CL
+  tests + 1 Branch 4 unit test).
+- **Integrates:** S2a/S2b/S3a/S3b/S4a-i/S4a-ii/S4b/S5a/S5b — by definition
+  composes all prior sessions.
+- **Compaction:** Medium 13 (1 fixture file +2; 1 modified +1; 4 reads +4;
+  6 tests +3; complex integration YES +3; total 13). The fixture is held
+  ≤80 LOC to avoid the large-file penalty.
+
+---
 
 ## Key Decisions
 
-1. **Path #1 mechanism: H2 amend-stop-price PRIMARY DEFAULT** (Round-1 C-3 reversal of original H1 default). H2 keeps the bracket stop live with updated trigger price; AMD-2 invariant preserved; DEC-117 atomic-bracket invariant preserved; zero unprotected window. H4 hybrid is fallback if H2 alone has 5–20% rejection rate. H1 cancel-and-await is last-resort only if both H2 and H4 empirically infeasible (AMD-2 superseded by AMD-2-prime; operator-audit logging mandatory).
-2. **Concurrency-safe pending-share reservation pattern** (Round-1 C-1). The ceiling check is `cumulative_pending_sell_shares + cumulative_sold_shares + requested_qty ≤ shares_total`. Pending counter increments synchronously at place-time (BEFORE the `await place_order(...)` yield-point) — closes the asyncio yield-gap race that two coroutines on the same `ManagedPosition` could otherwise exploit. Pending counter decrements on cancel/reject and transfers to filled counter on fill.
-3. **`is_reconstructed: bool` refusal posture** (Round-1 C-2 conservative disposition). Reconstructed positions (set `True` in `reconstruct_from_broker`) refuse ALL ARGUS-emitted SELLs. Operator-manual flatten via `scripts/ibkr_close_all_positions.py` is the only closing mechanism until Sprint 31.94 D3 (boot-time adoption-vs-flatten policy) lands. Conservative posture chosen over reviewer-proposed alternatives (trades-table reconstruction; SQLite persistence) on attribution-ambiguity / scope-creep grounds.
-4. **Position-keyed locate-suppression dict** (Round-1 H-2). Keyed by `ManagedPosition.id` (ULID), NOT symbol — preserves cross-position safety when sequential entries exist on same symbol within a session.
-5. **Broker-verification at suppression timeout** (Round-1 H-3). AC2.5 fallback queries `broker.get_positions()` BEFORE alert publication. Three branches: zero (held order resolved cleanly), expected-long (no phantom short), unexpected (publish `phantom_short_retry_blocked`). Eliminates false-positive class without coupling to `IBKRReconnectedEvent` (Sprint 31.94 territory).
-6. **Startup CRITICAL warning at AC4.6** (Round-1 H-4). Operator-visible warning emits at OrderManager init when `bracket_oca_type != 1`. `IBKRConfig.bracket_oca_type` Pydantic validator preserved (rollback escape hatch per DEC-386 design intent).
-7. **Tier 3 #1 Concern A (`_is_oca_already_filled_error` relocation) DEFERRED** to Sprint 31.93 (component-ownership scope). Tier 3 #1 Concern B (DEF-212 constant drift) RESOLVED in Sprint 31.92 S4b.
-8. **DEF-211 D1+D2+D3 (Sprint 31.94 sprint-gating)** STRICTLY OUT — Sprint 31.92 must NOT modify `argus/main.py:1081` (`reconstruct_from_broker()` call site), `check_startup_position_invariant`, `_startup_flatten_disabled` flag, or `reconstruct_from_broker` body BEYOND the single-line `is_reconstructed = True` addition.
-9. **Hard-to-borrow microcap spike scope** (Round-1 M-1). S1b operator-curates ≥5 PCT-class symbols × ≥10 trials per symbol. Suppression-window default derived from spike p99 + 20% margin (likely 18000s = 5hr; hard floor at 18000s if H6 ruled-out per S1b's `recommended_locate_suppression_seconds` field).
-10. **Validation artifacts framed as in-process logic only** (Round-1 M-2). AC5.1/AC5.2 explicitly NOT production safety evidence. Cessation criterion #5 (5 paper sessions clean post-seal) is the production-validation gate.
-11. **Composite validation as Pytest test with JSON side-effect** (Round-1 M-3). Test fixture writes JSON before assertion; daily CI workflow updates artifact mtime for freshness.
-12. **DEC-390 structural-closure framing** (process-evolution lesson F.5). NO aggregate percentage claims (no "comprehensive," "complete," "fully closed," "covers ~N%"). Replaces DEC-386's empirically-falsified `~98%` claim with "L1 closes Path #1 / L2 closes Path #2 / L3 + AC3.7 reconstructed-position refusal provides structural defense-in-depth / L4 closes constant-drift hygiene."
+This sprint's design reflects 7 settled operator decisions (verbatim from the
+Phase B re-run prompt) + 5 Tier 3-mandated revisions A–E (verbatim from
+`tier-3-review-1-verdict.md`). They are restated here in compact form so the
+design summary is self-sufficient if context is lost.
+
+### Settled operator decisions (binding)
+
+1. **Decision 1 — FAI #3 adversarial sub-spike (modifyOrder determinism).**
+   S1a script extended with adversarial axes (i) concurrent amends across
+   N≥3 positions, (ii) amends during a Gateway reconnect window, (iii) amends
+   with intentionally stale order IDs. Each axis produces its own rejection-
+   rate distribution. **Halt-or-proceed gate uses the worst-axis Wilson UB**,
+   NOT the steady-state UB. FAI #3 status: unverified-with-falsifying-spike-
+   scheduled.
+
+2. **Decision 2 — FAI #5 strengthening (`await_propagation` atomicity).** S1a's
+   `h1_propagation_converged` measurement strengthened to cancel-then-immediate-
+   SELL stress at **N=100 (not N=30)**. Hard gate: if even 1 trial in 100
+   exhibits a bracket-child OCA conflict, locate suppression, or position
+   state inconsistency, **H1 is NOT eligible regardless of `modifyOrder`
+   Wilson UB**. This is a hard gate, not advisory. FAI #5 status: unverified-
+   with-falsifying-spike-scheduled.
+
+3. **Decision 3 — FAI #8 option (a) (AST callsite scan completeness).** S4a-ii
+   adds 3 reflective-call sub-tests probing whether the AST-level scan for
+   `is_stop_replacement=True` callers catches (a) `**kw` unpacking, (b)
+   computed-value flag assignment, (c) `getattr` reflective access. Option
+   (b) accept-and-document NOT taken. FAI #8 status: unverified-with-
+   falsifying-spike-scheduled.
+
+4. **Decision 4 — M-R2-1 strengthening (AC2.7 watchdog auto-activation).**
+   New config field `config/order_management.yaml: pending_sell_age_watchdog_enabled`
+   with values `auto` (default) / `enabled` / `disabled`. `auto` mode flips to
+   `enabled` on first observed `case_a_in_production` event. NOT manual
+   operator activation. The watchdog provides the structural fallback for any
+   unmodeled locate-rejection string variant.
+
+5. **Decision 5 — 5 cross-layer composition tests (CL-1 through CL-5).** Per
+   the Tier 3 verdict and `templates/sprint-spec.md` v1.2.0 (mandatory when
+   DEC entries claim N≥3 layer defense), DEC-390's 4-layer structure
+   activates the cross-layer requirement. Sprint 31.92 commits to 5 tests
+   (above the template's "at least one" floor; above Tier 3's 3-test floor).
+   Tests live in S5c (new session). **CL-6 (rollback + locate-suppression
+   interaction) is explicitly OUT of scope for Sprint 31.92** — defer with
+   rationale documented in `docs/process-evolution.md`.
+
+6. **Decision 6 — Sprint scope: CONTINUE 31.92 (Option A).** Sprint 31.94 D3
+   prioritization is NOT brought forward. Treated as a separate Discovery
+   activity per Round 2 disposition's roadmap-flag. Operator-flatten daily
+   mitigation continues until cessation criterion #5 satisfied.
+
+7. **Decision 7 — Round 3 escalation pre-commitment (operator-bound,
+   verbatim, propagated to `escalation-criteria.md` at Phase C):**
+
+   > **Operator pre-commitment for Round 3 outcome (binding):** If Round 3
+   > produces a Critical finding, the response depends on the finding's class:
+   >
+   > (a) **Foundational primitive-semantics miss in the FAI's class** (same
+   > flavor as the asyncio yield-gap, ib_async cache freshness, and
+   > callback-path bookkeeping atomicity misses) → another revision pass
+   > (Phase A re-entry per Outcome C) is required.
+   >
+   > (b) **Any other Critical class** (edge case, missing test coverage,
+   > design refinement, documentation gap, marginal scope concern) → finding
+   > is accepted as a known limitation, logged as an RSK at appropriate
+   > severity (MEDIUM-HIGH or higher per Severity Calibration Rubric), and
+   > sprint ships to implementation.
+   >
+   > The pre-commitment is auditable: written before Round 3 runs, not
+   > rationalized after the fact. Operator override at Round 3 verdict time
+   > is permitted but must be explicit and logged in the Round 3 disposition.
+
+### Tier-3-mandated revisions (binding)
+
+A. **FAI entry #9 NEW: callback-path bookkeeping atomicity.** All bookkeeping
+   update paths on `cumulative_pending_sell_shares` and `cumulative_sold_shares`
+   (place-side increment, cancel/reject decrement, partial-fill transfer,
+   full-fill transfer, `_check_sell_ceiling` multi-attribute read) execute
+   synchronously between read and write across the entire transition. The L3
+   ceiling correctness depends on the asyncio single-event-loop guarantee
+   applying to every path that mutates these counters, not only
+   `_reserve_pending_or_fail`. Falsifying mechanism: AST-no-await scan +
+   mocked-await injection regression on `on_fill`, `on_cancel`, `on_reject`,
+   `_on_order_status`. Status: unverified-with-falsifying-spike-scheduled
+   (S4a-ii).
+
+B. **H-R2-1 protection scope extension.** The atomic `_reserve_pending_or_fail`
+   pattern is the reference implementation; the same AST guard + injection
+   test apply to every callback path that mutates the bookkeeping counters.
+   Materialized as AC3.1 + AC3.5 extended scope at Phase C. Implementation
+   lives in S4a-ii's regression-test infrastructure.
+
+C. **C-R2-1 + H-R2-2 coupling.** AC2.5 marks position
+   `halt_entry_until_operator_ack=True` if H1 is the active mechanism AND
+   `Broker.refresh_positions()` raises or times out. Without this coupling,
+   FAI #2 + FAI #5 compound when H1 is selected against a stale cache.
+   Materialized at S3b.
+
+D. **FAI #2 high-volume scope explicitly OUT (DEF-FAI-2-SCOPE).** S3b spike
+   covers the reconnect-window axis only. High-volume steady-state cache-
+   refresh behavior under hundreds of variants is deferred to Sprint 31.94
+   reconnect-recovery work. Phase C documents this in SbC §"Out of Scope"
+   and in the FAI #2 scope-text.
+
+E. **`SimulatedBrokerWithRefreshTimeout` fixture (DEF-SIM-BROKER-TIMEOUT-FIXTURE).**
+   Currently `SimulatedBroker.refresh_positions()` is no-op or instant-success;
+   in-process tests cannot exercise Branch 4. New fixture variant added at
+   S5c — enables CL-3 cross-layer test AND a dedicated Branch 4 unit test.
+
+### DEFs and RSKs filed by Tier 3 (materialized in CLAUDE.md DEF table at sprint-close)
+
+DEFs (6):
+DEF-FAI-CALLBACK-ATOMICITY (sprint-gating Round 3 advancement);
+DEF-CROSS-LAYER-EXPANSION (Sprint 31.92 — 5 CL tests delivered, CL-6 deferred);
+DEF-FAI-N-INCREASE (Sprint 31.92 S1a — N=30 → N=100);
+DEF-FAI-2-SCOPE (Sprint 31.94 — high-volume axis deferred);
+DEF-FAI-8-OPTION-A (Sprint 31.92 S4a-ii — adversarial regression sub-tests);
+DEF-SIM-BROKER-TIMEOUT-FIXTURE (Sprint 31.92 S5c).
+
+RSKs (2, both MEDIUM):
+RSK-FAI-COMPLETENESS — FAI's self-falsifiability clause triggered during
+Phase A Tier 3 (entry #9 added). Pattern of recurring FAI misses suggests
+Round 3 may surface a fourth. Mitigation: Phase B/C re-run + Round 3 full-
+scope cross-check; Round 3 escalation pre-commitment (Decision 7) bounds the
+worst-case revision pass count to one more.
+
+RSK-CROSS-LAYER-INCOMPLETENESS — Cross-layer composition test count at 5
+(above template floor; below exhaustive). DEC-386's empirical falsification
+justifies heightened bar; CL-6 explicitly deferred.
+
+RSK-PHASE-A-TIER-3-DEFERRED — **NOT FILED.** This Tier 3 occurred.
+
+### Inheritance from Round-1-revised + Round-2 dispositions (preserved)
+
+8. **Path #1 mechanism: H2 amend-stop-price PRIMARY DEFAULT** (Round-1 C-3).
+   AMD-2 invariant preserved on H2; mixed on H4; superseded on H1 last-resort.
+   Hierarchy is H2 > H4 > H1, safety-driven not preference-driven. AC1.6
+   operator-audit logging mandatory if H1 or H4-with-fallback-active.
+
+9. **Concurrency-safe pending-share reservation pattern** (Round-1 C-1 +
+   Tier 3 entry #9 extension). Two-counter design:
+   `cumulative_pending_sell_shares + cumulative_sold_shares + requested_qty
+   ≤ shares_total`. Synchronous-update invariant now applies to all
+   bookkeeping mutation paths (per Tier 3 item A + B), not only
+   `_reserve_pending_or_fail`.
+
+10. **`is_reconstructed: bool` refusal posture** (Round-1 C-2 + Round-2 H-R2-3
+    severity calibration). Reconstructed positions refuse all ARGUS-emitted
+    SELLs; operator-manual flatten via `scripts/ibkr_close_all_positions.py`
+    is the only closing mechanism until Sprint 31.94 D3.
+    RSK-RECONSTRUCTED-POSITION-DEGRADATION rated MEDIUM-HIGH per Severity
+    Calibration Rubric (operator daily-flatten empirically failed Apr 28: 27
+    of 87 ORPHAN-SHORT detections from a missed run). Sprint Abort Condition
+    #7 trigger lowered from 4 weeks to 2 weeks.
+
+11. **Position-keyed locate-suppression dict** (Round-1 H-2). Keyed by
+    `ManagedPosition.id` ULID, not symbol — preserves cross-position safety.
+
+12. **Broker-verification at suppression timeout via new ABC method** (C-R2-1
+    + Tier 3 item C). `Broker.refresh_positions(timeout_seconds=5.0)`
+    introduced on the ABC; AC2.5 forces refresh-then-verify with three
+    branches + Branch 4 (`verification_stale: true`) on refresh failure +
+    HALT-ENTRY coupling under H1 + refresh-fail.
+
+13. **Stop-replacement ceiling exemption** (H-R2-5). `_check_sell_ceiling`
+    accepts `is_stop_replacement: bool=False`; exemption permitted ONLY at
+    `_resubmit_stop_with_retry` normal-retry path. AST regression invariant
+    24 + Decision 3's reflective-call sub-tests guard against false-negative
+    paths.
+
+14. **AC4.6 dual-channel CRITICAL warning + AC4.7 `--allow-rollback` CLI
+    gate** (H-R2-4 combined). ntfy.sh `system_warning` AND canonical-logger
+    CRITICAL on `bracket_oca_type != 1`. Exit code 2 if flag absent. Defense-
+    in-depth + audit trail.
+
+15. **DEC-390 structural-closure framing** (process-evolution lesson F.5).
+    NO aggregate percentage claims. "L1 closes Path #1 mechanism / L2 closes
+    Path #2 detection + position-keyed suppression + broker-verified timeout
+    / L3 closes long-only ceiling with extended synchronous-update invariant
+    + reconstructed-position refusal / L4 closes constant-drift hygiene with
+    operator-visible rollback gate."
+
+---
+
+## Scope Boundaries (IN / OUT)
+
+**IN:**
+- DEC-390 4-layer architecture (L1 Path #1 / L2 Path #2 / L3 ceiling + reconstructed-position refusal / L4 DEF-212 rider)
+- Spike-driven mechanism selection (H2/H4/H1) per S1a + S1b
+- Synchronous-update invariant on all bookkeeping callback paths (S4a-ii)
+- 5 cross-layer composition tests CL-1 through CL-5 (S5c)
+- `SimulatedBrokerWithRefreshTimeout` fixture (S5c)
+- AC2.7 `_pending_sell_age_seconds` watchdog auto-activation (Decision 4)
+- Broker-verification ABC method + AC2.5 refresh-then-verify + Branch 4 (S3b)
+- C-R2-1 ↔ H-R2-2 coupling (`halt_entry_until_operator_ack=True` under H1 + refresh-fail)
+- AC4.6 dual-channel + AC4.7 `--allow-rollback` (S4b)
+- 22 spike + validation JSON artifacts committed to `main` ≤30 days fresh
+
+**OUT (deferred to other sprints — explicit list, mirrors SbC):**
+- **CL-6 (rollback + locate-suppression interaction)** — deferred per Decision 5; documented in `docs/process-evolution.md`.
+- **FAI #2 high-volume axis (DEF-FAI-2-SCOPE)** — deferred to Sprint 31.94 reconnect-recovery; FAI #2 scope-text amendment lands there.
+- **Sprint 31.94 D3 prioritization** — separate Discovery activity per Decision 6; not a Sprint 31.92 deliverable.
+- **DEF-211 D1+D2+D3 surfaces** — `argus/main.py:1081` `reconstruct_from_broker()` call site, `check_startup_position_invariant`, `_startup_flatten_disabled`, `reconstruct_from_broker` body BEYOND the single-line `is_reconstructed=True` addition. Sprint 31.94 territory.
+- **`_is_oca_already_filled_error` relocation** — Sprint 31.93 component-ownership.
+- **DEF-194/195/196 reconnect-recovery work** — Sprint 31.94. `IBKRReconnectedEvent` consumer that clears the suppression dict explicitly OUT.
+- **`evaluation.db` VACUUM behavior** — already closed by Sprint 31.915.
+- **`ibkr_close_all_positions.py` post-run verification feature** — operator-hygiene, not a script defect; not this sprint.
+- **DEF-215 reconciliation-WARNING throttling** — deferred with revisit trigger.
+- **Sprint 31B Research Console / Variant Factory** — orthogonal.
+- **Sprint 31.95 Alpaca retirement** — orthogonal.
+- **New alert observability features** beyond a single `POLICY_TABLE` entry for `sell_ceiling_violation`.
+- **Performance optimization** beyond explicit benchmarks.
+- **Backporting AC1/AC2/AC3/AC4 to Sprint 31.91-tagged code.**
+- **Live trading enablement** — gated by cessation criterion #5 + DEF-208 pre-live paper stress test.
+- **Documentation rewrites of `docs/architecture.md` §3.7** beyond AC-required additions.
+- **Restructuring/extending `SimulatedBroker` semantically** — fixture subclasses (e.g., `SimulatedBrokerWithRefreshTimeout`) acceptable; existing fill model unchanged.
+- **Trades-table reconstruction of `cumulative_sold_shares`** — REJECTED Round-1 (attribution-ambiguity).
+- **Persisting ceiling counters to SQLite (DEF-209 forward-pull)** — REJECTED Round-1 (Sprint 35+ horizon).
+- **`bracket_oca_type` Pydantic validator restriction to literal `1`** — REJECTED Round-1; `--allow-rollback` is the chosen mitigation.
+
+---
+
+## Regression Invariants
+
+22 invariants from Round-1-revised + 2 NEW from this Phase B re-run. Phase C
+materializes the full text in `regression-checklist.md`.
+
+**Preserved from prior sprints (1–9):** DEC-117 atomic bracket; DEC-364
+`cancel_all_orders()` no-args ABC; DEC-369 broker-confirmed reconciliation
+immunity; DEC-372 stop retry caps + backoff; DEC-385 6-layer side-aware
+reconciliation; DEC-386 4-layer OCA architecture; DEC-388 alert observability;
+DEF-158 retry 3-branch side-check verbatim; `# OCA-EXEMPT:` exemption.
+
+**Baseline preservation (10–12):** Test count baseline (≥5,269 pytest);
+pre-existing flake count (≤baseline; DEF-150/167/171/190/192 unchanged);
+frontend immutability.
+
+**New in Sprint 31.92 (13–22 from Round-1-revised, plus NEW 23–24):**
+13. Long-only SELL-volume ceiling per `ManagedPosition` (two-counter
+    reservation pattern). **Synchronous-update invariant extended to all
+    bookkeeping mutation paths per Tier 3 entry #9 / item A + B.**
+14. Path #2 fingerprint deterministic + position-keyed suppression + broker-
+    verified timeout (three branches + Branch 4 on refresh failure).
+15. `_OCA_TYPE_BRACKET` module constant deleted; grep regression guard.
+16. AC4.4 OCA-type lock-step (NOT operational validity).
+17. AMD-2 invariant mechanism-conditional (H2 preserved / H4 mixed / H1 superseded).
+18. Spike artifacts committed and ≤30 days fresh at first post-merge paper session.
+19. `is_reconstructed=True` refusal posture holds for all ARGUS-emitted SELL paths.
+20. Pending-reservation state-transition completeness (5 transitions enumerated).
+21. Broker-verification three-branch coverage at suppression timeout + Branch 4 on refresh fail.
+22. Mechanism-conditional operator-audit logging per AC1.6.
+
+23. **(NEW per Tier 3 item A + B + Decision 3)** Synchronous-update invariant
+    on all bookkeeping callback paths: AST-no-await scan applied to
+    `_reserve_pending_or_fail`, `on_fill`, `on_cancel`, `on_reject`,
+    `_on_order_status`, and `_check_sell_ceiling`'s multi-attribute read,
+    plus mocked-await injection test on each path. AST callsite scan
+    invariant 24 (existing) extended with reflective-pattern coverage:
+    `**kw` unpacking, computed-value flag assignment, `getattr` access.
+24. **(NEW per Tier 3 item C)** `halt_entry_until_operator_ack=True` posture
+    fires when H1 is the active mechanism AND `Broker.refresh_positions()`
+    raises or times out. No further SELL attempts on the position; no
+    phantom short. Operator-driven resolution.
+25. **(NEW per Tier 3 item E + Decision 5)** Branch 4 (`verification_stale: true`)
+    fires on `Broker.refresh_positions()` failure. `SimulatedBrokerWithRefreshTimeout`
+    fixture exercises this path in-process. CL-3 + dedicated Branch 4 unit
+    test cover both code paths.
+26. **(NEW per Decision 4)** AC2.7 `_pending_sell_age_seconds` watchdog
+    auto-activates from `auto` to `enabled` on first observed
+    `case_a_in_production` event in production paper trading.
+27. **(NEW per Decision 5)** 5 cross-layer composition invariants — CL-1
+    (L1 fails → L3 catches), CL-2 (L4 fails → L2 catches), CL-3 (FAI #2 +
+    FAI #5 cross-falsification → HALT-ENTRY catches), CL-4 (L1 + L2 →
+    L3 catches), CL-5 (L2 + L3 → protective stop-replacement allowed AND
+    Branch 4 doesn't false-fire). Each test is by definition slow + ugly +
+    spans multiple modules per `templates/sprint-spec.md` v1.2.0 § Defense-
+    in-Depth Cross-Layer Composition Tests.
+
+---
 
 ## File Scope
 
-**Modify:**
-- `argus/execution/order_manager.py` (S2a, S2b, S3a, S3b, S4a, S4b — 6 sessions touch this file; sequential by necessity)
-- `argus/execution/ibkr_broker.py` (S3a — fingerprint helper)
-- `argus/main.py` (S4b — `OrderManager` construction call site)
-- `argus/core/config.py` (S3a — 3 new `OrderManagerConfig` fields total)
-- `argus/core/alert_auto_resolution.py` (S4a — POLICY_TABLE 14th entry for `sell_ceiling_violation`)
-- `config/system_live.yaml` (S3a — new fields surfaced)
-- `tests/execution/order_manager/test_def204_round2_path1.py` (new, S2a + S2b)
-- `tests/execution/order_manager/test_def204_round2_path2.py` (new, S3a + S3b)
-- `tests/execution/order_manager/test_def204_round2_ceiling.py` (new, S4a)
-- `tests/execution/order_manager/test_def212_oca_type_wiring.py` (new, S4b)
-- `tests/integration/test_def204_round2_validation.py` (new, S5a + S5b — extended at S5b for composite + restart scenarios)
-- `tests/api/test_policy_table_exhaustiveness.py` (S4a — update for 14th entry)
-- `scripts/spike_def204_round2_path{1,2}.py` (new, S1a + S1b)
-- `scripts/validate_def204_round2_path1.py` (new, S5a)
-- `scripts/validate_def204_round2_path2.py` (new, S5b)
-- `scripts/spike-results/spike-def204-round2-path{1,2}-results.json` (new, S1a + S1b)
-- `scripts/spike-results/sprint-31.92-validation-{path1,path2}.json` (new, autogenerated + committed)
-- `scripts/spike-results/sprint-31.92-validation-composite.json` (new, autogenerated by Pytest test side-effect at S5b; daily CI updates mtime per AC5.3)
+**Modify (primary mass on `argus/execution/order_manager.py`):**
+- `argus/execution/order_manager.py` — 8 sessions touch (S2a/S2b/S3a/S3b/S4a-i/S4a-ii/S4b/S5c). **Recalibrated cumulative diff bound: ~1150–1300 LOC** (was ~1100–1200; +50 to +100 for callback-path AST guards + Branch 4 coupling per Tier 3 item C + AC2.7 auto-activation per Decision 4 + `halt_entry_until_operator_ack` field threading).
+- `argus/execution/broker.py` (S3b) — new ABC method `refresh_positions(timeout_seconds: float = 5.0)`.
+- `argus/execution/ibkr_broker.py` (S3a + S3b) — fingerprint helper + `refresh_positions` impl.
+- `argus/execution/simulated_broker.py` (S3b) — `refresh_positions` no-op or instant-success impl. Subclassing for `SimulatedBrokerWithRefreshTimeout` happens in test fixtures (S5c), not in production code.
+- `argus/main.py` (S4b) — OrderManager construction call site + `--allow-rollback` CLI flag + dual-channel emission.
+- `argus/core/config.py` (S3a) — `OrderManagerConfig` 4 new fields total (3 from Round-1-revised + `pending_sell_age_watchdog_enabled` from Decision 4).
+- `argus/core/alert_auto_resolution.py` (S4a-i) — `POLICY_TABLE` 14th entry for `sell_ceiling_violation`.
+- `config/system_live.yaml` (S3a) — surface new fields.
+- `config/order_management.yaml` (S3a) — new `pending_sell_age_watchdog_enabled` field per Decision 4.
+- `config/ibkr.yaml` — existing `bracket_oca_type` (S4b consumer-side wiring; field itself unchanged).
+- `tests/execution/order_manager/test_def204_round2_path1.py` (new, S2a + S2b).
+- `tests/execution/order_manager/test_def204_round2_path2.py` (new, S3a + S3b).
+- `tests/execution/order_manager/test_def204_round2_ceiling.py` (new, S4a-i).
+- `tests/execution/order_manager/test_def204_callback_atomicity.py` (NEW, S4a-ii).
+- `tests/execution/order_manager/test_def212_oca_type_wiring.py` (new, S4b).
+- `tests/integration/test_def204_round2_validation.py` (new, S5a + extended S5b + S5c).
+- `tests/integration/conftest_refresh_timeout.py` (NEW, S5c) — `SimulatedBrokerWithRefreshTimeout` fixture.
+- `tests/api/test_policy_table_exhaustiveness.py` (S4a-i — 14th entry).
+- `scripts/spike_def204_round2_path{1,2}.py` (new, S1a + S1b).
+- `scripts/validate_def204_round2_path{1,2}.py` (new, S5a + S5b).
+- `scripts/spike-results/spike-def204-round2-path{1,2}-results.json` (new).
+- `scripts/spike-results/sprint-31.92-validation-{path1,path2,composite}.json` (new).
+- `.github/workflows/` (S5b — daily composite test).
 
-**Document at sprint-close (D14 doc-sync per `doc-update-checklist.md`):**
-- `CLAUDE.md` (DEF-204 + DEF-212 status updates; active-sprint pointer)
-- `docs/decision-log.md` (DEC-390)
-- `docs/dec-index.md` (DEC-390 entry)
-- `docs/sprint-history.md` (Sprint 31.92 row + per-sprint detail block)
-- `docs/roadmap.md` (sprint close-out narrative + roadmap re-baseline)
-- `docs/project-knowledge.md` (DEF table sync; active-sprint pointer)
-- `docs/architecture.md` (§3.7 OrderManager additions: pending-reservation, is_reconstructed, position-keyed suppression dict, broker-verification, bracket_oca_type flow, Path #1 mechanism, Path #2 detection)
-- `docs/risk-register.md` (5 RSKs filed)
-- `docs/pre-live-transition-checklist.md` (Sprint 31.92 gate criteria — 12 items)
-- `docs/process-evolution.md` (lesson F.5 — structural closure framing pattern)
-- `.github/workflows/` (daily CI workflow for composite test freshness — operator-manual sprint-close task)
+**Document at sprint-close (D14 doc-sync):**
+`CLAUDE.md` (DEF-204 + DEF-212 + 6 NEW DEFs from Tier 3); `docs/decision-log.md` (DEC-390); `docs/dec-index.md`; `docs/sprint-history.md`; `docs/roadmap.md`; `docs/project-knowledge.md`; `docs/architecture.md` §3.7; `docs/risk-register.md` (5 sprint RSKs + 2 Tier 3 RSKs); `docs/pre-live-transition-checklist.md`; `docs/process-evolution.md` (lesson F.5 reaffirmation + CL-6 deferral + FAI completeness pattern); `.github/workflows/` daily CI workflow.
 
-**Do NOT modify** (full list in SbC §"Do NOT modify"):
-- `argus/execution/broker.py` (ABC) — Sprint 31.93 prerogative
-- `argus/execution/alpaca_broker.py` — Sprint 31.95 retirement
-- `argus/execution/simulated_broker.py` (semantic changes) — fixture subclasses in tests acceptable
-- `argus/execution/ibkr_broker.py::place_bracket_order` (DEC-386 S1a OCA threading) — preserve byte-for-byte
-- `argus/execution/ibkr_broker.py::_is_oca_already_filled_error` and `_OCA_ALREADY_FILLED_FINGERPRINT` — re-used; NOT relocated
-- `argus/execution/order_manager.py::_handle_oca_already_filled` (DEC-386 S1b) — preserve verbatim
-- `argus/execution/order_manager.py::reconstruct_from_broker` body BEYOND single-line `is_reconstructed = True` addition — Sprint 31.94 D1
-- `argus/execution/order_manager.py::reconcile_positions` Pass 1/2 (DEC-385 L3+L5) — preserve verbatim
-- `argus/execution/order_manager.py::_check_flatten_pending_timeouts` 3-branch side-check (DEF-158 fix anchor `a11c001`, lines ~3424–3489) — preserve verbatim
-- `argus/main.py::check_startup_position_invariant` and `_startup_flatten_disabled` flag — Sprint 31.94 D2
-- `argus/main.py:1081` (`reconstruct_from_broker()` call site) — Sprint 31.94 D1
-- `argus/core/health.py::HealthMonitor` consumer + 13 existing POLICY_TABLE entries — preserve
-- `argus/core/health.py::rehydrate_alerts_from_db` (DEC-388 L3) — preserve
-- `argus/api/v1/alerts.py` REST endpoints + `argus/ws/v1/alerts.py` WebSocket endpoint (DEC-388 L4) — preserve
-- `argus/frontend/...` (entire frontend) — zero UI changes
-- `data/operations.db` schema (DEC-388 L3) — preserve; new `sell_ceiling_violation` alerts use existing `alert_state` table
-- `data/argus.db` trades/positions/quality_history schemas — preserve; new fields are in-memory only
-- DEC-385 / DEC-386 / DEC-388 entries in `docs/decision-log.md` — preserve (leave-as-historical)
-- `IBKRConfig.bracket_oca_type` Pydantic validator — preserve runtime-flippability per DEC-386 design intent
+**Do NOT modify (full list in SbC):**
+- `argus/execution/alpaca_broker.py` — Sprint 31.95
+- `argus/execution/simulated_broker.py` semantic changes (fixture subclasses in tests acceptable)
+- `argus/execution/ibkr_broker.py::place_bracket_order` (DEC-386 S1a)
+- `argus/execution/ibkr_broker.py::_is_oca_already_filled_error` and `_OCA_ALREADY_FILLED_FINGERPRINT` (re-used; not relocated)
+- `argus/execution/order_manager.py::_handle_oca_already_filled` (DEC-386 S1b)
+- `argus/execution/order_manager.py::reconstruct_from_broker` body BEYOND single-line `is_reconstructed=True` addition
+- `argus/execution/order_manager.py::reconcile_positions` Pass 1/2 (DEC-385)
+- `argus/execution/order_manager.py::_check_flatten_pending_timeouts` 3-branch side-check (DEF-158)
+- `argus/main.py::check_startup_position_invariant` and `_startup_flatten_disabled`
+- `argus/main.py:1081` (`reconstruct_from_broker()` call site)
+- `argus/core/health.py::HealthMonitor` consumer + 13 existing `POLICY_TABLE` entries (14th added at S4a-i)
+- `argus/core/health.py::rehydrate_alerts_from_db` (DEC-388 L3)
+- `argus/api/v1/alerts.py` REST + `argus/ws/v1/alerts.py` WebSocket (DEC-388 L4)
+- Frontend (`argus/frontend/...`) — zero UI changes
+- `data/operations.db` schema (DEC-388 L3) — preserved; new alerts use existing `alert_state` table
+- `data/argus.db` schemas — preserved; new fields are in-memory only
+- DEC-385 / DEC-386 / DEC-388 entries in `decision-log.md` — preserved (leave-as-historical)
+- `IBKRConfig.bracket_oca_type` Pydantic validator — runtime-flippability preserved per DEC-386 design intent
+- DEF-158 retry 3-branch side-check structure (lines ~3424–3489)
+
+---
+
+## Config Changes
+
+| YAML Path | Pydantic Model | Field Name | Default | Notes |
+|-----------|---------------|------------|---------|-------|
+| `order_manager.locate_suppression_seconds` | `OrderManagerConfig` | `locate_suppression_seconds` | spike-derived (likely 18000s) | `Field(ge=300, le=86400)`; spike default from S1b |
+| `order_manager.long_only_sell_ceiling_enabled` | `OrderManagerConfig` | `long_only_sell_ceiling_enabled` | `True` (fail-closed) | — |
+| `order_manager.long_only_sell_ceiling_alert_on_violation` | `OrderManagerConfig` | `long_only_sell_ceiling_alert_on_violation` | `True` | — |
+| `order_management.pending_sell_age_watchdog_enabled` | `OrderManagerConfig` | `pending_sell_age_watchdog_enabled` | `"auto"` | **NEW per Decision 4** — `auto` / `enabled` / `disabled`; `auto` flips to `enabled` on first `case_a_in_production` event |
+| `ibkr.bracket_oca_type` | `IBKRConfig` | `bracket_oca_type` | `1` (existing) | UNCHANGED — runtime-flippability preserved per DEC-386. S4b adds consumer-side wiring + AC4.6 dual-channel CRITICAL + AC4.7 `--allow-rollback` flag gate. |
+
+**CLI flag (NEW per H-R2-4):** `--allow-rollback` on `argus/main.py`. Required
+to start ARGUS with `bracket_oca_type != 1`; absent ⇒ exit code 2 + stderr
+FATAL banner. Present ⇒ ntfy.sh `system_warning` urgent + canonical-logger
+CRITICAL with phrase "DEC-386 ROLLBACK ACTIVE."
+
+---
 
 ## Test Strategy
 
-**Net pytest target:** 75–95 logical tests (90–105 effective with parametrize multipliers per protocol §"Parametrized tests count per case, not per decorator"). **Final test-count target:** 5,344–5,374 pytest (5,269 baseline + 75–105 new), 913 Vitest unchanged.
+**Net pytest target:** 88–114 new logical tests (was 75–95 pre-Phase-B-re-run);
+~108–134 effective with parametrize multipliers. **Final test-count target:**
+5,357–5,403 pytest (5,269 baseline + 88–134 new), 913 Vitest unchanged (zero
+UI changes per frontend immutability invariant).
 
-**Per-session test deltas (revised estimate):**
-| Session | Pytest Δ | Vitest Δ |
-|---------|---------:|---------:|
-| S1a | 0 | 0 |
-| S1b | 0 | 0 |
-| S2a | +6 to +7 | 0 |
-| S2b | +7 | 0 |
-| S3a | +6 | 0 |
-| S3b | +8 | 0 |
-| S4a | +7 logical (≈8 effective) | 0 |
-| S4b | +6 logical (≈10 effective with parametrize) | 0 |
-| S5a | +4 | 0 |
-| S5b | +9 logical | 0 |
-| **Total range** | **+75 to +95** | **0** |
+**Per-session test deltas (post-Phase-B-re-run):**
+| Session | Pytest Δ | Notes |
+|---------|---------:|-------|
+| S1a | 0 | spike — JSON artifacts only |
+| S1b | 0 | spike — JSON artifacts only |
+| S2a | +6 to +7 | +1 conditional under H1/H4 (AC1.6 audit log) |
+| S2b | +7 | includes H-R2-2 HALT-ENTRY tests |
+| S3a | +6 | new `pending_sell_age_watchdog_enabled` Pydantic test |
+| S3b | +9 | +1 over Round-1-revised (Branch 4 + HALT-ENTRY coupling under H1 + refresh-fail) |
+| S4a-i | +7 logical (≈9 effective) | ceiling state machine + emit-site guards (mitigated to Medium 13.5) |
+| S4a-ii | **+7 NEW** | 4 callback-path AST regressions + 3 reflective-call sub-tests |
+| S4b | +7 logical (≈11 effective) | +1 over Round-1-revised (`--allow-rollback` flag absent → exit 2) |
+| S5a | +4 | unchanged |
+| S5b | +9 logical | unchanged from Round-1-revised final scope |
+| S5c | **+6 NEW** | 5 CL tests + 1 Branch 4 unit test using `SimulatedBrokerWithRefreshTimeout` |
+| **Total** | **+88 to +114** | |
 
-**Test dependencies:**
-- DEC-328 tiering: full suite at S1a pre-flight + every close-out + final review.
-- New tests follow existing naming convention (`test_def204_round2_*` for path/ceiling, `test_def212_*` for rider).
-- S5b composite test produces JSON artifact as side-effect; daily CI workflow updates mtime.
+**Test-suite hygiene per DEC-328:** full suite at S1a pre-flight + every
+close-out + final review. Naming convention: `test_def204_round2_*` for
+path/ceiling/atomicity, `test_def212_*` for rider, `test_*_cross_layer_*`
+for CL-1 through CL-5.
 
-## Regression Invariants (preserved or established)
+---
 
-**Preserved from prior sprints:**
-1. DEC-117 atomic bracket order placement
-2. DEC-364 `cancel_all_orders()` no-args ABC contract
-3. DEC-369 broker-confirmed reconciliation immunity
-4. DEC-372 stop retry caps + exponential backoff
-5. DEC-385 6-layer side-aware reconciliation (preserved byte-for-byte; `phantom_short_retry_blocked` alert path reused)
-6. DEC-386 4-layer OCA architecture (preserved byte-for-byte; `bracket_oca_type=0` rollback escape hatch preserved with new AC4.6 startup warning)
-7. DEC-388 alert observability subsystem (preserved; POLICY_TABLE extended with 14th entry)
-8. DEF-158 retry 3-branch side-check (preserved verbatim — Path #2 detection is upstream at `place_order` exception, NOT a 4th branch)
-9. `# OCA-EXEMPT:` exemption mechanism (preserved)
+## Runner Compatibility
 
-**Baseline preservation:**
-10. Test count baseline (≥ 5,269 pytest at every close-out; 913 Vitest)
-11. Pre-existing flake count (≤ baseline; DEF-150/167/171/190/192 unchanged)
-12. Frontend immutability (zero `.tsx`/`.ts`/`.css` changes)
+- **Mode:** human-in-the-loop (per `bootstrap-index.md` ARGUS workflow). Runner config not generated; sprint executes via Two-Claude workflow (Claude.ai for planning + Work Journal; Claude Code for implementation). Mid-sprint Tier 3 review happens in a separate Claude.ai conversation between S4a-ii and S4b.
+- **Parallelizable sessions:** S1a + S1b (different scripts; independent paper-IBKR sessions feasible if operator splits clientId budget — clientId 1 for S1a, clientId 2 for S1b). All other sessions strictly sequential due to `argus/execution/order_manager.py` overlap.
+- **Estimated token budget:** ~13 implementation/spike sessions × ~80–120K tokens/session avg = ~1.0–1.5M tokens for Phase D execution; mid-sprint Tier 3 +100–150K; post-sprint doc-sync +100–150K.
+- **Runner-specific escalation notes:**
+  - This sprint touches safety-load-bearing files. The mid-sprint Tier 3 (M-R2-5) is a non-negotiable integration point; cannot proceed to S5a/S5b/S5c without it.
+  - **Round 3 escalation pre-commitment (Decision 7) is the binding contract** for what happens after Round 3 produces a Critical. Runner cannot interpret around it.
+  - A14 fired in Round 2; another A14 firing in Round 3 routes per Decision 7 (a) — full Phase A re-entry. Decision 7 (b) routes Critical-class findings other than primitive-semantics-class to RSK + ship.
 
-**New in Sprint 31.92:**
-13. Long-only SELL-volume ceiling with pending+sold reservation pattern: `cumulative_pending_sell_shares + cumulative_sold_shares + requested_qty ≤ shares_total` per `ManagedPosition` (REWRITTEN per Round-1 C-1)
-14. Path #2 locate-rejection fingerprint deterministic + position-keyed suppression + broker-verified timeout (EXPANDED per Round-1 H-2 + H-3)
-15. `_OCA_TYPE_BRACKET` module constant deleted; grep regression guard
-16. AC4.4 OCA-type lock-step (NOT operational validity); `bracket_oca_type=0` threads through consistently (REFRAMED per Round-1 H-4)
-17. AMD-2 invariant mechanism-conditional (H2 preserved / H4 mixed / H1 superseded) (REFRAMED per Round-1 C-3)
-18. Spike artifacts committed and ≤30 days fresh at first post-merge paper session
-19. (NEW) `is_reconstructed = True` refusal posture holds for all ARGUS-emitted SELL paths (Round-1 C-2)
-20. (NEW) Pending-reservation state-transition completeness — all 5 transitions enumerated (Round-1 C-1)
-21. (NEW) Broker-verification three-branch coverage at suppression timeout (Round-1 H-3)
-22. (NEW) Mechanism-conditional operator-audit logging per AC1.6 (Round-1 C-3)
+---
 
-## Risks Filed at Sprint-Close
+## Dependencies
 
-5 RSKs filed (depending on H2/H4/H1 mechanism selection at S1a):
-- **RSK-DEC-390-AMEND** (PRIMARY if H2 selected) OR **RSK-DEC-390-CANCEL-AWAIT-LATENCY** (FALLBACK if H1 or H4-with-fallback-active)
-- **RSK-DEC-390-FINGERPRINT** (UNCONDITIONAL)
-- **RSK-CEILING-FALSE-POSITIVE** (UNCONDITIONAL; mitigated by S5b composite + A-class halt A11)
-- **RSK-RECONSTRUCTED-POSITION-DEGRADATION** (UNCONDITIONAL; TIME-BOUNDED by Sprint 31.94 D3 seal)
-- **RSK-SUPPRESSION-LEAK** (UNCONDITIONAL; PARTIALLY MITIGATED by AC2.5 broker-verification; full coupling deferred to Sprint 31.94)
+- Sprint 31.91 SEALED at HEAD (confirmed 2026-04-28).
+- Phase A re-entry FAI authored (`falsifiable-assumption-inventory.md`).
+- Phase A Tier 3 review verdict received and dispositioned (`tier-3-review-1-verdict.md`, REVISE_PLAN).
+- Phase B re-run produces this design summary.
+- Phase C (separate session) consumes this design summary + Tier 3 verdict + 7 settled operator decisions to regenerate `sprint-spec.md`, `spec-by-contradiction.md`, `session-breakdown.md`, `regression-checklist.md`, `escalation-criteria.md`, `doc-update-checklist.md`, `adversarial-review-input-package-round-3.md`.
+- Phase C-1 Round 3 adversarial review at full scope (per `protocols/adversarial-review.md` v1.1.0 § Outcome C; supersedes Round-2 disposition's narrowest-scope recommendation).
+- Phase D prompts (10+ implementation prompts, 10+ review prompts, review context, work journal handoff) consume final post-Round-3 spec-level artifacts.
 
-## Inheritance Pointers
+---
 
-- **Sprint 31.93** (component-ownership): inherits Tier 3 #1 Concern A (`_is_oca_already_filled_error` relocation); DEF-208 pre-live paper stress test fixture infrastructure.
-- **Sprint 31.94** (reconnect-recovery): inherits DEF-211 D1+D2+D3 (sprint-gating); RSK-DEC-386-DOCSTRING bound; `IBKRReconnectedEvent` producer/consumer wiring (eliminates RSK-SUPPRESSION-LEAK reconnect-blindness); D3 boot-time adoption-vs-flatten policy (eliminates RSK-RECONSTRUCTED-POSITION-DEGRADATION).
-- **Sprint 35+** (Learning Loop V2): inherits DEF-209 extended scope (`Position.side`, `redundant_exit_observed`, `cumulative_pending_sell_shares`, `cumulative_sold_shares`, `is_reconstructed` SQLite persistence prerequisite).
-- **Process-evolution** (RETRO-FOLD candidate, next campaign): metarepo amendments to `protocols/sprint-planning.md` + `protocols/adversarial-review.md` + `protocols/tier-3-review.md` for lesson F.5 structural-closure framing pattern.
+## Escalation Criteria (light)
 
-## Cessation criteria for DEF-204
+Detailed criteria are Phase C artifact #5. Binding pointers:
+- **Round 3 escalation pre-commitment (Decision 7)** is the load-bearing contract for Round 3's outcome.
+- **A14** retains its Round-2 semantic; if Round 3 fires it, Decision 7 routes the response.
+- **A15 (NEW per Round-1 C-2 disposition)** restart-during-active-position regression — preserved.
+- **A16 (NEW per Round-1 C-2 disposition)** `is_reconstructed` refusal posture false-positive in production — preserved.
+- **Mid-sprint Tier 3 (M-R2-5)** mandatory between S4a-ii and S5a; can route to PROCEED / REVISE_PLAN / PAUSE_AND_INVESTIGATE.
 
-DEF-204 transitions from RESOLVED-PENDING-PAPER-VALIDATION to RESOLVED when ALL of:
-1. ✅ Sprint 31.91 sealed (cumulative — 2026-04-28).
-2. ✅ Sprint 31.92 sealed (target: post-Round-2-clear + Phase D + 10 sessions complete).
-3. ✅ Sprint 31.92 spike + validation artifacts committed to `main` and ≤30 days old.
-4. ✅ DEC-390 written below in `docs/decision-log.md` with structural-closure framing.
-5. ⏸️ **5 paper sessions clean post-Sprint-31.92 seal** — counter starts at 0/5 on sprint-close.
-6. ⏸️ Sprint 31.94 sealed (eliminates RSK-RECONSTRUCTED-POSITION-DEGRADATION via D3).
+---
 
-Operator daily-flatten via `scripts/ibkr_close_all_positions.py` continues until criterion #5 satisfied. Live trading transition gated by criterion #5 + DEF-208 pre-live paper stress test (Sprint 31.93 OR 31.94).
+## Doc Updates Needed (light)
 
-## Adversarial Review Round 2 Status
+Detailed manifest is Phase C artifact #7. Phase B-level pointers:
+- DEC-390 in `decision-log.md` (4-layer structural-closure framing; cross-references to DEC-385/386/388, DEF-204, DEF-212, Apr 28 paper-session debrief, S1a + S1b spike artifacts, S5a + S5b + S5c validation artifacts).
+- 6 NEW DEFs from Tier 3 in `CLAUDE.md` DEF table.
+- 2 NEW RSKs from Tier 3 in `risk-register.md` (RSK-FAI-COMPLETENESS, RSK-CROSS-LAYER-INCOMPLETENESS) plus 5 sprint RSKs.
+- `process-evolution.md` reaffirmation: lesson F.5 (structural-closure framing), FAI completeness pattern (Round 1 + Round 2 + Phase A Tier 3 = three primitive-semantics misses; FAI made entry #9 detectable), CL-6 deferral rationale.
+- `pre-live-transition-checklist.md` additions: cessation criterion #5 reset to 0/5; spike artifact freshness ≤30 days; daily composite test green ≥7 days content-AND-mtime; `pending_sell_age_watchdog_enabled` runtime state recorded; `--allow-rollback` flag absent in production startup config.
 
-Round 1 verdict (2026-04-29): Outcome B — 3 Critical + 4 High + 3 Medium findings, all dispositioned per `revision-rationale.md`. This package is the post-revision input for Round 2.
+---
 
-Round 2 scope: validate the revisions specifically (did fixes introduce new failure modes?), not the original design. See `adversarial-review-input-package.md` (revised) §"Round 2 framing" for targeted scrutiny questions across 4 risk classes (Class I — accept-in-full revisions; Class II — partial-accept dispositions; Class III — new edge cases / out-of-scope items; Class IV — cross-cutting structural concerns).
+## Artifacts to Generate (Phase C — separate session)
 
-Round 2 verdict outcomes:
-- **CLEAR:** sprint planner proceeds to Phase D prompt generation (10 implementation prompts + 10 review prompts + review-context.md + work-journal-handoff.md = 22 artifacts).
-- **Outcome B with ≥1 Critical:** A-class halt A14 fires; sprint planner returns to Phase A; revisions re-applied; Round 3 adversarial review.
+This Phase B session produces ONE artifact: this design summary.
+**The following are explicitly Phase C (next, separate conversation):**
+1. Sprint Spec (revised; FAI section reproduces `falsifiable-assumption-inventory.md` with entry #9 + #2/#5/#8 status updates)
+2. Specification by Contradiction (revised; Out-of-Scope additions for CL-6, FAI #2 high-volume axis, Sprint 31.94 D3 prioritization)
+3. Session Breakdown (with full compaction-risk scoring tables for all 13 sessions; mid-sprint Tier 3 placement)
+4. Sprint-Level Escalation Criteria (revised; Decision 7 propagated verbatim; A15/A16/A17 new triggers)
+5. Sprint-Level Regression Checklist (revised; invariants 23–27 added)
+6. Doc Update Checklist (revised; 6 DEF additions + 2 RSK additions + lesson F.5 reaffirmation + FAI completeness pattern)
+7. Adversarial Review Input Package — Round 3 (declares full scope; FAI cross-check explicit; Decision 7 pre-commitment included as binding context)
+
+Phase D (after Round 3 CLEAR or Decision 7 (b) disposition) generates
+implementation prompts + review prompts + review context + work journal
+handoff.
+
+---
+
+## Closing
+
+This Phase B re-run incorporates every Tier 3-mandated revision (entry #9 +
+H-R2-1 scope extension + FAI #5 N=100 + FAI #8 option (a) + ≥4-now-5
+cross-layer tests + C-R2-1 ↔ H-R2-2 coupling + 6 DEFs + 2 RSKs) and every
+settled operator decision (Decisions 1–7) verbatim. Substantive vs Structural
+Rubric triggers fired (5 of 8); per protocol, structural revision is required
+and revisions cannot be applied directly.
+
+The session count grew from 10 to 13 (12 implementation/spike + 1 mid-sprint
+Tier 3 review). Every session re-scored against the compaction-risk thresholds;
+zero sessions at 14+ post-mitigation. The session splits (S4a → S4a-i + S4a-ii;
+new S5c) cleanly separate ceiling implementation from synchronous-update-
+invariant regression infrastructure from cross-layer composition testing.
+
+The cumulative diff bound on `argus/execution/order_manager.py` recalibrates
+to ~1150–1300 LOC (was ~1100–1200) per Tier 3 guidance, accommodating
+callback-path AST guards, Branch 4 coupling, AC2.7 auto-activation, and
+`halt_entry_until_operator_ack` field threading.
+
+Round 3 proceeds at full scope (per `protocols/adversarial-review.md` v1.1.0
+§ Outcome C, superseding the Round-2 disposition's narrowest-scope
+recommendation). Round 3 verdict routes per Decision 7's binding pre-commitment.
+
+This design summary IS the Phase B output. Phase C is a separate session.

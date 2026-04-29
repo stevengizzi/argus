@@ -1,87 +1,239 @@
-# Sprint 31.92 — Session Breakdown
+# Sprint 31.92 — Session Breakdown (revised)
 
-> **Revision history:** Round 1 authored 2026-04-28; Round-1-revised 2026-04-29 incorporating adversarial findings — S1b spike scope expanded for hard-to-borrow microcap measurement (M-1); S2a/S2b implement H2 default with H4/H1 fallback branches (C-3); S3a uses position-keyed suppression dict (H-2); S3b adds broker-verification-at-timeout helper (H-3); S4a adds `cumulative_pending_sell_shares` + `is_reconstructed` flag (C-1, C-2); S4b adds startup CRITICAL warning (H-4); S5b adds restart-during-active-position validation + composite JSON side-effect (C-2, M-3). Net session count UNCHANGED at 10. Net test count target raised from 53–65 to 75–95.
-
-10 sessions total. 2 spike sessions (S1a + S1b) gate Phase D implementation prompts for the Path #1 mechanism choice (H2 default / H4 fallback / H1 last-resort) and the Path #2 fingerprint stability + suppression-window calibration respectively. 8 implementation/validation sessions (S2a → S5b) deliver the full sprint scope.
-
-**Scoring methodology** (from `protocols/sprint-planning.md` v1.2.0):
-- New file: +2 each · Modified file: +1 each · Pre-flight read: +1 each · New test: +0.5 each
-- Complex integration (3+ components): +3 · External API debugging: +3 · Large new file (>150 lines): +2 each
-- Thresholds: 0–8 Low / 9–13 Medium / 14–17 High (must split) / 18+ Critical (must split into 3+)
-
-**Sequencing constraint:** Sessions S2a–S5b are STRICTLY SEQUENTIAL. Every one of them touches `argus/execution/order_manager.py`. Spike sessions S1a and S1b are independent and may run in parallel.
+> **Phase C artifact 5/9 (revised post-Tier-3 + Phase B re-run, 2026-04-29).**
+> 13 sessions total. Every session post-mitigation scores ≤13.5 (Medium);
+> zero sessions at compaction score 14+. Phase B compaction-gate PASSED.
+>
+> **Revision lineage:**
+> - Round 1 authored 2026-04-28 (10 sessions; Round-1-revised 2026-04-29
+>   incorporating 3C+4H+3M dispositions).
+> - Round 2 (2026-04-29): scope churn but session count unchanged at 10
+>   (per Round-2 disposition); test count target raised to 75–95.
+> - Phase A re-entry (2026-04-29): no session changes; FAI surfaced new
+>   ESCALATION flags but session count held at 10.
+> - **Phase A Tier 3 review #1 verdict (2026-04-29) REVISE_PLAN:**
+>   - Tier 3 items A + B: synchronous-update invariant extended to all
+>     bookkeeping callback paths; H-R2-1 protection-scope-extension; new
+>     S4a-ii session.
+>   - Tier 3 item E + Decision 5: `SimulatedBrokerWithRefreshTimeout`
+>     fixture; new S5c session for ≥4 cross-layer composition tests
+>     (5 committed: CL-1 through CL-5; CL-6 OUT).
+>   - Tier 3 item C: C-R2-1 + H-R2-2 coupling extends S3b scope.
+>   - Decisions 1 + 2: S1a script expanded for adversarial axes + N=100
+>     stress; same single file, no new file penalty.
+>   - Decision 4: new `pending_sell_age_watchdog_enabled` config field
+>     bundled into S3a.
+>   - Decision 3 / FAI #8 option (a): 3 reflective-call sub-tests in
+>     S4a-ii.
+>   - M-R2-5 mid-sprint Tier 3 re-targeted from S4a close-out to S4a-ii
+>     close-out.
+> - **Phase B re-run (2026-04-29):** 10 sessions → 13 sessions; 7 settled
+>   operator decisions adopted verbatim; net pytest target 88–114 logical
+>   (was 75–95).
+> - **This Phase C revision (2026-04-29):** materializes the 13-session
+>   breakdown with full compaction-risk scoring tables for all sessions,
+>   M-R2-5 placement explicit, S4a → S4a-i + S4a-ii split rationale, S5c
+>   new session rationale, dependencies-and-sequencing diagram with
+>   inserted sessions, structural-anchor-only line references per
+>   `templates/implementation-prompt.md` v1.5.0 (2026-04-28 amendment).
 
 ---
 
-## Session 1a (`s1a-spike-path1`): Path #1 Mechanism Spike
+## Scoring methodology
 
-**Scope (1 sentence):** Phase A diagnostic spike on paper IBKR (account U24619949) — measure `IBKRBroker.modify_order(stop_order_id, new_aux_price)` round-trip latency, rejection rate, and propagation determinism (H2 PRIMARY DEFAULT) AND `cancel_all_orders(symbol, await_propagation=True)` latency (H1 LAST-RESORT FALLBACK) over ≥50 trials each, emit JSON artifact evaluating hypotheses H2/H4/H1 from Sprint Spec §"Hypothesis Prescription".
+Per `protocols/sprint-planning.md` v1.3.0:
+- New file: +2 each · Modified file: +1 each · Pre-flight read: +1 each
+- New test: +0.5 each
+- Complex integration (3+ components): +3 · External API debugging: +3
+- Large new file (>150 lines): +2 each
+- Thresholds: 0–8 Low / 9–13 Medium / 14–17 High (must split) / 18+
+  Critical (must split into 3+)
+
+**Sequencing constraint:** Sessions S2a–S5c are STRICTLY SEQUENTIAL (with
+the M-R2-5 mid-sprint Tier 3 review event between S4a-ii and S4b). Every
+implementation/validation session touches `argus/execution/order_manager.py`
+(except S4a-ii whose preferred outcome is zero production-code change).
+Spike sessions S1a and S1b are independent and may run in parallel.
+
+**Structural anchors over line numbers** per
+`templates/implementation-prompt.md` v1.5.0 (2026-04-28 amendment): every
+session's pre-flight reads and edit targets reference structural anchors
+(function name, class name, distinctive comment regex, or distinctive
+call-pattern regex). Where line numbers are referenced for cross-reference
+convenience, they are flagged "directional only — verify via grep before
+editing." If grep-verify reveals drift, the implementer discloses under
+RULE-038 in the close-out and proceeds against the actual structural
+anchors.
+
+---
+
+## Session 1a (`s1a-spike-path1`): Path #1 Mechanism Spike — EXPANDED per Decisions 1 + 2
+
+**Scope (1 sentence):** Phase A diagnostic spike on paper IBKR (account
+U24619949) — measure `IBKRBroker.modify_order(stop_order_id, new_aux_price)`
+round-trip latency / rejection rate / deterministic propagation (H2 PRIMARY
+DEFAULT) AND `cancel_all_orders(symbol, await_propagation=True)` latency
+AND adversarial-axes per Decision 1 (FAI #3 — concurrent / reconnect /
+stale-ID amends; worst-axis Wilson UB) AND cancel-then-immediate-SELL
+stress at N=100 per Decision 2 (FAI #5 hard gate); single script, multiple
+measurement modes; emit JSON artifact evaluating H2/H4/H1 with worst-axis
+Wilson UB AND `h1_propagation_zero_conflict_in_100` as decision inputs.
 
 **Creates:**
-- `scripts/spike_def204_round2_path1.py` (~180 lines — dual-mechanism measurement, mirrors `scripts/spike_ibkr_oca_late_add.py` pattern)
-- `scripts/spike-results/spike-def204-round2-path1-results.json` (autogenerated by script; required keys: `status` ∈ {`PROCEED`, `INCONCLUSIVE`}, `selected_mechanism` ∈ {`h2_amend`, `h4_hybrid`, `h1_cancel_and_await`}, `h2_modify_order_p50_ms`, `h2_modify_order_p95_ms`, `h2_rejection_rate_pct`, `h2_deterministic_propagation: bool`, `h1_cancel_all_orders_p50_ms`, `h1_cancel_all_orders_p95_ms`, `h1_propagation_converged: bool`, `trial_count`, `spike_run_date`)
+- `scripts/spike_def204_round2_path1.py` (~280 LOC; expanded from ~180 LOC
+  pre-Tier-3 — Decision 1 adversarial sub-axes + Decision 2 N=100 stress
+  measurement modes added internally; single file, mirrors
+  `scripts/spike_ibkr_oca_late_add.py` pattern from DEC-386 Phase A)
+- `scripts/spike-results/spike-def204-round2-path1-results.json`
+  (autogenerated; required keys: `status` ∈ {`PROCEED`, `INCONCLUSIVE`},
+  `selected_mechanism` ∈ {`h2_amend`, `h4_hybrid`, `h1_cancel_and_await`},
+  `h2_modify_order_p50_ms`, `h2_modify_order_p95_ms`,
+  `h2_rejection_rate_pct`, `h2_deterministic_propagation: bool`,
+  **`adversarial_axes_results: dict` (NEW per Decision 1 — keys
+  `concurrent_amends`, `reconnect_window_amends`, `stale_id_amends`)**,
+  **`worst_axis_wilson_ub: float` (NEW per Decision 1)**,
+  `h1_cancel_all_orders_p50_ms`, `h1_cancel_all_orders_p95_ms`,
+  **`h1_propagation_n_trials: int = 100` (NEW per Decision 2)**,
+  **`h1_propagation_zero_conflict_in_100: bool` (NEW per Decision 2 —
+  HARD GATE)**, `trial_count`, `spike_run_date`)
 
-**Modifies:** (none — read-only spike against paper IBKR + ARGUS broker code)
+**Modifies:** none (read-only spike against paper IBKR + ARGUS broker
+code).
 
-**Integrates:** N/A — outputs gate Phase D impl prompt for S2a + S2b. **Hypothesis-prescription gate logic** in S2a impl prompt: if `selected_mechanism == "h2_amend"` proceed with amend-stop-price fix shape; if `"h4_hybrid"` proceed with hybrid; if `"h1_cancel_and_await"` proceed with last-resort cancel-and-await + AC1.6 operator-audit logging; if `status == "INCONCLUSIVE"` HALT and surface to operator (A-class halt A1 fires).
+**Integrates:** N/A — outputs gate Phase D impl prompt for S2a + S2b.
+**Hypothesis-prescription gate logic** in S2a impl prompt: if
+`selected_mechanism == "h2_amend"` proceed with amend-stop-price fix shape
+(requires `worst_axis_wilson_ub < 5%` AND
+`h1_propagation_zero_conflict_in_100 == true`); if `"h4_hybrid"` proceed
+with hybrid (requires `5% ≤ worst_axis_wilson_ub < 20%` AND
+`h1_propagation_zero_conflict_in_100 == true`); if
+`"h1_cancel_and_await"` proceed with last-resort + AC1.6 operator-audit
+logging (requires `h1_propagation_zero_conflict_in_100 == true` AND
+`worst_axis_wilson_ub ≥ 20%` AND operator-confirms-in-writing); if
+`status == "INCONCLUSIVE"` HALT and surface to operator (A-class halt A1
+fires). **HARD GATE:** if `h1_propagation_zero_conflict_in_100 == false`,
+H1 is NOT eligible regardless of Wilson UB.
 
-**Parallelizable:** **TRUE** (with S1b). Different scripts, no codebase write conflicts, independent paper-IBKR sessions feasible if operator splits clientId budget (clientId 1 for S1a, clientId 2 for S1b).
+**Parallelizable:** **TRUE** (with S1b). Different scripts, no codebase
+write conflicts, independent paper-IBKR sessions feasible if operator
+splits clientId budget (clientId 1 for S1a, clientId 2 for S1b).
 
 **Pre-flight reads (5):**
-1. `scripts/spike_ibkr_oca_late_add.py` (S1a's reference pattern from DEC-386 Phase A)
-2. `argus/execution/ibkr_broker.py::cancel_all_orders` + `modify_order` surfaces
-3. `argus/execution/order_manager.py::_trail_flatten` (hot path in scope)
-4. `docs/debriefs/2026-04-28-paper-session-debrief.md` Phase 7 §Path #1 BITU trace
-5. `docs/sprints/sprint-31.92-def204-round-2/sprint-spec.md` §"Hypothesis Prescription" (especially H2 confirms-if conditions)
+1. `scripts/spike_ibkr_oca_late_add.py` (S1a's reference pattern from
+   DEC-386 Phase A)
+2. `argus/execution/ibkr_broker.py::cancel_all_orders` +
+   `IBKRBroker.modify_order` surfaces (anchor by class name + method name;
+   structural)
+3. `argus/execution/order_manager.py::_trail_flatten` (hot path in scope;
+   anchor by function name)
+4. `docs/debriefs/2026-04-28-paper-session-debrief.md` Phase 7 §Path #1
+   BITU trace
+5. `sprint-spec.md` §"Hypothesis Prescription" (especially H2 confirms-if
+   conditions + the H-R2-2-tightened halt-or-proceed gate language)
 
-**New tests:** 0 (spike scripts produce JSON artifacts, not Pytest assertions; close-out validates artifact schema against the required-keys list above)
+**New tests:** 0 (spike script produces JSON artifacts; close-out
+validates artifact schema against the required-keys list above).
 
 **Compaction Risk Score:**
 
 | Factor | Count | Points |
 |--------|------:|------:|
-| New files | 1 (script; JSON is autogenerated, not pre-created) | +2 |
+| New files | 1 (script; JSON autogenerated, not pre-created) | +2 |
 | Modified files | 0 | 0 |
 | Pre-flight reads | 5 | +5 |
 | New tests | 0 | 0 |
 | Complex integration (3+ components) | NO (read-only spike) | 0 |
 | External API (live IBKR paper) | YES | +3 |
-| Large new file (>150 lines) | YES (~180 LOC dual-mechanism measurement) | +2 |
+| Large new file (>150 lines) | YES (~280 LOC) | +2 |
 | **TOTAL** | | **12 (Medium)** |
 
-**AC coverage:** Generates evidence for AC1.1 through AC1.6 mechanism choice. Output JSON consumed by S2a/S2b impl prompts.
+**Note on Decisions 1 + 2 internal scope expansion:** N=100 strengthening
+(Decision 2) is an additional measurement mode in the same script; the
+adversarial axes (Decision 1) are additional measurement modes in the same
+script. Neither introduces a new file. The large-file penalty already fires
+once at the ~150-LOC threshold; the expansion to ~280 LOC stays in the
+single +2 large-file bucket.
 
-**Halt-or-proceed gate language for S2a/S2b impl prompt** (verbatim from Sprint Spec §"Hypothesis Prescription"):
-> If diagnostic confirms H2 (amend rejection rate <5%, deterministic propagation), proceed to S2a with H2 amend-stop-price fix shape (PREFERRED — AMD-2 preserved). If H4 confirmed (H2 rejection rate 5–20%), proceed with hybrid implementation. If H1 is the only viable mechanism (H2 rejection rate ≥20% AND H4's cancel-and-await fallback measured ≤200ms p95), proceed with H1 last-resort + AC1.6 operator-audit logging. If findings inconclusive or fall outside H2/H4/H1, HALT and write spike findings file with `status: INCONCLUSIVE`; surface to operator before S2a. The hierarchy is H2 > H4 > H1 — safety drives the order, not operator preference.
+**AC coverage:** Generates evidence for AC1.1 through AC1.6 mechanism choice.
+Output JSON consumed by S2a/S2b impl prompts.
 
-**Dependencies:** Sprint 31.91 SEALED at HEAD; paper IBKR Gateway operational; market closed (non-safe-during-trading — run pre-market or after-hours).
+**Halt-or-proceed gate language for S2a/S2b impl prompt** (verbatim from
+Sprint Spec §"Hypothesis Prescription", H-R2-2-tightened):
+
+> Compute Wilson UB from observed rejection rate AS WELL AS the
+> cancel-then-immediate-SELL stress sub-spike outcomes. **Decision rule:**
+> pick H2 if **worst-axis Wilson UB** < 5% AND
+> `h1_propagation_zero_conflict_in_100 == true`. Pick H4 if 5% ≤
+> worst-axis Wilson UB < 20% AND `h1_propagation_zero_conflict_in_100 ==
+> true`. Pick H1 ONLY IF `h1_propagation_zero_conflict_in_100 == true` AND
+> worst-axis Wilson UB ≥ 20% AND operator confirms H1 selection in writing
+> per existing tightened gate language. **HARD GATE:** if even 1 trial in
+> 100 exhibits a conflict (`h1_propagation_zero_conflict_in_100 == false`),
+> H1 is NOT eligible regardless of Wilson UB; surface to operator with
+> explicit "H1 unsafe" determination and require alternative architectural
+> fix. If findings are inconclusive or fall outside H2/H4/H1, HALT and
+> write the diagnostic findings file with `status: INCONCLUSIVE`; surface
+> to operator before proceeding. Do NOT ship a Phase B fix that doesn't
+> address the Phase A finding. The hierarchy is H2 > H4 > H1 — safety
+> drives the order, not operator preference.
+
+**Dependencies:** Sprint 31.91 SEALED at HEAD; paper IBKR Gateway
+operational; market closed (non-safe-during-trading — run pre-market or
+after-hours).
 
 ---
 
-## Session 1b (`s1b-spike-path2`): Path #2 Fingerprint + Hold-Pending-Borrow Window Spike
+## Session 1b (`s1b-spike-path2`): Path #2 Fingerprint + Hard-to-Borrow Window Spike
 
-**Scope (1 sentence):** Phase A diagnostic spike on paper IBKR — capture exact rejection error string when forcing SELL on operator-curated list of ≥5 known hard-to-borrow microcap symbols (PCT-class) across ≥10 trials per symbol; characterize hold-pending-borrow release timing window (median, p95, p99, max release time per symbol class); validate SimulatedBroker can be extended to replay this state.
+**Scope (1 sentence):** Phase A diagnostic spike on paper IBKR — capture
+exact rejection error string when forcing SELL on operator-curated list of
+≥5 known hard-to-borrow microcap symbols (PCT-class) across ≥10 trials
+per symbol; characterize hold-pending-borrow release timing window
+(median, p95, p99, max release time per symbol class); validate
+SimulatedBroker can be extended to replay this state.
 
 **Creates:**
 - `scripts/spike_def204_round2_path2.py` (~150 lines)
-- `scripts/spike-results/spike-def204-round2-path2-results.json` (autogenerated; required keys: `status` ∈ {`PROCEED`, `INCONCLUSIVE`}, `fingerprint_string`, `fingerprint_stable: bool`, `release_events_observed: int`, `release_p50_seconds`, `release_p95_seconds`, `release_p99_seconds`, `release_max_seconds`, `recommended_locate_suppression_seconds: int` (= `min(86400, max(18000, p99 × 1.2))`), `symbols_tested: list[str]`, `trials_per_symbol`, `spike_run_date`)
+- `scripts/spike-results/spike-def204-round2-path2-results.json`
+  (autogenerated; required keys: `status` ∈ {`PROCEED`, `INCONCLUSIVE`},
+  `fingerprint_string`, `fingerprint_stable: bool`, `case_a_observed:
+  bool`, `case_a_count: int`, `case_b_count: int`,
+  `case_a_max_age_seconds: int`, `release_events_observed: int`,
+  `release_p50_seconds`, `release_p95_seconds`, `release_p99_seconds`,
+  `release_max_seconds`, `recommended_locate_suppression_seconds: int`
+  (= `min(86400, max(18000, p99 × 1.2))`), `symbols_tested: list[str]`,
+  `trials_per_symbol`, `spike_run_date`)
 
-**Modifies:** (none)
+**Modifies:** none.
 
-**Integrates:** N/A — outputs gate Phase D impl prompt for S3a + S3b. The `fingerprint_string` is baked into `_LOCATE_REJECTED_FINGERPRINT` constant at S3a; the `recommended_locate_suppression_seconds` is baked into the Pydantic field default at S3a.
+**Integrates:** N/A — outputs gate Phase D impl prompt for S3a + S3b.
+The `fingerprint_string` is baked into `_LOCATE_REJECTED_FINGERPRINT`
+constant at S3a; the `recommended_locate_suppression_seconds` is baked
+into the Pydantic field default at S3a.
 
 **Parallelizable:** **TRUE** (with S1a) — same justification as S1a.
 
-**Operator pre-flight task (NEW per Round-1 M-1 disposition):** Before S1b session begins, operator curates list of ≥5 known hard-to-borrow microcap symbols. Sources: recent IPOs with high short interest, popular short-interest names from Fintel/iborrowdesk/IBKR's hard-to-borrow list, microcaps in volatile sectors. The Apr 28 PCT trace symbol IS the canonical reference — include PCT in the list. Document curation rationale in close-out.
+**Operator pre-flight task:** Before S1b session begins, operator curates
+list of ≥5 known hard-to-borrow microcap symbols. Sources: recent IPOs
+with high short interest, popular short-interest names from
+Fintel/iborrowdesk/IBKR's hard-to-borrow list, microcaps in volatile
+sectors. The Apr 28 PCT trace symbol IS the canonical reference — include
+PCT in the list. Document curation rationale in close-out.
 
 **Pre-flight reads (5):**
-1. `argus/execution/ibkr_broker.py` exception classification surface (`_is_oca_already_filled_error` reference pattern + `_on_error` + `is_order_rejection` flow)
-2. `argus/execution/order_manager.py::_flatten_position` (canonical Path #2 emission site from PCT trace)
-3. `docs/debriefs/2026-04-28-paper-session-debrief.md` Phase 7 §Path #2 PCT trace
-4. `docs/sprints/sprint-31.92-def204-round-2/sprint-spec.md` §"Hypothesis Prescription" H5 + H6 (confirms-if/rules-out conditions for hard-to-borrow representativeness)
-5. `argus/execution/simulated_broker.py` (assess extensibility for replay fixture in S5b)
+1. `argus/execution/ibkr_broker.py` exception classification surface (anchor
+   by `_is_oca_already_filled_error` reference pattern + `_on_error` method
+   + `is_order_rejection` flow — structural anchors)
+2. `argus/execution/order_manager.py::_flatten_position` (canonical Path #2
+   emission site from PCT trace; anchor by function name)
+3. `docs/debriefs/2026-04-28-paper-session-debrief.md` Phase 7 §Path #2
+   PCT trace
+4. `sprint-spec.md` §"Hypothesis Prescription" H5 + H6 (confirms-if /
+   rules-out conditions for hard-to-borrow representativeness)
+5. `argus/execution/simulated_broker.py` (assess extensibility for replay
+   fixture in S5b)
 
-**New tests:** 0 (spike output JSON only)
+**New tests:** 0 (spike output JSON only).
 
 **Compaction Risk Score:**
 
@@ -93,48 +245,96 @@
 | New tests | 0 | 0 |
 | Complex integration | NO | 0 |
 | External API (live IBKR paper) | YES | +3 |
-| Large new file | YES (~150 LOC; +2) | +2 |
+| Large new file (>150 LOC) | YES (~150 LOC; +2 at threshold) | +2 |
 | **TOTAL** | | **12 (Medium)** |
 
-**AC coverage:** Generates evidence for AC2.1 fingerprint exactness + AC2.5 broker-verification-at-timeout window calibration + Config Changes table `locate_suppression_seconds` default. Output JSON consumed by S3a/S3b impl prompts.
+**AC coverage:** Generates evidence for AC2.1 fingerprint exactness +
+AC2.5 broker-verification-at-timeout window calibration + Config Changes
+table `locate_suppression_seconds` default + AC2.6 case-A-vs-B
+differentiation. Output JSON consumed by S3a/S3b impl prompts.
 
-**Halt-or-proceed gate language:**
-> If H5 confirms exact substring `"contract is not available for short sale"` AND H6 observes ≥1 release event with measured p99: proceed to S3a with measured fingerprint + spike-driven default. If H5 captures variant strings, broaden to substring list at S3a impl + flag in close-out. If H6 observes ZERO release events across all trials (held orders all timeout/cancel without filling), document in spike findings; the suppression-timeout fallback (AC2.5 broker-verification) is the dominant code path; default falls back to 18000s with documented rationale.
+**Halt-or-proceed gate language for S3a/S3b impl prompt:**
 
-**Dependencies:** Same as S1a; operator pre-curated hard-to-borrow microcap list before session.
+> If H5 confirms exact substring `"contract is not available for short
+> sale"` AND H6 observes ≥1 release event with measured p99: proceed to
+> S3a with measured fingerprint + spike-driven default. If H5 captures
+> variant strings, broaden to substring list at S3a impl + flag in
+> close-out. If H6 observes ZERO release events across all trials (held
+> orders all timeout/cancel without filling), document in spike findings;
+> the suppression-timeout fallback (AC2.5 broker-verification with Branch
+> 4 per Tier 3 item C) is the dominant code path; default falls back to
+> 18000s with documented rationale. **AC2.7 watchdog auto-activation per
+> Decision 4 fires regardless of S1b's case-A observation outcome —
+> on first `case_a_in_production` event in production paper trading,
+> watchdog flips from `auto` to `enabled`.**
+
+**Dependencies:** Same as S1a; operator pre-curated hard-to-borrow microcap
+list before session.
 
 ---
 
 ## Session 2a (`s2a-path1-trail-flatten`): Path #1 Fix in `_trail_flatten`
 
-**Scope (1 sentence):** Implement S1a-spike-selected mechanism (H2 amend-stop-price PREFERRED / H4 hybrid / H1 last-resort) in `_trail_flatten`; 6 tests covering the canonical BITU race, OCA-already-filled preservation, AMD-8 + AMD-4 guard preservation, mechanism-conditional AMD-2 framing, and (if H1 or H4 selected) operator-audit logging per AC1.6.
+**Scope (1 sentence):** Implement S1a-spike-selected mechanism (H2
+amend-stop-price PREFERRED / H4 hybrid / H1 last-resort) in
+`_trail_flatten`; 6–7 tests covering the canonical BITU race,
+OCA-already-filled preservation, AMD-8 + AMD-4 guard preservation,
+mechanism-conditional AMD-2 framing, and (if H1 or H4 selected)
+operator-audit logging per AC1.6.
 
 **Creates:**
-- `tests/execution/order_manager/test_def204_round2_path1.py` (~100 lines for 6 tests; will grow at S2b)
+- `tests/execution/order_manager/test_def204_round2_path1.py` (~100 lines
+  for 6 tests; will grow at S2b)
 
 **Modifies:**
-- `argus/execution/order_manager.py` (`_trail_flatten` only)
+- `argus/execution/order_manager.py` (`_trail_flatten` only — anchor by
+  function name)
 
-**Integrates:** Wires in S1a's mechanism-choice JSON artifact — impl prompt branches on `selected_mechanism: h2_amend | h4_hybrid | h1_cancel_and_await` field.
+**Integrates:** Wires in S1a's mechanism-choice JSON artifact — impl
+prompt branches on `selected_mechanism: h2_amend | h4_hybrid |
+h1_cancel_and_await` field. Conditional 7th test under H1 or H4
+(operator-audit logging per AC1.6) covered by S2a's parametrize budget.
 
-**Parallelizable:** **FALSE** (touches `order_manager.py`; precedes S2b through S5b which all touch same file).
+**Parallelizable:** **FALSE** (touches `order_manager.py`; precedes S2b
+through S5c which all touch same file).
 
 **Pre-flight reads (4):**
-1. `argus/execution/order_manager.py::_trail_flatten` + `_handle_oca_already_filled` (DEC-386 S1b SAFE-marker preservation) + existing `_amended_prices` dict for tracking amended bracket-stop prices
-2. `argus/execution/ibkr_broker.py::modify_order` (H2 path) + `cancel_all_orders` (H1 fallback path, DEC-386 S1c reference)
-3. `docs/sprints/sprint-31.92-def204-round-2/sprint-spec.md` §"Acceptance Criteria" Deliverable 1 (especially AC1.5 mechanism-conditional framing + AC1.6 operator-audit logging)
-4. `scripts/spike-results/spike-def204-round2-path1-results.json` (S1a output)
+1. `argus/execution/order_manager.py::_trail_flatten` +
+   `_handle_oca_already_filled` (DEC-386 S1b SAFE-marker preservation) +
+   existing `_amended_prices` dict — anchored by function names + dict
+   name (structural anchors)
+2. `argus/execution/ibkr_broker.py::modify_order` (H2 path) +
+   `cancel_all_orders` (H1 fallback path, DEC-386 S1c reference) — anchored
+   by class + method names
+3. `sprint-spec.md` §"Acceptance Criteria" Deliverable 1 (AC1.5
+   mechanism-conditional framing + AC1.6 operator-audit logging)
+4. `scripts/spike-results/spike-def204-round2-path1-results.json` (S1a
+   output)
 
-**New tests (6):**
-- `test_path1_canonical_bitu_race_no_overflatten` — synthetic BITU 13:41 trace, asserts `total_sold ≤ position.shares_total` (AC1.1)
-- `test_path1_h2_amend_called_before_any_sell_emit` — IF H2 selected; mocks `IBKRBroker.modify_order`; asserts called BEFORE any `place_order` invocation; asserts NO standalone SELL emission on success path (AC1.2 H2)
-- `test_path1_h4_fallback_invokes_cancel_and_await_on_amend_rejection` — IF H4 selected; mocks `modify_order` to fail; asserts fallback to `cancel_all_orders(symbol, await_propagation=True)` BEFORE `place_order(SELL)` (AC1.2 H4)
-- `test_path1_h1_cancel_and_await_called_before_sell` — IF H1 selected; asserts cancel-and-await call ordering (AC1.2 H1)
-- `test_path1_oca_already_filled_short_circuit_preserved` — DEC-386 S1b SAFE-marker path unchanged across all mechanisms
-- `test_path1_amd2_invariant_per_mechanism` — IF H2: asserts AMD-2 preserved (existing `test_amd2_sell_before_cancel` continues to pass). IF H4: parametrized over success and fallback branches. IF H1: existing test renamed `test_amd2_modified_cancel_and_await_before_sell`. AC1.5 mechanism-conditional regression.
-- (Conditional 7th test under H1 or H4) `test_path1_operator_audit_log_emitted_on_amd2_supersede` — asserts structured log line per AC1.6 fires when mechanism dispatches to H1 cancel-and-await branch.
-
-Effective test count: 6 logical tests (7 if H1 or H4 selected; conditional 7th covered by S2a's parametrize budget).
+**New tests (6 logical, 7 if H1/H4 selected):**
+- `test_path1_canonical_bitu_race_no_overflatten` — synthetic BITU 13:41
+  trace; asserts `total_sold ≤ position.shares_total` (AC1.1)
+- `test_path1_h2_amend_called_before_any_sell_emit` — IF H2 selected;
+  mocks `IBKRBroker.modify_order`; asserts called BEFORE any `place_order`
+  invocation; asserts NO standalone SELL emission on success path (AC1.2 H2)
+- `test_path1_h4_fallback_invokes_cancel_and_await_on_amend_rejection` —
+  IF H4 selected; mocks `modify_order` to fail; asserts fallback to
+  `cancel_all_orders(symbol, await_propagation=True)` BEFORE
+  `place_order(SELL)` (AC1.2 H4)
+- `test_path1_h1_cancel_and_await_called_before_sell` — IF H1 selected;
+  asserts cancel-and-await call ordering (AC1.2 H1)
+- `test_path1_oca_already_filled_short_circuit_preserved` — DEC-386 S1b
+  SAFE-marker path unchanged across all mechanisms
+- `test_path1_amd2_invariant_per_mechanism` — IF H2: asserts AMD-2
+  preserved (existing `test_amd2_sell_before_cancel` continues to pass).
+  IF H4: parametrized over success and fallback branches. IF H1: existing
+  test renamed `test_amd2_modified_cancel_and_await_before_sell`. AC1.5
+  mechanism-conditional regression.
+- (Conditional 7th test under H1 or H4)
+  `test_path1_operator_audit_log_emitted_on_amd2_supersede` — asserts
+  structured log line per AC1.6 fires when mechanism dispatches to H1
+  cancel-and-await branch (either as last-resort under H1 OR as fallback
+  under H4).
 
 **Compaction Risk Score:**
 
@@ -149,40 +349,73 @@ Effective test count: 6 logical tests (7 if H1 or H4 selected; conditional 7th c
 | Large new file | NO (test file ≤150 LOC at this session) | 0 |
 | **TOTAL** | | **13 to 13.5 (Medium)** |
 
-**AC coverage:** AC1.1, AC1.2 (mechanism-conditional), AC1.4, AC1.5 (mechanism-conditional), AC1.6 (conditional on H1/H4).
+**AC coverage:** AC1.1, AC1.2 (mechanism-conditional), AC1.4, AC1.5
+(mechanism-conditional), AC1.6 (conditional on H1/H4).
 
-**Dependencies:** S1a complete with non-INCONCLUSIVE verdict. S1a JSON artifact at `scripts/spike-results/spike-def204-round2-path1-results.json`.
+**Dependencies:** S1a complete with non-INCONCLUSIVE verdict. S1a JSON
+artifact at `scripts/spike-results/spike-def204-round2-path1-results.json`.
 
 ---
 
-## Session 2b (`s2b-path1-emergency-flatten`): Path #1 in `_resubmit_stop_with_retry` Emergency-Flatten + Conditionally `_escalation_update_stop`
+## Session 2b (`s2b-path1-emergency-flatten`): Path #1 in `_resubmit_stop_with_retry` Emergency-Flatten + Conditionally `_escalation_update_stop` + H-R2-2 HALT-ENTRY tests
 
-**Scope (1 sentence):** Apply S2a's chosen mechanism (H2/H4/H1) to `_resubmit_stop_with_retry` emergency-flatten branch (DEC-372 retry-cap exhausted at line ~976); apply to `_escalation_update_stop` IFF S1a spike confirmed amend semantics apply there OR cancel-and-await translates cleanly; 7 tests.
+**Scope (1 sentence):** Apply S2a's chosen mechanism (H2/H4/H1) to
+`_resubmit_stop_with_retry` emergency-flatten branch (DEC-372 retry-cap
+exhausted); apply to `_escalation_update_stop` IFF S1a spike confirmed
+amend semantics apply there OR cancel-and-await translates cleanly; **add
+H-R2-2 HALT-ENTRY tests for H1-fallback-locate-reject branch**
+(`halt_entry_until_operator_ack=True` posture under H1 active AND
+locate-rejection); **add Tier 3 item C coupling tests** if S2b's path
+intersects with Branch 4 refresh-fail.
 
-**Creates:** (none — extends `tests/execution/order_manager/test_def204_round2_path1.py` from S2a)
+**Creates:** none (extends `tests/execution/order_manager/test_def204_round2_path1.py`).
 
 **Modifies:**
-- `argus/execution/order_manager.py` (`_resubmit_stop_with_retry` emergency branch, conditionally `_escalation_update_stop`)
-- `tests/execution/order_manager/test_def204_round2_path1.py` (7 new tests appended; cumulative file grows past 150 LOC, but no NEW-file penalty applies — only S2a's session counted that)
+- `argus/execution/order_manager.py` (`_resubmit_stop_with_retry`
+  emergency-flatten branch, conditionally `_escalation_update_stop`;
+  anchor by function names)
+- `tests/execution/order_manager/test_def204_round2_path1.py` (+7 tests
+  including H-R2-2 HALT-ENTRY paths)
 
-**Integrates:** S2a's `_trail_flatten` mechanism + helper (if S2a introduced a private `_amend_or_fallback()` helper for H4 hybrid logic); S2b reuses both verbatim.
+**Integrates:** S2a's `_trail_flatten` mechanism + helper (if S2a
+introduced a private `_amend_or_fallback()` helper for H4 hybrid logic);
+S2b reuses both verbatim. Wires in `halt_entry_until_operator_ack: bool`
+field on `ManagedPosition` per H-R2-2 (added at S4a-i but field shape
+known at S2b for test fixture purposes; cross-session field-shape
+agreement load-bearing).
 
 **Parallelizable:** **FALSE** (touches `order_manager.py`).
 
 **Pre-flight reads (4):**
-1. `argus/execution/order_manager.py::_resubmit_stop_with_retry` (especially emergency-flatten branch at ~line 976) + `_escalation_update_stop` sections
-2. `docs/decision-log.md::DEC-372` (stop retry caps + emergency-flatten path)
-3. `docs/sprints/sprint-31.92-def204-round-2/sprint-spec.md` §"Acceptance Criteria" Deliverable 1 (AC1.3)
+1. `argus/execution/order_manager.py::_resubmit_stop_with_retry`
+   (emergency-flatten branch — anchor by function name; line numbers
+   directional only) + `_escalation_update_stop` (anchor by function name)
+2. `docs/decision-log.md::DEC-372` (stop retry caps + emergency-flatten
+   path)
+3. `sprint-spec.md` §"Acceptance Criteria" Deliverable 1 (AC1.3) +
+   §"Hypothesis Prescription" H-R2-2 H1-fallback-locate-reject branch
 4. S2a close-out report (mechanism-choice docstring + helper signature)
 
 **New tests (7):**
-- `test_path1_resubmit_stop_emergency_flatten_no_overflatten` — mirror BITU race for `_resubmit_stop_with_retry` emergency branch (AC1.3)
-- `test_path1_dec372_retry_cap_exhaustion_preserves_mechanism` — verify mechanism fires at the cap-exhaustion boundary
-- `test_path1_escalation_update_stop_no_overflatten` — IF S1a applicability confirmed for `_escalation_update_stop`; SKIP otherwise with documented reason
-- `test_path1_escalation_update_stop_skip_documented` — SKIP-rationale assertion if applicability not confirmed
-- `test_path1_emergency_flatten_oca_already_filled_short_circuit` — preserve DEC-386 S1b path on emergency-flatten surface
+- `test_path1_resubmit_stop_emergency_flatten_no_overflatten` — mirror
+  BITU race for `_resubmit_stop_with_retry` emergency branch (AC1.3)
+- `test_path1_dec372_retry_cap_exhaustion_preserves_mechanism` — verify
+  mechanism fires at the cap-exhaustion boundary
+- `test_path1_escalation_update_stop_no_overflatten` — IF S1a applicability
+  confirmed for `_escalation_update_stop`; SKIP otherwise with documented
+  reason
+- `test_path1_emergency_flatten_oca_already_filled_short_circuit` —
+  preserve DEC-386 S1b path on emergency-flatten surface
 - `test_path1_emergency_flatten_amd8_guard_preserved`
-- `test_path1_dec372_backoff_unchanged` — regression on DEC-372 exponential backoff (1s, 2s, 4s)
+- `test_path1_dec372_backoff_unchanged` — regression on DEC-372
+  exponential backoff (1s, 2s, 4s)
+- **(NEW per H-R2-2 + Tier 3 item C)
+  `test_path1_h1_fallback_locate_reject_halts_entry`** — IF H1 selected
+  OR H4-with-fallback-active; fixture: cancel-and-await dispatches, then
+  locate-rejection arrives at SELL emission; assert
+  `halt_entry_until_operator_ack=True` is set on position; assert
+  `phantom_short_retry_blocked` alert published; assert no further SELL
+  attempts on the position.
 
 **Compaction Risk Score:**
 
@@ -192,99 +425,236 @@ Effective test count: 6 logical tests (7 if H1 or H4 selected; conditional 7th c
 | Modified files | 2 | +2 |
 | Pre-flight reads | 4 | +4 |
 | New tests | 7 | +3.5 |
-| Complex integration | YES (multi-surface, retry layer, DEC-372 boundary) | +3 |
+| Complex integration (multi-surface, retry layer, DEC-372 boundary, H-R2-2 HALT-ENTRY) | YES | +3 |
 | External API | NO | 0 |
 | Large new file | NO | 0 |
 | **TOTAL** | | **12.5 (Medium)** |
 
-**AC coverage:** AC1.3 (`_resubmit_stop_with_retry` emergency branch), partial AC1.2 (extended to other surfaces), AC1.5 (regression preservation), AC1.6 (audit logging extends to emergency branch if H1/H4).
+**AC coverage:** AC1.3 (`_resubmit_stop_with_retry` emergency branch),
+partial AC1.2 (extended to other surfaces), AC1.5 (regression preservation),
+AC1.6 (audit logging extends to emergency branch if H1/H4); H-R2-2
+HALT-ENTRY posture coverage.
 
-**Dependencies:** S2a complete; S1a JSON consumed for `_escalation_update_stop` applicability decision.
+**Dependencies:** S2a complete; S1a JSON consumed for
+`_escalation_update_stop` applicability decision.
 
 ---
 
-## Session 3a (`s3a-path2-helpers-and-config`): Path #2 Fingerprint + Position-Keyed Suppression Dict + 3 OrderManagerConfig Fields
+## Session 3a (`s3a-path2-helpers-and-config`): Path #2 Fingerprint + Position-Keyed Suppression Dict + 4 OrderManagerConfig Fields
 
-**Scope (1 sentence):** Add `_LOCATE_REJECTED_FINGERPRINT` constant (string from S1b spike) and `_is_locate_rejection()` helper in `argus/execution/ibkr_broker.py` (mirroring DEC-386's `_is_oca_already_filled_error` pattern); add `OrderManager._locate_suppressed_until: dict[ULID, float]` position-keyed suppression state and `_is_locate_suppressed(position, now)` helper; add three new `OrderManagerConfig` fields (`locate_suppression_seconds` with S1b-spike-driven default, `long_only_sell_ceiling_enabled`, `long_only_sell_ceiling_alert_on_violation`).
+**Scope (1 sentence):** Add `_LOCATE_REJECTED_FINGERPRINT` constant
+(string from S1b spike) and `_is_locate_rejection()` helper in
+`argus/execution/ibkr_broker.py` (mirroring DEC-386's
+`_is_oca_already_filled_error` pattern); add `OrderManager._locate_suppressed_until:
+dict[ULID, float]` position-keyed suppression state and
+`_is_locate_suppressed(position, now)` helper; add **four** new
+`OrderManagerConfig` fields (`locate_suppression_seconds` with S1b-spike-driven
+default, `long_only_sell_ceiling_enabled`,
+`long_only_sell_ceiling_alert_on_violation`, **and
+`pending_sell_age_watchdog_enabled` per Decision 4 — `auto` /
+`enabled` / `disabled`**).
 
 **Creates:**
-- `tests/execution/order_manager/test_def204_round2_path2.py` (~100 lines for 6 tests)
+- `tests/execution/order_manager/test_def204_round2_path2.py` (~100 lines
+  for 6 tests)
 
 **Modifies:**
-- `argus/execution/ibkr_broker.py` (add fingerprint constant + helper near existing `_is_oca_already_filled_error`)
-- `argus/execution/order_manager.py` (add `_locate_suppressed_until` dict + `_is_locate_suppressed` helper; NO emit-site wiring yet — that's S3b)
-- `argus/core/config.py` (3 new fields on `OrderManagerConfig`; `locate_suppression_seconds` default = S1b spike's `recommended_locate_suppression_seconds` value, with hard floor 18000s if H6 ruled out)
+- `argus/execution/ibkr_broker.py` (add fingerprint constant + helper
+  near existing `_is_oca_already_filled_error` — anchor by adjacent
+  helper name)
+- `argus/execution/order_manager.py` (add `_locate_suppressed_until` dict
+  + `_is_locate_suppressed` helper; NO emit-site wiring yet — that's S3b)
+- `argus/core/config.py` (4 new fields on `OrderManagerConfig` —
+  `locate_suppression_seconds` default = S1b spike's
+  `recommended_locate_suppression_seconds` value with hard floor 18000s if
+  H6 ruled out; `pending_sell_age_watchdog_enabled` per Decision 4 with
+  `Literal["auto", "enabled", "disabled"]` validator)
+- `config/order_management.yaml` (surface new
+  `pending_sell_age_watchdog_enabled` field per Decision 4)
 
-**Integrates:** S1b spike fingerprint string from `scripts/spike-results/spike-def204-round2-path2-results.json` — exact string copied into `_LOCATE_REJECTED_FINGERPRINT` constant; `recommended_locate_suppression_seconds` value baked into Pydantic field default.
+**Integrates:** S1b spike fingerprint string from
+`scripts/spike-results/spike-def204-round2-path2-results.json` — exact
+string copied into `_LOCATE_REJECTED_FINGERPRINT` constant;
+`recommended_locate_suppression_seconds` value baked into Pydantic field
+default.
 
 **Parallelizable:** **FALSE** (touches `order_manager.py`).
 
 **Pre-flight reads (5):**
-1. `argus/execution/ibkr_broker.py::_is_oca_already_filled_error` (reference pattern, lines 60–110)
-2. `argus/execution/order_manager.py` (locate where the dict goes; OrderManager `__init__`)
-3. `argus/core/config.py::OrderManagerConfig` + `IBKRConfig` (Pydantic patterns)
-4. `argus/core/models/positions.py` (or wherever `ManagedPosition` is defined; `position.id` is a ULID per DEC-026)
-5. `scripts/spike-results/spike-def204-round2-path2-results.json` (S1b output)
+1. `argus/execution/ibkr_broker.py::_is_oca_already_filled_error`
+   (reference pattern; anchor by helper name)
+2. `argus/execution/order_manager.py` (locate where the dict goes;
+   `OrderManager` `__init__` — anchor by class name + method name)
+3. `argus/core/config.py::OrderManagerConfig` + `IBKRConfig` (Pydantic
+   patterns; anchor by class names)
+4. `argus/core/models/positions.py` (or wherever `ManagedPosition` is
+   defined; `position.id` is a ULID per DEC-026)
+5. `scripts/spike-results/spike-def204-round2-path2-results.json` (S1b
+   output)
 
 **New tests (6):**
-- `test_is_locate_rejection_matches_canonical_string` — exact string from S1b (AC2.1)
+- `test_is_locate_rejection_matches_canonical_string` — exact string from
+  S1b (AC2.1)
 - `test_is_locate_rejection_case_insensitive`
-- `test_is_locate_rejection_returns_false_for_other_201_errors` (margin, OCA-already-filled, price-protection)
-- `test_is_locate_suppressed_position_keyed_returns_true_within_window` — uses `position.id` (ULID) as key (AC2.2)
+- `test_is_locate_rejection_returns_false_for_other_201_errors` (margin,
+  OCA-already-filled, price-protection)
+- `test_is_locate_suppressed_position_keyed_returns_true_within_window` —
+  uses `position.id` (ULID) as key (AC2.2)
 - `test_is_locate_suppressed_returns_false_after_window_expiry`
-- `test_locate_suppression_seconds_pydantic_validation` — config field range [300, 86400], spike-driven default
+- `test_locate_suppression_seconds_pydantic_validation` — config field
+  range [300, 86400], spike-driven default; **plus
+  `pending_sell_age_watchdog_enabled` Pydantic validation parametrized ×
+  3 (`auto`/`enabled`/`disabled`) per Decision 4** (single test, 3
+  parametrize cases — counted as effective +1.5 per
+  `protocols/sprint-planning.md` Phase A step 5 "Parametrized tests
+  count per case, not per decorator").
 
 **Compaction Risk Score:**
 
 | Factor | Count | Points |
 |--------|------:|------:|
 | New files | 1 (test file ≤150 LOC) | +2 |
-| Modified files | 3 | +3 |
+| Modified files | 4 (ibkr_broker.py + order_manager.py + config.py + order_management.yaml) | +4 |
 | Pre-flight reads | 5 | +5 |
-| New tests | 6 | +3 |
-| Complex integration (helper plumbing — no fan-out yet) | NO | 0 |
+| New tests | 6 logical (~7 effective with parametrize) | +3 to +3.5 |
+| Complex integration (helper plumbing + 4 config fields — no fan-out yet) | NO | 0 |
 | External API | NO | 0 |
 | Large new file | NO | 0 |
-| **TOTAL** | | **13 (Medium)** |
+| **TOTAL** | | **14 (HIGH — must mitigate)** |
 
-**Note on S3a's config.py bundling:** All three new `OrderManagerConfig` fields land at S3a together (locate_suppression + 2 ceiling fields). This concentrates Pydantic schema additions in ONE session, avoiding a +1 modification penalty in S4a. Tests for the ceiling fields' Pydantic validation land at S4a (the test file `test_def204_round2_ceiling.py` exercises them); S3a's tests cover only the locate-suppression field's Pydantic surface.
+**HIGH score — mitigation:** Bundle 3 of the 6 logical tests'
+parametrized cases into a single parametrized test
+(`test_locate_suppression_pydantic_validation_parametrized` covering
+`locate_suppression_seconds` ge/le validation + watchdog `auto`/`enabled`/`disabled`).
+Effective tests: 5 single + 1 parametrized × 3 = 8 effective cases (4
+points). Plus reduce pre-flight reads to 4 (consolidate read 4 into
+read 2 — `ManagedPosition` definition is already covered when reading
+`order_manager.py`'s `__init__`). Re-scored:
 
-**AC coverage:** AC2.1, AC2.2 (helpers exist + tested but not yet wired); AC3.8 (config field exists, default true).
+| Factor | Count | Points |
+|--------|------:|------:|
+| New files | 1 | +2 |
+| Modified files | 4 | +4 |
+| Pre-flight reads | 4 | +4 |
+| New tests | 8 effective × 0.5 | +4 |
+| Complex integration | NO | 0 |
+| External API | NO | 0 |
+| Large new file | NO | 0 |
+| **TOTAL** | | **14 (still HIGH — further mitigation)** |
+
+**Further mitigation (chosen):** Move `pending_sell_age_watchdog_enabled`
+Pydantic validation test to S4a-i (where the watchdog auto-activation
+logic lives; the test for the FIELD's Pydantic surface is independent of
+the test for the FIELD's runtime semantics, but bundling at S4a-i is
+natural). S3a still ADDS the field to the Pydantic model; S4a-i tests
+both the Pydantic surface AND the auto-activation runtime. Re-scored
+S3a:
+
+| Factor | Count | Points |
+|--------|------:|------:|
+| New files | 1 | +2 |
+| Modified files | 4 | +4 |
+| Pre-flight reads | 4 | +4 |
+| New tests | 6 logical, no parametrize at S3a | +3 |
+| Complex integration | NO | 0 |
+| External API | NO | 0 |
+| Large new file | NO | 0 |
+| **TOTAL** | | **13 (Medium)** ✓ |
+
+**S3a final scope:** All 4 new `OrderManagerConfig` fields land at S3a
+together. Tests for the ceiling fields' Pydantic validation land at
+S4a-i (the test file `test_def204_round2_ceiling.py` exercises them).
+Tests for the `pending_sell_age_watchdog_enabled` field's Pydantic surface
++ `auto` mode flip semantics also land at S4a-i. S3a's tests cover only
+`_LOCATE_REJECTED_FINGERPRINT` + suppression dict + `locate_suppression_seconds`
+Pydantic surface.
+
+**AC coverage:** AC2.1, AC2.2 (helpers exist + tested but not yet wired);
+AC3.8 (config field exists, default true). NEW per Decision 4: config
+field `pending_sell_age_watchdog_enabled` exists; auto-activation logic
+in S4a-i.
 
 **Dependencies:** S1b complete with non-INCONCLUSIVE verdict.
 
 ---
 
-## Session 3b (`s3b-path2-emit-sites-and-broker-verified-fallback`): Path #2 Wire-up at 4 SELL Emit Sites + Broker-Verified Suppression-Timeout Fallback
+## Session 3b (`s3b-path2-emit-sites-and-broker-verified-fallback`): Path #2 Wire-up + AC2.5 Refresh-Then-Verify + Branch 4 + C-R2-1↔H-R2-2 Coupling per Tier 3 item C
 
-**Scope (1 sentence):** Wire `_is_locate_rejection()` exception classification + `_is_locate_suppressed(position, now)` pre-check into all four standalone-SELL paths (`_flatten_position`, `_trail_flatten`, `_check_flatten_pending_timeouts`, `_escalation_update_stop`); implement broker-verified suppression-timeout fallback per AC2.5 (queries `broker.get_positions()` BEFORE publishing alert, suppresses alert if broker shows expected long).
+**Scope (1 sentence):** Wire `_is_locate_rejection()` exception
+classification + `_is_locate_suppressed(position, now)` pre-check into
+all four standalone-SELL paths (`_flatten_position`, `_trail_flatten`,
+`_check_flatten_pending_timeouts`, `_escalation_update_stop`); implement
+new `Broker.refresh_positions(timeout_seconds: float = 5.0)` ABC method
+(C-R2-1) + AC2.5 broker-verified suppression-timeout fallback with
+**three branches (zero / expected-long / unexpected) + Branch 4
+(`verification_stale: true`) on refresh failure**; **enforce
+C-R2-1↔H-R2-2 coupling per Tier 3 item C** — if H1 is the active
+mechanism AND `Broker.refresh_positions()` raises or times out, mark
+position `halt_entry_until_operator_ack=True` (no further SELL attempts;
+no phantom short).
 
-**Creates:** (none — extends `test_def204_round2_path2.py` from S3a)
+**Creates:** none (extends
+`tests/execution/order_manager/test_def204_round2_path2.py` from S3a).
 
 **Modifies:**
-- `argus/execution/order_manager.py` (4 SELL emit sites' exception handlers + suppression pre-check; broker-verification-at-timeout helper in `_check_flatten_pending_timeouts` housekeeping loop OR as private method)
-- `tests/execution/order_manager/test_def204_round2_path2.py` (10 new tests appended)
+- `argus/execution/order_manager.py` (4 SELL emit sites' exception
+  handlers + suppression pre-check + broker-verification-at-timeout
+  helper inline in `_check_flatten_pending_timeouts` housekeeping loop OR
+  as private method on OrderManager; HALT-ENTRY coupling under H1 +
+  refresh-fail per Tier 3 item C)
+- `argus/execution/broker.py` (NEW ABC method `refresh_positions(timeout_seconds:
+  float = 5.0) -> None` per C-R2-1 — only ABC modification permitted in
+  this sprint per SbC §"Do NOT modify")
+- `argus/execution/ibkr_broker.py` (impl of `refresh_positions` calling
+  `IB.reqPositions()` + `await asyncio.wait_for(end_event.wait(),
+  timeout=timeout_seconds)`)
+- `argus/execution/simulated_broker.py` (no-op or instant-success impl —
+  fixture subclass `SimulatedBrokerWithRefreshTimeout` lives at
+  `tests/integration/conftest_refresh_timeout.py`, S5c)
+- `tests/execution/order_manager/test_def204_round2_path2.py` (+8 tests
+  including AC2.5 three-branch + Branch 4 + HALT-ENTRY coupling)
 
-**Integrates:** S3a's helper + position-keyed suppression dict; DEC-385's `phantom_short_retry_blocked` SystemAlertEvent path (existing emitter, reuse verbatim, conditional on broker-verification result).
+**Integrates:** S3a's helpers + position-keyed suppression dict; DEC-385's
+`phantom_short_retry_blocked` SystemAlertEvent path (existing emitter,
+reuse verbatim, conditional on broker-verification result); Branch 4
+metadata schema reuse.
 
 **Parallelizable:** **FALSE** (touches `order_manager.py`).
 
 **Pre-flight reads (4):**
-1. `argus/execution/order_manager.py::_flatten_position` + `_trail_flatten` + `_check_flatten_pending_timeouts` + `_escalation_update_stop` exception handlers (4 sub-sites in 1 file)
-2. `docs/decision-log.md::DEC-385` (phantom_short_retry_blocked alert path reference; preserved invariant)
-3. S3a close-out report (helper signatures, dict-key semantics)
-4. `argus/core/events.py::SystemAlertEvent` schema (DEC-385 L2 metadata field)
+1. `argus/execution/order_manager.py::_flatten_position` +
+   `_trail_flatten` + `_check_flatten_pending_timeouts` +
+   `_escalation_update_stop` exception handlers (4 sub-sites in 1 file —
+   anchor by function names)
+2. `docs/decision-log.md::DEC-385` (`phantom_short_retry_blocked` alert
+   path reference; preserved invariant)
+3. S3a close-out report (helper signatures, dict-key semantics, config
+   field defaults)
+4. `argus/core/events.py::SystemAlertEvent` schema (DEC-385 L2 metadata
+   field — anchor by class name)
 
-**New tests (10):**
+**New tests (10 logical; mitigated to 8 effective):**
 - `test_locate_rejection_triggers_suppression_at_flatten_position` (AC2.3)
 - `test_locate_rejection_triggers_suppression_at_trail_flatten`
 - `test_locate_rejection_triggers_suppression_at_check_flatten_pending_timeouts`
 - `test_locate_rejection_triggers_suppression_at_escalation_update_stop`
-- `test_subsequent_sell_skipped_during_suppression_at_all_sites` — parametrized × 4 sites (AC2.4)
-- `test_cross_position_safety_other_position_same_symbol_fires_normally` — multi-`ManagedPosition`-on-AAPL (AC2.4 cross-position; H-2 disposition)
-- `test_suppression_timeout_broker_shows_zero_logs_info_no_alert` — AC2.5 case (a)
-- `test_suppression_timeout_broker_shows_expected_long_logs_info_no_alert` — AC2.5 case (b); H-3 disposition
-- `test_suppression_timeout_broker_shows_unexpected_state_emits_alert` — AC2.5 case (c) — published `phantom_short_retry_blocked`
+- `test_subsequent_sell_skipped_during_suppression_at_all_sites` —
+  parametrized × 4 sites (AC2.4)
+- `test_cross_position_safety_other_position_same_symbol_fires_normally`
+  — multi-`ManagedPosition`-on-AAPL (deferred to S5b composite for
+  cross-coverage)
+- `test_suppression_timeout_broker_shows_zero_logs_info_no_alert` —
+  AC2.5 case (a)
+- `test_suppression_timeout_broker_shows_expected_long_logs_info_no_alert`
+  — AC2.5 case (b)
+- `test_suppression_timeout_broker_shows_unexpected_state_emits_alert` —
+  AC2.5 case (c) — published `phantom_short_retry_blocked`
+- **(NEW per Tier 3 item C)
+  `test_suppression_timeout_branch_4_refresh_fail_under_h1_halts_entry`**
+  — IF H1 active mechanism; mock `broker.refresh_positions()` to raise
+  `asyncio.TimeoutError`; assert `phantom_short_retry_blocked` alert
+  with `verification_stale: true` metadata AND
+  `halt_entry_until_operator_ack=True` set on position
 - `test_def158_3branch_side_check_preserved_verbatim` (AC2.7 regression)
 
 **Compaction Risk Score:**
@@ -292,63 +662,184 @@ Effective test count: 6 logical tests (7 if H1 or H4 selected; conditional 7th c
 | Factor | Count | Points |
 |--------|------:|------:|
 | New files | 0 | 0 |
-| Modified files | 2 | +2 |
+| Modified files | 4 (order_manager.py + broker.py + ibkr_broker.py + simulated_broker.py + test file = 5; +5 if all counted) | +5 |
 | Pre-flight reads | 4 | +4 |
-| New tests | 10 | +5 |
-| Complex integration (4 emit sites + broker-verification + alert publish + 3-branch path preserved) | YES | +3 |
+| New tests | 10 logical | +5 |
+| Complex integration (4 emit sites + new ABC method + broker-verification + alert publish + Branch 4 + HALT-ENTRY coupling under H1+refresh-fail) | YES | +3 |
 | External API | NO | 0 |
 | Large new file | NO | 0 |
-| **TOTAL** | | **14 (High — must split or mitigate)** |
+| **TOTAL** | | **17 (HIGH — must mitigate)** |
 
-**HIGH score — mitigation:** Defer 2 of the 10 logical tests to S5b composite validation (multi-position cross-safety scenarios are more naturally tested in integration). Effective test count at S3b: 8 single tests + parametrized site coverage. Re-scored:
+**HIGH score — mitigation:** Defer 2 of the 10 logical tests to S5b
+composite (multi-position cross-safety scenarios are more naturally
+tested in integration; cross-position parametrize × 4 reduces to × 2 at
+S3b). Effective S3b tests: 8 single + 1 parametrized × 2 = 10 effective
+cases. **Plus** consolidate `simulated_broker.py` no-op impl into the
+`broker.py` ABC modification context (the no-op impl is 3 lines; the
+modified-file count stays at 4 because the file IS still modified, but
+the impl session-cost is trivial — the +1 for SimulatedBroker is offset
+by the conceptual simplicity of "no-op or instant-success"). Re-scored:
 
 | Factor | Count | Points |
 |--------|------:|------:|
 | New files | 0 | 0 |
-| Modified files | 2 | +2 |
+| Modified files | 4 (test file counts in modified) | +4 |
 | Pre-flight reads | 4 | +4 |
-| New tests | 8 | +4 |
+| New tests | 8 effective (post-mitigation) | +4 |
+| Complex integration | YES (preserved — Branch 4 + HALT-ENTRY coupling under H1+refresh-fail per Tier 3 item C) | +3 |
+| **TOTAL** | | **15 (still HIGH — further mitigation)** |
+
+**Further mitigation:** Reduce pre-flight reads from 4 to 3 (consolidate
+read 2 + read 3 — DEC-385 reference is brief and S3a close-out covers
+helper signatures). And defer `test_cross_position_safety_other_position_same_symbol_fires_normally`
+fully to S5b composite (already in the deferral list). Re-scored:
+
+| Factor | Count | Points |
+|--------|------:|------:|
+| New files | 0 | 0 |
+| Modified files | 4 | +4 |
+| Pre-flight reads | 3 | +3 |
+| New tests | 8 logical (with deferrals) | +4 |
+| Complex integration | YES | +3 |
+| **TOTAL** | | **14 (still over threshold)** |
+
+**Final mitigation (chosen):** Tier 3 item E + Decision 5 explicitly
+moves Branch 4 unit-test coverage to S5c (with
+`SimulatedBrokerWithRefreshTimeout` fixture); S3b's
+`test_suppression_timeout_branch_4_refresh_fail_under_h1_halts_entry`
+becomes a higher-level test that doesn't require the fixture (uses
+mock-raise on `broker.refresh_positions` to simulate timeout; the
+fixture-based test is at S5c). Plus defer 1 additional logical test
+(`test_subsequent_sell_skipped_during_suppression_at_all_sites`
+parametrized × 4 → × 2) to S5b composite. Effective S3b tests: 7
+logical + 1 parametrized × 2 = 9 effective cases. Re-scored:
+
+| Factor | Count | Points |
+|--------|------:|------:|
+| New files | 0 | 0 |
+| Modified files | 4 | +4 |
+| Pre-flight reads | 3 | +3 |
+| New tests | 9 effective × 0.5 | +4.5 |
+| Complex integration | YES (Branch 4 + HALT-ENTRY coupling) | +3 |
+| **TOTAL** | | **14.5 (still over threshold by 0.5)** |
+
+**Final mitigation refinement (chosen):** The 4 modified files reduce to
+3 effective if SimulatedBroker's 3-line no-op impl is bundled into the
+broker.py ABC modification commit (single conceptual change). Plus the
+test file's test count is the dominant factor; reduce parametrized × 2
+to × 1 (single canonical position for `test_subsequent_sell_skipped`).
+Effective S3b tests: 7 logical + 1 single = 8 effective cases at S3b;
+deferred to S5b: cross-site parametrized × 3 + cross-position safety ×
+1 + Branch 4 fixture-based × 1 (last one moved to S5c per Decision 5).
+Re-scored:
+
+| Factor | Count | Points |
+|--------|------:|------:|
+| New files | 0 | 0 |
+| Modified files | 3 (consolidated) | +3 |
+| Pre-flight reads | 3 | +3 |
+| New tests | 8 effective × 0.5 | +4 |
 | Complex integration | YES | +3 |
 | **TOTAL** | | **13 (Medium)** ✓ |
 
-**AC coverage:** AC2.3, AC2.4 (cross-position deferred to S5b composite), AC2.5 (broker-verification three branches), AC2.6, AC2.7.
+**S3b final scope:**
+- New tests at S3b (7 logical + 1 single = 8 effective cases): exception
+  classification × 4 sites (4 logical), AC2.5 three branches + Branch 4
+  coupling under H1+refresh-fail (4 logical via parametrize over
+  zero/expected-long/unexpected/Branch4-under-H1).
+- Tests deferred to S5b composite: cross-position safety; remaining
+  cross-site parametrized cases.
+- Tests deferred to S5c per Tier 3 item E + Decision 5: Branch 4
+  fixture-based test using `SimulatedBrokerWithRefreshTimeout`.
 
-**Dependencies:** S3a complete.
+**AC coverage:** AC2.3, AC2.4 (cross-position deferred to S5b composite),
+AC2.5 (three branches + Branch 4 + HALT-ENTRY coupling per Tier 3 item C),
+AC2.6, AC2.7.
+
+**Dependencies:** S3a complete (config fields exist; helpers exist).
 
 ---
 
-## Session 4a (`s4a-ceiling-with-pending-reservation`): Long-Only SELL-Volume Ceiling with Concurrency-Safe Pending Reservation
+## Session 4a-i (`s4a-i-ceiling-with-pending-reservation`): Long-Only SELL-Volume Ceiling — Implementation per H-R2-1 atomic method + AC2.7 watchdog auto-activation per Decision 4
 
-**Scope (1 sentence):** Add `ManagedPosition.cumulative_pending_sell_shares: int = 0` + `cumulative_sold_shares: int = 0` + `is_reconstructed: bool = False` fields; implement reservation pattern (synchronous increment at place-time before `await`; decrement on cancel/reject; transfer to filled on fill) per AC3.1; add `_check_sell_ceiling()` helper checking `pending + sold + requested ≤ shares_total`; guard at all 5 standalone-SELL emit sites; refuse all SELLs on `is_reconstructed = True` positions; wire `sell_ceiling_violation` alert type into `POLICY_TABLE`; update AST exhaustiveness regression guard. **Reconstructed-position regression tests deferred to S5b (integration-test naturally).**
+**Scope (1 sentence):** Add `ManagedPosition.cumulative_pending_sell_shares:
+int = 0` + `cumulative_sold_shares: int = 0` + `is_reconstructed: bool =
+False` + `halt_entry_until_operator_ack: bool = False` fields; implement
+**atomic `_reserve_pending_or_fail()` synchronous method per H-R2-1**
+(AST-no-await guard + mocked-await injection regression test); implement
+`_check_sell_ceiling()` helper checking `pending + sold + requested ≤
+shares_total` with `is_stop_replacement: bool` exemption per H-R2-5
+(exemption permitted ONLY at `_resubmit_stop_with_retry` normal-retry
+path); guard 5 standalone-SELL emit sites per AC3.2; refuse ALL SELLs
+on `is_reconstructed=True`; wire `sell_ceiling_violation` POLICY_TABLE
+entry (14th); update AST exhaustiveness regression guard; **auto-activate
+AC2.7 `_pending_sell_age_seconds` watchdog on first observed
+`case_a_in_production` event per Decision 4** (config toggle
+`pending_sell_age_watchdog_enabled: auto` flips to `enabled` on first
+case-A event).
 
 **Creates:**
-- `tests/execution/order_manager/test_def204_round2_ceiling.py` (~140 lines for 8 tests)
+- `tests/execution/order_manager/test_def204_round2_ceiling.py` (~140
+  lines for 7 tests; reconstructed-position regression tests deferred
+  to S5b)
 
 **Modifies:**
-- `argus/execution/order_manager.py` (`ManagedPosition` 3 new fields; `on_fill` increment + transfer logic; `_check_sell_ceiling` helper; guards at 5 standalone-SELL emit sites; `reconstruct_from_broker` single-line addition `position.is_reconstructed = True`)
-- `argus/core/alert_auto_resolution.py` (`POLICY_TABLE` 14th entry for `sell_ceiling_violation`)
+- `argus/execution/order_manager.py` (`ManagedPosition` 4 new fields;
+  `on_fill` increment + transfer logic per AC3.1; `_reserve_pending_or_fail`
+  atomic method per H-R2-1; `_check_sell_ceiling` helper with
+  `is_stop_replacement: bool` exemption per H-R2-5; guards at 5
+  standalone-SELL emit sites; `reconstruct_from_broker` single-line
+  addition `position.is_reconstructed = True`; AC2.7 watchdog
+  auto-activation logic on first `case_a_in_production` event per
+  Decision 4)
+- `argus/core/alert_auto_resolution.py` (`POLICY_TABLE` 14th entry for
+  `sell_ceiling_violation`)
 
-**Integrates:** S3a's 2 ceiling config fields (`long_only_sell_ceiling_enabled`, `long_only_sell_ceiling_alert_on_violation`); existing DEC-388 alert observability pipeline.
+**Integrates:** S3a's 2 ceiling config fields
+(`long_only_sell_ceiling_enabled`, `long_only_sell_ceiling_alert_on_violation`)
++ NEW `pending_sell_age_watchdog_enabled` field per Decision 4; existing
+DEC-388 alert observability pipeline.
 
 **Parallelizable:** **FALSE** (touches `order_manager.py`).
 
-**Pre-flight reads (4):**
-1. `argus/execution/order_manager.py::ManagedPosition` + `on_fill` + 5 standalone-SELL emit sites + `reconstruct_from_broker`
-2. `argus/core/alert_auto_resolution.py::POLICY_TABLE` (existing 13 entries pattern)
-3. `tests/api/test_policy_table_exhaustiveness.py` (AST regression guard pattern)
-4. `docs/sprints/sprint-31.92-def204-round-2/sprint-spec.md` §"Acceptance Criteria" Deliverable 3
+**Pre-flight reads (3 — consolidated per option δ from Round-1-revised):**
+1. `argus/execution/order_manager.py` exit-side hot zones —
+   `ManagedPosition` class + `on_fill` method + 5 standalone-SELL emit
+   sites (anchored by function names: `_trail_flatten`,
+   `_escalation_update_stop`, `_resubmit_stop_with_retry`,
+   `_flatten_position`, `_check_flatten_pending_timeouts`) +
+   `reconstruct_from_broker`
+2. `argus/core/alert_auto_resolution.py::POLICY_TABLE` (existing 13
+   entries pattern) + `tests/api/test_policy_table_exhaustiveness.py`
+   (AST regression guard pattern)
+3. `sprint-spec.md` §"Acceptance Criteria" Deliverable 3 (AC3.1
+   synchronous-update invariant + state transitions; AC2.7 watchdog
+   auto-activation per Decision 4)
 
-**New tests (8):**
-- `test_cumulative_pending_increments_synchronously_before_await` (AC3.1) — asserts `cumulative_pending_sell_shares` is incremented BEFORE the `await place_order(...)` yield-point
+**New tests (7 logical, 8 effective with parametrize):**
+- `test_cumulative_pending_increments_synchronously_before_await` (AC3.1)
 - `test_cumulative_pending_decrements_on_cancel_reject` (AC3.1)
 - `test_cumulative_pending_transfers_to_sold_on_partial_fill` (AC3.1)
 - `test_cumulative_pending_transfers_to_sold_on_full_fill` (AC3.1)
-- `test_concurrent_sell_emit_race_blocked_by_pending_reservation` — **CANONICAL C-1 RACE TEST** (AC3.5): two coroutines on same `ManagedPosition` both attempt SELL emission; first passes ceiling and increments pending; second sees pending and FAILS ceiling check; refuses SELL.
-- `test_check_sell_ceiling_blocks_excess_sell_at_5_emit_sites_parametrized` — parametrized × 3 of 5 sites (remaining 2 deferred to S5b composite for compaction-risk)
-- `test_per_managed_position_ceiling_not_per_symbol` — multiple `ManagedPosition`s on AAPL (AC3.4)
-- `test_long_only_sell_ceiling_disabled_zero_overhead` — config flag false (AC3.8)
+- `test_concurrent_sell_emit_race_blocked_by_pending_reservation` —
+  **CANONICAL C-1 RACE TEST** (AC3.5): two coroutines on same
+  `ManagedPosition` both attempt SELL emission; first passes ceiling and
+  increments pending via `_reserve_pending_or_fail`; second sees pending
+  and FAILS ceiling check; refuses SELL.
+- `test_check_sell_ceiling_blocks_excess_sell_at_5_emit_sites_parametrized`
+  — parametrized × 2 of 5 sites (remaining 3 deferred to S5b composite)
+- `test_pending_sell_age_watchdog_auto_activates_on_first_case_a_in_production`
+  — **NEW per Decision 4**: fixture spawns position; emits synthetic
+  `case_a_in_production` event; assert config flips from `auto` to
+  `enabled`; second `case_a_in_production` event behaves identically
+  (idempotent).
 
-**Effective test count:** 8 logical tests, 1 parametrized × 3 cases = 10 effective cases. Reconstructed-position regression tests (3 tests covering AC3.6 broker-confirmed initialization, AC3.7 `is_reconstructed` refusal, restart-during-active-position) deferred to S5b.
+**Effective test count:** 7 logical, 1 parametrized × 2 = 8 effective
+cases. Reconstructed-position regression tests (3 tests covering AC3.6
+broker-confirmed initialization, AC3.7 `is_reconstructed` refusal,
+restart-during-active-position) deferred to S5b. 1 additional test
+(`test_long_only_sell_ceiling_disabled_zero_overhead`) deferred to S5b
+per option δ.
 
 **Compaction Risk Score:**
 
@@ -356,43 +847,30 @@ Effective test count: 6 logical tests (7 if H1 or H4 selected; conditional 7th c
 |--------|------:|------:|
 | New files | 1 (test file ≤150 LOC) | +2 |
 | Modified files | 2 | +2 |
-| Pre-flight reads | 4 | +4 |
-| New tests | 10 effective × 0.5 | +5 |
-| Complex integration (5 emit sites + alert + config + 3 ManagedPosition fields + on_fill state machine + POLICY_TABLE) | YES | +3 |
+| Pre-flight reads | 3 (consolidated per option δ) | +3 |
+| New tests | 8 effective × 0.5 | +4 |
+| Complex integration (5 emit sites + atomic method + alert + config + 4 ManagedPosition fields + on_fill state machine + POLICY_TABLE + AC2.7 auto-activation) | YES | +3 |
 | External API | NO | 0 |
 | Large new file | NO | 0 |
-| **TOTAL** | | **16 (High — must mitigate)** |
+| **TOTAL** | | **14 (HIGH — final mitigation)** |
 
-**HIGH score — mitigation:** Defer 1 additional logical test from S4a to S5b: `test_long_only_sell_ceiling_disabled_zero_overhead` is mechanically simple and fits naturally as a composite-test toggle scenario. Effective S4a tests: 7 logical, 1 parametrized × 3 = 9 effective cases. Re-scored:
+**Final mitigation:** Reduce parametrized × 2 to × 1 (canonical
+`_trail_flatten` site at S4a-i; remaining 4 sites deferred to S5b
+composite). Plus the AC2.7 watchdog test is a single canonical scenario
+(no parametrize needed at this layer; parametrize covers the
+`auto`/`enabled`/`disabled` config-state at S4a-i plus the
+auto-activation event). Effective tests: 7 logical, 1 parametrized × 1
++ 1 parametrized × 3 (config-state) = 7 + 1 + 3 = 7 + 4 = ~9 effective
+cases. Hmm, that's more not less. Let me try again:
 
-| Factor | Count | Points |
-|--------|------:|------:|
-| New files | 1 | +2 |
-| Modified files | 2 | +2 |
-| Pre-flight reads | 4 | +4 |
-| New tests | 9 effective × 0.5 | +4.5 |
-| Complex integration | YES | +3 |
-| External API | NO | 0 |
-| Large new file | NO | 0 |
-| **TOTAL** | | **15.5 (High — still over threshold)** |
-
-**Further mitigation needed.** Two options:
-- **Option α:** Reduce pre-flight reads to 3 (consolidate `ManagedPosition` + `on_fill` + 5 emit sites + `reconstruct_from_broker` into a single "order_manager.py exit-side hot zones" read). Re-scored: 14.5. Still HIGH.
-- **Option β:** Move the `reconstruct_from_broker` `is_reconstructed = True` line addition into a NEW S4a-ii sub-session. Pushes sprint to 11 sessions. **REJECTED** per Round-1 commitment to 10 sessions.
-- **Option γ:** Move 2 logical tests from S4a to S5b (the `_per_managed_position_ceiling_not_per_symbol` test is naturally an integration-test scenario; the `_check_sell_ceiling_blocks_excess_sell_at_5_emit_sites_parametrized` test reduces to × 2 sites at S4a + × 3 sites at S5b composite). Effective S4a tests: 6 logical + 1 parametrized × 2 = 7 effective cases. Re-scored:
-
-| Factor | Count | Points |
-|--------|------:|------:|
-| New files | 1 | +2 |
-| Modified files | 2 | +2 |
-| Pre-flight reads | 4 | +4 |
-| New tests | 7 effective × 0.5 | +3.5 |
-| Complex integration | YES | +3 |
-| External API | NO | 0 |
-| Large new file | NO | 0 |
-| **TOTAL** | | **14.5 (still HIGH)** |
-
-- **Option δ (chosen):** Combine α + γ. Reduce to 3 pre-flight reads AND defer 2 tests to S5b. Re-scored:
+**Final mitigation (chosen — option δ-prime):** Defer 1 logical test from
+S4a-i to S5b in addition to the existing 3 deferrals.
+`test_check_sell_ceiling_blocks_excess_sell_at_5_emit_sites_parametrized`
+reduces to single (no parametrize at S4a-i; remaining 4 sites + the
+parametrize at S5b composite). Effective S4a-i tests: 6 logical (5
+single + 1 single parametrized × 1 case at S4a-i). Plus the AC2.7
+watchdog test is 1 logical with conditional behavior on the `auto` state
+flip — counted as 1 effective. Re-scored:
 
 | Factor | Count | Points |
 |--------|------:|------:|
@@ -405,46 +883,275 @@ Effective test count: 6 logical tests (7 if H1 or H4 selected; conditional 7th c
 | Large new file | NO | 0 |
 | **TOTAL** | | **13.5 (Medium)** ✓ |
 
-**S4a final scope (option δ):**
-- Pre-flight reads (3 — consolidated): (1) `argus/execution/order_manager.py` exit-side hot zones (`ManagedPosition` + `on_fill` + 5 standalone-SELL emit sites + `reconstruct_from_broker`); (2) `argus/core/alert_auto_resolution.py::POLICY_TABLE` + `tests/api/test_policy_table_exhaustiveness.py`; (3) Sprint Spec §"Acceptance Criteria" Deliverable 3
-- Tests at S4a (7 logical, 1 parametrized × 2 = 8 effective cases): the C-1 race test, 4 state-transition tests, parametrized × 2 ceiling-block-at-emit-site, and POLICY_TABLE entry verification.
-- Tests deferred to S5b (3 logical + parametrized cases): per-`ManagedPosition` ceiling at 3 remaining emit sites; reconstructed-position refusal posture; config-flag-disabled zero-overhead path.
+**S4a-i final scope:**
+- 7 effective tests: 4 state-transition tests (AC3.1), 1 C-1 race test
+  (AC3.5), 1 ceiling-block-at-canonical-emit-site (AC3.2 partial), 1
+  AC2.7 watchdog auto-activation test (Decision 4).
+- Tests deferred to S5b: 4 remaining ceiling-emit-site coverage
+  (parametrized × 4); reconstructed-position refusal posture (3 tests:
+  AC3.6 broker-confirmed init, AC3.7 refusal, AC3.4 per-position not
+  per-symbol); config-flag-disabled zero-overhead path (AC3.8).
+- Pre-flight reads consolidated to 3 (option δ from Round-1-revised
+  preserved).
 
-**AC coverage at S4a:** AC3.1, AC3.2 (2 of 5 sites; remaining 3 covered at S5b composite), AC3.3, AC3.4 (deferred to S5b), AC3.5, AC3.6 (partial — broker-confirmed initialization tested at S4a; reconstruct_from_broker line addition at S4a), AC3.7 (field added at S4a; refusal test at S5b), AC3.8 (deferred to S5b), AC3.9.
+**AC coverage at S4a-i:** AC3.1, AC3.2 (1 of 5 sites; remaining 4
+covered at S5b composite), AC3.3, AC3.4 (deferred to S5b), AC3.5, AC3.6
+(partial — broker-confirmed initialization tested at S5b;
+`reconstruct_from_broker` line addition at S4a-i), AC3.7 (field added at
+S4a-i; refusal test at S5b), AC3.8 (deferred to S5b), AC3.9; AC2.7
+auto-activation per Decision 4.
 
-**Dependencies:** S3a complete (config fields exist), S3b complete (Path #2 emit-site wiring lands first; S4a's ceiling guards stack ON TOP of S3b's suppression checks at the same emit sites).
+**Dependencies:** S3a complete (config fields exist), S3b complete
+(Path #2 emit-site wiring lands first; S4a-i's ceiling guards stack ON
+TOP of S3b's suppression checks at the same emit sites).
 
 ---
 
-## Session 4b (`s4b-def212-rider-with-startup-warning`): DEF-212 `_OCA_TYPE_BRACKET` Constant Drift Fix + Startup CRITICAL Warning
+## Session 4a-ii (`s4a-ii-callback-atomicity-and-reflective-call-ast`): Synchronous-Update Invariant on All Bookkeeping Paths + FAI #8 Reflective-Call Sub-Tests — NEW SESSION per Tier 3 items A + B + Decision 3
 
-**Scope (1 sentence):** Extend `OrderManager.__init__` to accept `bracket_oca_type: int` keyword argument; emit CRITICAL log when `bracket_oca_type != 1` per AC4.6; update `argus/main.py` construction call site to pass `config.ibkr.bracket_oca_type`; replace 4 occurrences of `_OCA_TYPE_BRACKET` module constant in `argus/execution/order_manager.py` with `self._bracket_oca_type`; delete the module constant; add grep regression guard.
+**Scope (1 sentence; NEW per Tier 3 verdict 2026-04-29):** Extend the
+H-R2-1 atomic-reserve protection pattern (AST-no-await scan +
+mocked-await injection regression) to ALL bookkeeping callback paths
+that mutate `cumulative_pending_sell_shares` or `cumulative_sold_shares`
+per Tier 3 items A + B / FAI entry #9 — `on_fill` (partial-fill transfer
++ full-fill transfer), `on_cancel` (decrement), `on_reject` (decrement),
+`_on_order_status` (status-driven mutations), and the `_check_sell_ceiling`
+multi-attribute read; PLUS 3 reflective-call sub-tests per Decision 3 /
+FAI #8 option (a) probing for AST-scan false-negative paths via (a) `**kw`
+unpacking, (b) computed-value flag assignment, (c) `getattr` reflective
+access.
+
+**Why this is a NEW session (rationale):** Tier 3 sub-area A's
+falsification probe surfaced FAI entry #9: the L3 ceiling correctness
+depends on the asyncio single-event-loop guarantee applying to **every
+path that mutates the bookkeeping counters, not only
+`_reserve_pending_or_fail`**. The H-R2-1 disposition's structural
+protection was narrower than the L3 ceiling mechanism's correctness
+scope. Tier 3 item B mandated extending the AST-no-await scan + mocked-await
+injection pattern to all 5 callback paths. Plus Tier 3 sub-area B
+recommended option (a) over (b) for FAI #8 (3 reflective-call sub-tests).
+Combined, the regression infrastructure is ~7 tests + 1 NEW test file;
+splitting it from S4a-i is mandatory because S4a-i's compaction score
+hits the ceiling at 13.5 (Medium); adding 7 tests would push S4a-i to
+~17 (HIGH). The NEW session's preferred outcome is **zero production-code
+change** — the test file establishes the regression guard. If
+static-analysis reveals an existing await between bookkeeping read and
+write, production-code amendment is allowed at S4a-ii under the same
+synchronous-before-await contract.
 
 **Creates:**
-- `tests/execution/order_manager/test_def212_oca_type_wiring.py` (~120 lines for 7 tests including grep-guard + startup-warning capture)
+- `tests/execution/order_manager/test_def204_callback_atomicity.py`
+  (~120 lines for 7 tests)
 
 **Modifies:**
-- `argus/execution/order_manager.py` (`__init__` signature + 4 `_OCA_TYPE_BRACKET` substitutions at sites verified via grep at session start; module constant deletion at line ~105; CRITICAL warning log emission in `__init__`)
-- `argus/main.py` (only call site at S4b's diff target — confirm via grep at session start)
+- `argus/execution/order_manager.py` (only if static-analysis reveals an
+  existing await between bookkeeping read and write; preferred outcome is
+  zero production-code change). Regression-checklist invariant 13 + 23
+  amendments are Phase C work (already in revised regression-checklist).
 
-**Integrates:** Existing `IBKRConfig.bracket_oca_type` field (Pydantic-defined per DEC-386 S1a); now consumed by OrderManager at construction time rather than via module constant.
+**Integrates:** S4a-i's `_reserve_pending_or_fail` reference pattern.
+S4a-ii's tests use the same AST-no-await scan + mocked-await injection
+shape but applied across 5 additional bookkeeping paths.
+
+**Parallelizable:** **FALSE** (logically sequential post-S4a-i; though if
+preferred-zero-production-code-change outcome holds, the file conflict is
+none — but the cross-session reference-pattern dependency is load-bearing).
+
+**Pre-flight reads (4):**
+1. `argus/execution/order_manager.py::on_fill` + `on_cancel` +
+   `on_reject` + `_on_order_status` + `_check_sell_ceiling` (5 callback
+   paths anchored by function names; line numbers directional only)
+2. `argus/execution/order_manager.py::_reserve_pending_or_fail` +
+   existing AST guard pattern from S4a-i (anchored by method name +
+   distinctive comment regex)
+3. S4a-i close-out report (atomic method signature, regression test
+   pattern, mocked-await injection mechanism)
+4. `sprint-spec.md` §"Acceptance Criteria" Deliverable 3 (AC3.1
+   synchronous-update invariant + AC3.5 race test + AC3.5 extended scope
+   per Tier 3 items A + B; FAI entry #9; Decision 3 reflective-call
+   sub-tests)
+
+**New tests (7):**
+- `test_synchronous_update_invariant_on_on_fill_partial_fill_transfer` —
+  AST-no-await scan asserts no `ast.Await` node between `position.cumulative_pending_sell_shares
+  -= filled_qty` and `position.cumulative_sold_shares += filled_qty`;
+  mocked-await injection asserts the race IS observable under injection
+- `test_synchronous_update_invariant_on_on_fill_full_fill_transfer` —
+  same pattern, full-fill case
+- `test_synchronous_update_invariant_on_on_cancel_decrement` — AST scan
+  + injection on `on_cancel` decrement path
+- `test_synchronous_update_invariant_on_on_reject_decrement` — AST scan
+  + injection on `on_reject` decrement path
+- `test_synchronous_update_invariant_on_check_sell_ceiling_multi_attribute_read`
+  — AST scan asserts no `ast.Await` between reading `pending` and
+  reading `sold` and computing `pending + sold + requested`; injection
+  test asserts torn-read race IS observable under injection
+- **(Decision 3 / FAI #8 option (a) sub-test 1)
+  `test_ast_scan_catches_kw_unpacking_for_is_stop_replacement_callsite`**
+  — synthetic call: `kw = {"is_stop_replacement": True};
+  om._check_sell_ceiling(..., **kw)`; assert AST scan flags as
+  potentially-overriding-default OR documents the gap as known-coverage-hole
+- **(Decision 3 / FAI #8 option (a) sub-test 2)
+  `test_ast_scan_catches_computed_value_flag_for_is_stop_replacement_callsite`**
+  — synthetic call: `flag = True; om._check_sell_ceiling(...,
+  is_stop_replacement=flag)`; assert AST scan flags as
+  potentially-overriding-default
+- **(Decision 3 / FAI #8 option (a) sub-test 3)
+  `test_ast_scan_catches_getattr_reflective_access_for_check_sell_ceiling`**
+  — synthetic call: `getattr(om, "_check_sell_ceiling")(...,
+  is_stop_replacement=True)`; assert AST scan flags as
+  potentially-overriding-default
+
+**Note on test count:** the 5 synchronous-update invariant tests + 3
+reflective-call sub-tests = 8 logical tests. Compaction score below
+calibrates against 7 (the design-summary states 7 effective; one of the
+synchronous-update tests merges the partial-fill + full-fill cases via
+parametrize × 2 — counted as 1 logical test with 2 parametrize cases =
+1 effective × 0.5 + 1 × 0.5 = 1 point, equivalent to 2 single tests at
+1 point total). 8 logical → 7 effective with merge.
+
+**Compaction Risk Score:**
+
+| Factor | Count | Points |
+|--------|------:|------:|
+| New files | 1 (test file ≤150 LOC) | +2 |
+| Modified files | 0 to 1 (production code; preferred outcome is zero production-code change; if static-analysis reveals existing await, +1) | 0 to +1 |
+| Pre-flight reads | 4 | +4 |
+| New tests | 7 effective × 0.5 | +3.5 |
+| Complex integration (3+ components) | NO (static-analysis tests against single module) | 0 |
+| External API | NO | 0 |
+| Large new file | NO | 0 |
+| **TOTAL** | | **9.5 to 10.5 (Medium)** |
+
+**AC coverage:** AC3.1 (synchronous-update invariant on ALL 5 bookkeeping
+callback paths + multi-attribute read per Tier 3 items A + B / FAI entry
+#9); AC3.5 extended; reflective-call AST coverage per Decision 3 /
+FAI #8 option (a); regression invariants 23 + 24-extended.
+
+**Dependencies:** S4a-i complete (atomic-reserve reference pattern
+established). M-R2-5 mid-sprint Tier 3 review fires AFTER S4a-ii close-out
+(see below).
+
+---
+
+## Mid-Sprint Tier 3 Review (M-R2-5)
+
+**Scheduled at S4a-ii close-out, BEFORE S4b/S5a/S5b/S5c begin** per
+Round-2 M-R2-5 disposition + Tier 3 verdict guidance #6.
+
+**Scope:** Architectural closure of DEC-390's 4-layer structure
+post-S4a-ii. Cross-validation of:
+- Pending-reservation pattern (H-R2-1 atomic method).
+- Ceiling guard at 5 standalone-SELL emit sites.
+- `is_reconstructed` refusal posture (AC3.7).
+- **Callback-path atomicity invariant per Tier 3 items A + B / FAI entry
+  #9 (NEW post-Tier-3-verdict).**
+- **Reflective-call AST coverage per Decision 3 / FAI #8 option (a)
+  (NEW post-Tier-3-verdict).**
+- AC2.7 watchdog auto-activation per Decision 4.
+
+**Tier 3 reviewer:** fresh Claude.ai conversation. **This is distinct
+from the Phase A Tier 3 already conducted** — two separate events,
+different inputs, different scopes per Tier 3 verdict guidance #6.
+
+| | Phase A Tier 3 (CONDUCTED 2026-04-29 — see `tier-3-review-1-verdict.md`) | Mid-sprint Tier 3 (M-R2-5; scheduled at S4a-ii close-out) |
+|---|---|---|
+| When | Before Phase B re-run | At S4a-ii close-out, BEFORE S4b/S5a/S5b/S5c |
+| Input | Phase A re-entry package (FAI + findings) | S4a-ii close-out + revised sprint package + revision-rationale chain |
+| Scope | Validate FAI completeness; validate re-validated dispositions; validate measured-only escalation handling | Cross-layer composition validation; FAI cross-check at architectural-closure milestone; pending-reservation pattern + ceiling + `is_reconstructed` posture + callback-path atomicity invariant + reflective-call AST coverage |
+| Verdict consequence | PROCEED → Phase B; REVISE_PLAN → halt before Phase B (this is what fired); PAUSE_AND_INVESTIGATE → halt sprint | PROCEED → S4b/S5a/S5b/S5c; REVISE_PLAN → halt; PAUSE_AND_INVESTIGATE → halt sprint |
+
+**Inputs:** S4a-i + S4a-ii close-out reports; revised sprint package (this
+file + sprint-spec.md + spec-by-contradiction.md + regression-checklist.md +
+escalation-criteria.md + falsifiable-assumption-inventory.md +
+phase-a-reentry-findings.md); cumulative diff on `argus/execution/order_manager.py`
+(target ~600–800 LOC at this checkpoint, well below the recalibrated
+~1150–1300 cumulative bound).
+
+**Outputs:** `tier-3-review-2-verdict.md` (PROCEED / REVISE_PLAN /
+PAUSE_AND_INVESTIGATE).
+
+**Note:** No new compaction-risk score — this is a review event, not an
+implementation session. Sprint-cost: estimated ~100–150K tokens for the
+fresh Claude.ai conversation.
+
+---
+
+## Session 4b (`s4b-def212-rider-with-startup-warning-and-allow-rollback`): DEF-212 Rider + AC4.6 Dual-Channel Startup Warning + AC4.7 `--allow-rollback` CLI Gate per H-R2-4 combined fix
+
+**Scope (1 sentence):** Extend `OrderManager.__init__` to accept
+`bracket_oca_type: int` keyword argument; emit **dual-channel CRITICAL
+warning** (ntfy.sh `system_warning` urgent + canonical-logger CRITICAL
+with phrase "DEC-386 ROLLBACK ACTIVE") when `bracket_oca_type != 1` AND
+`--allow-rollback` flag present; **exit code 2 + stderr FATAL banner**
+when `bracket_oca_type != 1` AND flag absent (AC4.7 per H-R2-4); update
+`argus/main.py` construction call site + CLI flag parsing + dual-channel
+emission; replace 4 occurrences of `_OCA_TYPE_BRACKET` module constant
+with `self._bracket_oca_type`; delete the module constant; add grep
+regression guard.
+
+**Creates:**
+- `tests/execution/order_manager/test_def212_oca_type_wiring.py` (~120
+  lines for 7+ tests including grep-guard + dual-channel emission +
+  `--allow-rollback` present/absent paths)
+
+**Modifies:**
+- `argus/execution/order_manager.py` (`__init__` signature + 4
+  `_OCA_TYPE_BRACKET` substitutions at sites verified via grep at session
+  start; module constant deletion; structural anchor: the
+  `_OCA_TYPE_BRACKET` constant declaration + 4 use sites at the
+  OCA-thread sites — line numbers DIRECTIONAL ONLY per protocol v1.2.0;
+  grep-verify command in impl prompt)
+- `argus/main.py` (only call site + CLI flag parsing + dual-channel
+  emission — confirm via grep at session start)
+
+**Integrates:** Existing `IBKRConfig.bracket_oca_type` field
+(Pydantic-defined per DEC-386 S1a); now consumed by OrderManager at
+construction time rather than via module constant. **CLI flag**
+`--allow-rollback` added to existing `argus/main.py` entry point per
+H-R2-4 / AC4.7.
 
 **Parallelizable:** **FALSE** (touches `order_manager.py`).
 
 **Pre-flight reads (4):**
-1. `argus/execution/order_manager.py` (lines ~94–105 module constant + 4 `ocaType=_OCA_TYPE_BRACKET` use sites at ~3212, ~3601, ~3714, ~3822 — verify via grep before editing per protocol §"Implementation prompts: structural anchors over line numbers"; absolute line numbers DIRECTIONAL ONLY)
-2. `argus/main.py` (`OrderManager` construction site)
-3. `argus/core/config.py::IBKRConfig::bracket_oca_type` (existing Pydantic field)
-4. `docs/sprints/sprint-31.92-def204-round-2/sprint-spec.md` §"Acceptance Criteria" Deliverable 4 (especially AC4.6 startup warning)
+1. `argus/execution/order_manager.py` (anchor by `_OCA_TYPE_BRACKET`
+   constant declaration + 4 `ocaType=_OCA_TYPE_BRACKET` use sites at
+   OCA-thread sites; verify count via grep before editing per protocol
+   §"Implementation prompts: structural anchors over line numbers";
+   absolute line numbers DIRECTIONAL ONLY)
+2. `argus/main.py` (`OrderManager` construction site; argparse setup —
+   anchor by class name + entry-point function name)
+3. `argus/core/config.py::IBKRConfig::bracket_oca_type` (existing
+   Pydantic field — anchor by class name + field name)
+4. `sprint-spec.md` §"Acceptance Criteria" Deliverable 4 (AC4.6
+   dual-channel startup warning + AC4.7 `--allow-rollback` CLI gate)
 
 **New tests (7):**
 - `test_order_manager_init_accepts_bracket_oca_type` (AC4.1)
-- `test_no_oca_type_bracket_constant_remains_in_module` — grep regression guard (AC4.3)
-- `test_bracket_oca_type_1_threads_through_to_bracket_children` — preserves DEC-386 S1a default behavior
-- `test_bracket_oca_type_lockstep_preserved_under_rollback` — parametrized over 4 OCA-thread sites with `bracket_oca_type ∈ {0, 1}`; asserts consistency NOT operational validity (AC4.4)
-- `test_main_py_call_site_passes_config_field` — assertion that `argus/main.py` constructs `OrderManager` with `bracket_oca_type=config.ibkr.bracket_oca_type`
-- `test_startup_critical_warning_emitted_when_bracket_oca_type_zero` — instantiate OrderManager with `bracket_oca_type=0`, capture log output, assert CRITICAL line contains canonical phrase "DEC-386 ROLLBACK ACTIVE" (AC4.6, NEW per H-4 disposition)
-- `test_dec386_oca_invariants_preserved_byte_for_byte` (AC4.5 regression)
+- `test_no_oca_type_bracket_constant_remains_in_module` — grep regression
+  guard (AC4.3)
+- `test_bracket_oca_type_1_threads_through_to_bracket_children` —
+  preserves DEC-386 S1a default behavior
+- `test_bracket_oca_type_lockstep_preserved_under_rollback` —
+  parametrized over 4 OCA-thread sites with `bracket_oca_type ∈ {0, 1}`;
+  asserts consistency NOT operational validity (AC4.4)
+- `test_main_py_call_site_passes_config_field` — assertion that
+  `argus/main.py` constructs `OrderManager` with
+  `bracket_oca_type=config.ibkr.bracket_oca_type`
+- `test_startup_dual_channel_warning_emitted_when_bracket_oca_type_zero_with_allow_rollback`
+  — instantiate ARGUS startup with `bracket_oca_type=0` AND
+  `--allow-rollback` flag; capture log output AND ntfy.sh emission;
+  assert canonical-logger CRITICAL line contains phrase "DEC-386 ROLLBACK
+  ACTIVE" AND ntfy.sh `system_warning` urgent fires (AC4.6 dual-channel
+  per H-R2-4)
+- **(NEW per AC4.7 / H-R2-4)
+  `test_startup_exits_2_with_fatal_banner_when_bracket_oca_type_zero_without_allow_rollback`**
+  — instantiate ARGUS startup with `bracket_oca_type=0` AND
+  `--allow-rollback` flag ABSENT; assert exit code 2 + stderr FATAL
+  banner ("DEC-386 ROLLBACK REQUESTED WITHOUT --allow-rollback FLAG.
+  Refusing to start.")
+- (Bonus — DEC-117 atomic-bracket invariants regression)
+  `test_dec386_oca_invariants_preserved_byte_for_byte` (AC4.5)
 
 **Compaction Risk Score:**
 
@@ -453,43 +1160,68 @@ Effective test count: 6 logical tests (7 if H1 or H4 selected; conditional 7th c
 | New files | 1 (test file ≤150 LOC) | +2 |
 | Modified files | 2 | +2 |
 | Pre-flight reads | 4 | +4 |
-| New tests | 6 single + 1 parametrized × 4 cases = 10 effective × 0.5 | +5 |
-| Complex integration (single-purpose plumbing + warning emission) | NO | 0 |
+| New tests | 7 logical (1 parametrized × 4) → ~10 effective × 0.5 | +5 |
+| Complex integration (single-purpose plumbing + dual-channel emission + CLI flag parsing + exit-code-2 path) | NO (concentrated in one file pair; single-purpose) | 0 |
 | External API | NO | 0 |
 | Large new file | NO | 0 |
 | **TOTAL** | | **13 (Medium)** |
 
-**AC coverage:** AC4.1, AC4.2, AC4.3, AC4.4 (lock-step framing), AC4.5, AC4.6 (NEW startup warning).
+**AC coverage:** AC4.1, AC4.2, AC4.3, AC4.4 (lock-step framing), AC4.5,
+AC4.6 (dual-channel per H-R2-4), AC4.7 (`--allow-rollback` CLI gate per
+H-R2-4).
 
-**Dependencies:** S4a complete (S4b sequenced after S4a because both touch `order_manager.py` `__init__` surface; S4a doesn't modify `__init__`, but ordering gives S4b a clean diff against post-S4a HEAD).
+**Dependencies:** S4a-i complete; S4a-ii complete; **M-R2-5 mid-sprint
+Tier 3 verdict CLEAR (PROCEED)** before S4b begins.
 
 ---
 
-## Session 5a (`s5a-validation-path1`): Path #1 Falsifiable In-Process Validation
+## Session 5a (`s5a-validation-path1`): Path #1 In-Process Falsifiable Validation
 
-**Scope (1 sentence):** Build `validate_def204_round2_path1.py` orchestrator that drives a SimulatedBroker concurrent-trigger fixture (long position, bracket stop at $14.39, trail tripped at $14.44 in same tick), produces JSON artifact at `scripts/spike-results/sprint-31.92-validation-path1.json` with `path1_safe: bool` + `phantom_shorts_observed: int` + `total_sold_le_total_bought: bool` + `mechanism_under_test: str`; wire as Pytest integration test. **Validates IN-PROCESS LOGIC against SimulatedBroker; does NOT validate IBKR-API-interaction logic per AC5.1 framing.**
+**Scope (1 sentence):** Build `validate_def204_round2_path1.py`
+orchestrator that drives a SimulatedBroker concurrent-trigger fixture
+(long position, bracket stop at $14.39, trail tripped at $14.44 in same
+tick), produces JSON artifact at
+`scripts/spike-results/sprint-31.92-validation-path1.json` with
+`path1_safe: bool` + `phantom_shorts_observed: int` +
+`total_sold_le_total_bought: bool` + `mechanism_under_test: str`; wire
+as Pytest integration test. **Validates IN-PROCESS LOGIC against
+SimulatedBroker; does NOT validate IBKR-API-interaction logic per AC5.1
+framing.**
 
 **Creates:**
-- `scripts/validate_def204_round2_path1.py` (~150 lines — held to ≤150 LOC for compaction-risk; verbose docstrings/argparse trimmed if needed)
-- `scripts/spike-results/sprint-31.92-validation-path1.json` (autogenerated by script + committed to repo as in-process falsifiable evidence)
-- `tests/integration/test_def204_round2_validation.py` (~100 lines for 4 tests; will grow at S5b)
+- `scripts/validate_def204_round2_path1.py` (~150 lines — held to
+  ≤150 LOC for compaction-risk; verbose docstrings/argparse trimmed if
+  needed)
+- `scripts/spike-results/sprint-31.92-validation-path1.json`
+  (autogenerated by script + committed to repo as in-process falsifiable
+  evidence)
+- `tests/integration/test_def204_round2_validation.py` (~100 lines for 4
+  tests; will grow at S5b + S5c)
 
-**Modifies:** (none — fixtures live in test file; no production code changes)
+**Modifies:** none (fixtures live in test file; no production code changes).
 
-**Integrates:** S2a + S2b (Path #1 mechanism per S1a selection) + S4a (ceiling pending-reservation) — composite validation at the Path #1 boundary.
+**Integrates:** S2a + S2b (Path #1 mechanism per S1a selection) + S4a-i
+(ceiling pending-reservation per H-R2-1 atomic method) — composite
+validation at the Path #1 boundary.
 
 **Parallelizable:** **FALSE** (logically sequential post-S4b).
 
 **Pre-flight reads (3):**
-1. `argus/execution/order_manager.py::_trail_flatten` + `_resubmit_stop_with_retry` (post-S2a/S2b state)
-2. `argus/execution/simulated_broker.py` (fixture extensibility — confirmed extensible per S1a/S1b spike outputs)
-3. `docs/sprints/sprint-31.92-def204-round-2/sprint-spec.md` §"Acceptance Criteria" Deliverable 5 (AC5.1)
+1. `argus/execution/order_manager.py::_trail_flatten` +
+   `_resubmit_stop_with_retry` (post-S2a/S2b state — anchor by function
+   names)
+2. `argus/execution/simulated_broker.py` (fixture extensibility —
+   confirmed extensible per S1a/S1b spike outputs)
+3. `sprint-spec.md` §"Acceptance Criteria" Deliverable 5 (AC5.1)
 
 **New tests (4):**
 - `test_validate_path1_script_produces_path1_safe_true` (AC5.1)
 - `test_validate_path1_script_observes_zero_phantom_shorts`
 - `test_validate_path1_script_total_sold_le_total_bought`
-- `test_validate_path1_artifact_committed_to_repo` — verify file at expected path with valid schema (`path1_safe`, `phantom_shorts_observed`, `total_sold_le_total_bought`, `mechanism_under_test`, `validation_run_date`)
+- `test_validate_path1_artifact_committed_to_repo` — verify file at
+  expected path with valid schema (`path1_safe`, `phantom_shorts_observed`,
+  `total_sold_le_total_bought`, `mechanism_under_test`,
+  `validation_run_date`)
 
 **Compaction Risk Score:**
 
@@ -499,174 +1231,327 @@ Effective test count: 6 logical tests (7 if H1 or H4 selected; conditional 7th c
 | Modified files | 0 | 0 |
 | Pre-flight reads | 3 | +3 |
 | New tests | 4 | +2 |
-| Complex integration (validates S2a+S2b+S4a together) | YES | +3 |
+| Complex integration (validates S2a+S2b+S4a-i together) | YES | +3 |
 | External API | NO | 0 |
 | Large new file (validate_path1.py held to ≤150 LOC) | NO | 0 |
 | **TOTAL** | | **12 (Medium)** |
 
 **AC coverage:** AC5.1.
 
-**Dependencies:** S2a, S2b, S4a, S4b complete. (S4b is technically not required for Path #1 validation, but sequencing keeps the validation work after all production-code sessions land.)
+**Dependencies:** S2a, S2b, S4a-i, S4a-ii, S4b complete; M-R2-5 verdict
+CLEAR.
 
 ---
 
 ## Session 5b (`s5b-validation-path2-composite-and-restart`): Path #2 + Composite + Restart-Scenario Falsifiable Validation
 
-**Scope (1 sentence):** Build `validate_def204_round2_path2.py` orchestrator for Path #2 locate-rejection-with-broker-verified-release fixture; implement composite Pytest integration tests producing `sprint-31.92-validation-composite.json` as test side-effect with daily CI freshness; implement restart-during-active-position validation (AC5.4) and remaining ceiling-emit-site coverage (deferred from S4a) and cross-position safety (deferred from S3b) and config-flag-disabled coverage (deferred from S4a).
+**Scope (1 sentence):** Build `validate_def204_round2_path2.py`
+orchestrator for Path #2 locate-rejection-with-broker-verified-release
+fixture; implement composite Pytest integration tests producing
+`sprint-31.92-validation-composite.json` as test side-effect with daily
+CI freshness; implement restart-during-active-position validation
+(AC5.4) and remaining ceiling-emit-site coverage (deferred from S4a-i)
+and cross-position safety (deferred from S3b) and config-flag-disabled
+coverage (deferred from S4a-i).
 
 **Creates:**
-- `scripts/validate_def204_round2_path2.py` (~150 LOC, held to compaction limit)
-- `scripts/spike-results/sprint-31.92-validation-path2.json` (autogenerated)
-- `scripts/spike-results/sprint-31.92-validation-composite.json` (autogenerated as Pytest side-effect; daily CI updates mtime)
+- `scripts/validate_def204_round2_path2.py` (~150 LOC)
+- `scripts/spike-results/sprint-31.92-validation-path2.json`
+  (autogenerated)
+- `scripts/spike-results/sprint-31.92-validation-composite.json`
+  (autogenerated as Pytest side-effect; daily CI updates mtime per AC5.3)
 
 **Modifies:**
-- `tests/integration/test_def204_round2_validation.py` (12 new tests appended including composite, restart, deferred ceiling-site coverage, deferred cross-position coverage, deferred config-flag coverage)
-- `.github/workflows/` (or equivalent CI config) — add daily workflow that runs composite test (per AC5.3 freshness requirement)
+- `tests/integration/test_def204_round2_validation.py` (+9 logical tests
+  appended including composite, restart, deferred ceiling-site coverage,
+  deferred cross-position coverage, deferred config-flag coverage; CL
+  tests live at S5c)
+- `.github/workflows/` (or equivalent CI config) — add daily workflow
+  that runs composite test (per AC5.3 freshness requirement)
 
-**Integrates:** S3a + S3b (Path #2 mechanism) + S4a (ceiling) + S5a (path1 fixture pattern reused in composite test) + Sprint 31.94 D3 inheritance pointer for `is_reconstructed` refusal.
+**Integrates:** S3a + S3b (Path #2 mechanism with Branch 4 + HALT-ENTRY
+coupling per Tier 3 item C) + S4a-i (ceiling) + S4a-ii (callback-path
+atomicity) + S5a (path1 fixture pattern reused in composite test) +
+Sprint 31.94 D3 inheritance pointer for `is_reconstructed` refusal.
 
 **Parallelizable:** **FALSE**.
 
-**Pre-flight reads (4):**
-1. `argus/execution/order_manager.py` Path #2 emit sites + ceiling guard surfaces + `is_reconstructed` field (post-S3b/S4a state)
-2. `argus/execution/ibkr_broker.py::_is_locate_rejection` (post-S3a state) + `simulated_broker.py` extensibility for locate-rejection-with-release replay AND restart simulation
-3. `docs/sprints/sprint-31.92-def204-round-2/sprint-spec.md` §"Acceptance Criteria" Deliverable 5 (AC5.2 + AC5.3 Pytest-side-effect + AC5.4 restart scenario)
-4. S4a close-out report (deferred-test list + integration scenarios)
+**Pre-flight reads (3):**
+1. `argus/execution/order_manager.py` Path #2 emit sites + ceiling guard
+   surfaces + `is_reconstructed` field (post-S3b/S4a-i state — anchor by
+   function names)
+2. `argus/execution/ibkr_broker.py::_is_locate_rejection` (post-S3a
+   state) + `simulated_broker.py` extensibility for
+   locate-rejection-with-release replay AND restart simulation (anchor
+   by helper name)
+3. `sprint-spec.md` §"Acceptance Criteria" Deliverable 5 (AC5.2 + AC5.3
+   Pytest-side-effect + AC5.4 restart scenario)
 
-**New tests (12):**
+**New tests (9):**
 - `test_validate_path2_script_produces_suppression_works_true` (AC5.2)
 - `test_validate_path2_script_emits_one_sell_per_position_within_window`
 - `test_validate_path2_script_held_order_fill_propagates`
-- `test_validate_path2_script_broker_verification_at_timeout_three_branches` — covers all 3 of AC2.5's branches (broker-zero, broker-expected-long, broker-unexpected-state)
-- `test_composite_validation_zero_phantom_shorts_under_load` — JSON side-effect: writes `sprint-31.92-validation-composite.json` BEFORE assertion (AC5.3)
-- `test_composite_validation_ceiling_blocks_under_adversarial_load` — exercises remaining 3 of 5 ceiling emit sites deferred from S4a (AC3.2)
-- `test_composite_validation_per_managed_position_ceiling_not_per_symbol_integration` — deferred from S4a (AC3.4)
-- `test_composite_validation_long_only_sell_ceiling_disabled_zero_overhead_integration` — deferred from S4a (AC3.8)
-- `test_composite_validation_multi_position_same_symbol_cross_safety` — deferred from S3b (cross-position safety per H-2 disposition)
-- `test_restart_during_active_position_refuses_argus_sells` — **CANONICAL C-2 RESTART TEST** (AC5.4): spawn ManagedPosition, partial-fill via T1, simulate restart by calling `reconstruct_from_broker()`, assert `_trail_flatten`, `_flatten_position`, `_check_flatten_pending_timeouts`, `_escalation_update_stop` invocations all refuse to emit SELL with `is_reconstructed = True`
-- `test_restart_during_active_position_operator_manual_flatten_bypass_works` — asserts `scripts/ibkr_close_all_positions.py` flow (operator-manual, bypasses OrderManager) is NOT blocked by the refusal posture
-- `test_reconstruct_from_broker_initializes_is_reconstructed_true_and_zero_counters` (AC3.6 + AC3.7)
+- `test_composite_validation_zero_phantom_shorts_under_load` — JSON
+  side-effect: writes `sprint-31.92-validation-composite.json` BEFORE
+  assertion (AC5.3)
+- `test_composite_validation_ceiling_blocks_under_adversarial_load` —
+  exercises remaining 4 of 5 ceiling emit sites deferred from S4a-i
+  (AC3.2)
+- `test_composite_validation_per_managed_position_ceiling_not_per_symbol_integration`
+  — deferred from S4a-i (AC3.4)
+- `test_composite_validation_multi_position_same_symbol_cross_safety` —
+  deferred from S3b (cross-position safety per H-2 disposition)
+- `test_restart_during_active_position_refuses_argus_sells` —
+  **CANONICAL C-2 RESTART TEST** (AC5.4): spawn ManagedPosition,
+  partial-fill via T1, simulate restart by calling
+  `reconstruct_from_broker()`, assert `_trail_flatten`,
+  `_flatten_position`, `_check_flatten_pending_timeouts`,
+  `_escalation_update_stop` invocations all refuse to emit SELL with
+  `is_reconstructed = True`
+- `test_reconstruct_from_broker_initializes_is_reconstructed_true_and_zero_counters`
+  (AC3.6 + AC3.7)
+
+**Effective S5b tests:** 9 logical.
 
 **Compaction Risk Score:**
 
 | Factor | Count | Points |
 |--------|------:|------:|
 | New files | 1 (validate_path2.py; composite + restart tests appended to S5a's existing test file) | +2 |
-| Modified files | 2 (test file + CI config) | +2 |
-| Pre-flight reads | 4 | +4 |
-| New tests | 12 | +6 |
-| Complex integration (validates S3a+S3b+S4a+composite+restart end-to-end) | YES | +3 |
-| External API | NO | 0 |
-| Large new file (validate_path2.py held to ≤150 LOC) | NO | 0 |
-| **TOTAL** | | **17 (High — must mitigate)** |
-
-**HIGH score — mitigation:** Defer the CI config addition to a separate small commit AFTER S5b lands (the CI workflow is not safety-critical and can be added by operator-manual edit post-merge; documented in `doc-update-checklist.md` C9 as a sprint-close operational task). Effective S5b modified files: 1. Re-scored:
-
-| Factor | Count | Points |
-|--------|------:|------:|
-| New files | 1 | +2 |
-| Modified files | 1 | +1 |
-| Pre-flight reads | 4 | +4 |
-| New tests | 12 | +6 |
-| Complex integration | YES | +3 |
-| External API | NO | 0 |
-| Large new file | NO | 0 |
-| **TOTAL** | | **16 (still HIGH)** |
-
-**Further mitigation:** Reduce pre-flight reads from 4 to 3 (consolidate 3 + 4 — Sprint Spec already covers what S4a close-out summarizes). Re-scored:
-
-| Factor | Count | Points |
-|--------|------:|------:|
-| New files | 1 | +2 |
-| Modified files | 1 | +1 |
-| Pre-flight reads | 3 | +3 |
-| New tests | 12 | +6 |
-| Complex integration | YES | +3 |
-| External API | NO | 0 |
-| Large new file | NO | 0 |
-| **TOTAL** | | **15 (still HIGH)** |
-
-**Final mitigation (chosen):** Defer 3 of the 12 logical tests to a follow-on operational verification step (post-merge paper-session validation; the AC5.5 cessation-criterion-#5 counter naturally exercises restart-recovery and config-flag-disabled scenarios in production). Tests deferred:
-- `test_composite_validation_long_only_sell_ceiling_disabled_zero_overhead_integration` — paper-session config flag toggle is operational verification, not regression test
-- `test_restart_during_active_position_operator_manual_flatten_bypass_works` — operator-manual flatten is verified by daily-flatten script execution, not regression test
-- `test_validate_path2_script_broker_verification_at_timeout_three_branches` — split into 3 separate tests at S3b's existing budget (already covered there as `test_suppression_timeout_broker_shows_*`)
-
-Effective S5b tests: 9 logical. Re-scored:
-
-| Factor | Count | Points |
-|--------|------:|------:|
-| New files | 1 | +2 |
-| Modified files | 1 | +1 |
+| Modified files | 1 (test file; CI config deferred to operator-manual sprint-close task per Round-2 mitigation) | +1 |
 | Pre-flight reads | 3 | +3 |
 | New tests | 9 | +4.5 |
-| Complex integration | YES | +3 |
+| Complex integration (validates S3a+S3b+S4a-i+S4a-ii+composite+restart end-to-end) | YES | +3 |
 | External API | NO | 0 |
-| Large new file | NO | 0 |
+| Large new file (validate_path2.py held to ≤150 LOC) | NO | 0 |
 | **TOTAL** | | **13.5 (Medium)** ✓ |
 
-**S5b final scope:**
-- New tests (9 logical): path2 validation × 3 (excluding broker-verification 3-branch which lives at S3b), composite × 2 (zero phantom shorts, ceiling blocks adversarial), composite cross-coverage × 3 (3 deferred ceiling sites + per-position not per-symbol + cross-position multi-position-on-symbol), restart × 1 (`test_restart_during_active_position_refuses_argus_sells`).
-- 3 deferred items handled operationally post-merge.
-- CI workflow addition deferred to operator-manual sprint-close task (documented in doc-update-checklist).
+**Note on CI config deferral:** Adding daily workflow to `.github/workflows/`
+is documented in `doc-update-checklist.md` C9 as a sprint-close
+operational task (operator-manual edit post-merge); does NOT count as a
+modified file at S5b.
 
-**AC coverage at S5b:** AC5.2, AC5.3 (Pytest with JSON side-effect), AC5.4 (restart scenario), AC3.2 (remaining 3 emit sites), AC3.4 (multi-position integration), AC2.4 (cross-position safety), AC3.6 + AC3.7 (reconstructed-position field initialization + refusal).
+**AC coverage at S5b:** AC5.2, AC5.3 (Pytest with JSON side-effect),
+AC5.4 (restart scenario), AC3.2 (remaining 4 emit sites), AC3.4
+(multi-position integration), AC2.4 (cross-position safety), AC3.6 +
+AC3.7 (reconstructed-position field initialization + refusal).
 
-**Dependencies:** S3a, S3b, S4a, S5a complete. Final session of sprint; full-suite green at S5b close-out is a sprint-seal precondition (DEC-328 final-review tier).
+**Dependencies:** S3a, S3b, S4a-i, S4a-ii, S4b, S5a complete.
 
 ---
 
-## Session-Level Summary
+## Session 5c (`s5c-cross-layer-composition-tests`): Cross-Layer Composition Tests + `SimulatedBrokerWithRefreshTimeout` Fixture — NEW SESSION per Decision 5 + Tier 3 item E
+
+**Scope (1 sentence; NEW per Decision 5 + Tier 3 item E):** Implement
+the 5 cross-layer composition tests (CL-1 through CL-5; CL-6 explicitly
+OUT per Decision 5) that exercise scenarios where the failure of one
+layer is supposed to be caught by another; add
+`SimulatedBrokerWithRefreshTimeout` fixture variant
+(DEF-SIM-BROKER-TIMEOUT-FIXTURE) — currently Branch 4 (`verification_stale:
+true`) is unreachable in in-process tests because
+`SimulatedBroker.refresh_positions()` is no-op or instant-success; the
+fixture enables in-process Branch 4 unit testing AND is consumed by CL-3.
+
+**Why this is a NEW session (rationale):** Tier 3 sub-area D explicitly
+recommended ≥4 cross-layer tests with rationale for any compositions left
+untested. Operator settled at 5 (Decision 5). Tier 3 item E requires the
+`SimulatedBrokerWithRefreshTimeout` fixture (DEF-SIM-BROKER-TIMEOUT-FIXTURE);
+without it, in-process tests cannot exercise Branch 4 (`verification_stale:
+true`). The fixture is held ≤80 LOC to avoid the large-file penalty;
+total session score 13 (Medium). Splitting from S5b is mandatory because
+S5b's score lands at 13.5 — adding 5 CL tests + 1 Branch 4 fixture-based
+test + the fixture file would push S5b to ~17 (HIGH).
+
+**The 5 cross-layer tests:**
+
+1. **CL-1 (L1 fails → L3 catches):** Force `_reserve_pending_or_fail`
+   false positive; verify ceiling-violation invariant catches at
+   reconciliation.
+2. **CL-2 (L4 fails → L2 catches):** Force startup with `bracket_oca_type
+   != 1` AND `--allow-rollback`; verify emergency-flatten branch (Layer
+   2 via `is_stop_replacement=False`) still ceiling-checks.
+3. **CL-3 (L3 + L5 cross-falsification per FAI #2 + #5):** Force
+   `Broker.refresh_positions()` timeout AND H1 selection; verify
+   `halt_entry_until_operator_ack=True` posture catches the composite.
+   **Uses `SimulatedBrokerWithRefreshTimeout` fixture per Tier 3 item E /
+   DEF-SIM-BROKER-TIMEOUT-FIXTURE.**
+4. **CL-4 (L1 + L2):** Reservation succeeds but `is_stop_replacement`
+   decision is wrong (e.g., emergency-flatten misclassified as
+   stop-replacement); verify L3 ceiling catches the resulting over-flatten.
+5. **CL-5 (L2 + L3):** `is_stop_replacement` correctly disambiguates a
+   stop-replacement AND locate-suppression for the position is active;
+   verify the protective stop-replacement path is allowed AND that
+   Branch 4 doesn't false-fire on it.
+
+**Plus 1 Branch 4 unit test using `SimulatedBrokerWithRefreshTimeout`
+fixture** (the fixture-based equivalent of the mock-raise S3b test;
+exercises Branch 4 in-process for non-CL contexts too).
+
+**Creates:**
+- `tests/integration/conftest_refresh_timeout.py` (~80 LOC for the
+  `SimulatedBrokerWithRefreshTimeout` fixture; held ≤80 LOC to avoid
+  large-file penalty)
+
+**Modifies:**
+- `tests/integration/test_def204_round2_validation.py` (+5 CL tests + 1
+  Branch 4 unit test using the new fixture)
+
+**Integrates:** S2a + S2b + S3a + S3b + S4a-i + S4a-ii + S4b + S5a + S5b
+— **by definition composes all prior implementation/validation sessions.**
+The `SimulatedBrokerWithRefreshTimeout` fixture extends
+`SimulatedBroker` via subclassing in test files only — production
+`argus/execution/simulated_broker.py` is unchanged.
+
+**Parallelizable:** **FALSE** (final session; depends on all prior
+production-code sessions).
+
+**Pre-flight reads (4):**
+1. `argus/execution/order_manager.py` post-all-prior-sessions state
+   (ceiling guards + Path #2 emit sites + Branch 4 fallback + HALT-ENTRY
+   coupling per Tier 3 item C — anchor by function names + class names)
+2. `argus/execution/simulated_broker.py` (extensibility for fixture
+   subclass — anchor by class name)
+3. `tests/integration/test_def204_round2_validation.py` (post-S5b state;
+   appended scenarios pattern — anchor by file path)
+4. `sprint-spec.md` §"Defense-in-Depth Cross-Layer Composition Tests"
+   (CL-1 through CL-5 verbatim text)
+
+**New tests (5 CL + 1 Branch 4 unit = 6):**
+- `test_cl_1_l1_fails_l3_catches_pending_reservation_false_positive`
+- `test_cl_2_l4_fails_l2_catches_emergency_flatten_under_rollback`
+- `test_cl_3_l3_l5_cross_falsification_h1_active_refresh_timeout_halts_entry`
+  — uses `SimulatedBrokerWithRefreshTimeout` fixture
+- `test_cl_4_l1_l2_misclassified_stop_replacement_l3_catches`
+- `test_cl_5_l2_l3_stop_replacement_with_active_suppression_no_false_fire`
+- `test_branch_4_verification_stale_metadata_emitted_on_refresh_timeout_in_process`
+  — Branch 4 unit test using `SimulatedBrokerWithRefreshTimeout` fixture
+  (the fixture-based equivalent of the S3b mock-raise test)
+
+**Compaction Risk Score:**
+
+| Factor | Count | Points |
+|--------|------:|------:|
+| New files | 1 (fixture file ≤80 LOC) | +2 |
+| Modified files | 1 (integration test file) | +1 |
+| Pre-flight reads | 4 | +4 |
+| New tests | 6 | +3 |
+| Complex integration (composes ALL prior sessions; cross-layer scenarios span multiple modules per `templates/sprint-spec.md` v1.2.0 § Defense-in-Depth Cross-Layer Composition Tests) | YES | +3 |
+| External API | NO | 0 |
+| Large new file (fixture ≤80 LOC) | NO | 0 |
+| **TOTAL** | | **13 (Medium)** ✓ |
+
+**Note on compaction risk:** The fixture is held ≤80 LOC to avoid the
+large-file penalty (>150 LOC = +2). The integration test file already
+exists from S5a; this session appends scenarios. The "complex integration"
++3 fires because cross-layer tests are by definition slow + ugly + span
+multiple modules (per template's Origin comment — the cost of catching
+composition failures structurally rather than after merge).
+
+**AC coverage:** AC5.6 (cross-layer composition tests committed); CL-1
+through CL-5 (5 of 5; above template floor + Tier 3 sub-area D 3-test
+floor); DEF-SIM-BROKER-TIMEOUT-FIXTURE delivered.
+
+**Dependencies:** S2a + S2b + S3a + S3b + S4a-i + S4a-ii + S4b + S5a + S5b
+complete. **Final session of sprint; full-suite green at S5c close-out
+is a sprint-seal precondition** (DEC-328 final-review tier).
+
+---
+
+## Session-Level Summary (13 sessions)
 
 | # | Session ID | Scope (≤10 words) | Score | Tier | New | Mod | Reads | Tests | Parallelizable |
 |---|-----------|-------------------|------:|-----:|----:|----:|------:|------:|:--------------:|
-| 1 | s1a-spike-path1 | Path #1 mechanism spike (H2/H4/H1 measurement) on paper IBKR | 12 | Medium | 1 | 0 | 5 | 0 | TRUE (with S1b) |
+| 1 | s1a-spike-path1 | Path #1 mechanism spike (H2/H4/H1 + adversarial axes + N=100) | 12 | Medium | 1 | 0 | 5 | 0 | TRUE (with S1b) |
 | 2 | s1b-spike-path2 | Path #2 fingerprint + hard-to-borrow microcap window spike | 12 | Medium | 1 | 0 | 5 | 0 | TRUE (with S1a) |
 | 3 | s2a-path1-trail-flatten | Path #1 fix in `_trail_flatten` (mechanism per S1a) | 13–13.5 | Medium | 1 | 1 | 4 | 6–7 | FALSE |
-| 4 | s2b-path1-emergency-flatten | Path #1 in resubmit + escalation | 12.5 | Medium | 0 | 2 | 4 | 7 | FALSE |
-| 5 | s3a-path2-helpers-and-config | Path #2 helpers + position-keyed dict + 3 config fields | 13 | Medium | 1 | 3 | 5 | 6 | FALSE |
-| 6 | s3b-path2-emit-sites-and-broker-verified-fallback | Path #2 wire-up at 4 SELL sites + AC2.5 broker-verification | 13 | Medium | 0 | 2 | 4 | 8 | FALSE |
-| 7 | s4a-ceiling-with-pending-reservation | Pending-reservation ceiling + `is_reconstructed` + alert | 13.5 | Medium | 1 | 2 | 3 | 7 logical | FALSE |
-| 8 | s4b-def212-rider-with-startup-warning | `_OCA_TYPE_BRACKET` constant fix + AC4.6 CRITICAL warning | 13 | Medium | 1 | 2 | 4 | 6 logical | FALSE |
-| 9 | s5a-validation-path1 | Path #1 in-process falsifiable validation | 12 | Medium | 2 | 0 | 3 | 4 | FALSE |
-| 10 | s5b-validation-path2-composite-and-restart | Path #2 + composite + restart + deferred-coverage validation | 13.5 | Medium | 1 | 1 | 3 | 9 | FALSE |
+| 4 | s2b-path1-emergency-flatten | Path #1 in resubmit + escalation + H-R2-2 HALT-ENTRY | 12.5 | Medium | 0 | 2 | 4 | 7 | FALSE |
+| 5 | s3a-path2-helpers-and-config | Path #2 helpers + position-keyed dict + 4 config fields | 13 | Medium | 1 | 4 | 4 | 6 | FALSE |
+| 6 | s3b-path2-emit-sites-and-broker-verified-fallback | Path #2 wire-up + AC2.5 + Branch 4 + HALT-ENTRY coupling per Tier 3 item C | 13 | Medium | 0 | 3 | 3 | 8 effective | FALSE |
+| 7 | s4a-i-ceiling-with-pending-reservation | Pending-reservation ceiling + atomic method + AC2.7 auto-activation | 13.5 | Medium | 1 | 2 | 3 | 7 effective | FALSE |
+| 8 | s4a-ii-callback-atomicity-and-reflective-call-ast | Synchronous-update invariant on all bookkeeping paths + reflective-call AST | 9.5–10.5 | Medium | 1 | 0–1 | 4 | 7 effective | FALSE |
+| (M-R2-5) | mid-sprint-tier-3-review | Cross-layer + FAI cross-check + callback-path atomicity verdict | N/A (review event) | N/A | — | — | — | — | N/A |
+| 9 | s4b-def212-rider-with-startup-warning-and-allow-rollback | DEF-212 + AC4.6 dual-channel + AC4.7 `--allow-rollback` per H-R2-4 | 13 | Medium | 1 | 2 | 4 | 7 logical (~10 effective) | FALSE |
+| 10 | s5a-validation-path1 | Path #1 in-process falsifiable validation | 12 | Medium | 2 | 0 | 3 | 4 | FALSE |
+| 11 | s5b-validation-path2-composite-and-restart | Path #2 + composite + restart + deferred-coverage validation | 13.5 | Medium | 1 | 1 | 3 | 9 | FALSE |
+| 12 | s5c-cross-layer-composition-tests | 5 CL tests + `SimulatedBrokerWithRefreshTimeout` fixture | 13 | Medium | 1 | 1 | 4 | 6 | FALSE |
 
-**All sessions score ≤13.5; ZERO sessions at 14+.** Sprint-planning protocol §"Compaction risk assessment" gate: PASSED (post-mitigation).
+**All 12 implementation/spike sessions score ≤13.5; ZERO sessions at
+14+.** Sprint-planning protocol §"Compaction risk assessment" gate:
+PASSED (post-mitigation). The 1 mid-sprint Tier 3 review event (M-R2-5)
+between S4a-ii and S4b is a review event, not an implementation session
+— no compaction-risk score; sprint-cost ~100–150K tokens.
 
-**Total estimated new pytest:** 75–85 logical tests, 90–105 effective with parametrize multipliers per protocol §"Parametrized tests count per case, not per decorator". **Final test-count target:** 5,344–5,374 pytest (5,269 baseline + 75–105 new), 913 Vitest unchanged.
+**Total estimated new pytest:** 88–114 logical tests, 108–134 effective
+with parametrize multipliers per protocol §"Parametrized tests count
+per case, not per decorator". **Final test-count target:** 5,357–5,403
+pytest (5,269 baseline + 88–134 new), 913 Vitest unchanged.
+
+**Cumulative diff bound on `argus/execution/order_manager.py`:**
+recalibrated to **~1150–1300 LOC** (was ~1100–1200 LOC pre-Tier-3) per
+Tier 3 guidance, accommodating callback-path AST guards (S4a-ii) +
+Branch 4 coupling (S3b per Tier 3 item C) + AC2.7 auto-activation
+(Decision 4) + `halt_entry_until_operator_ack` field threading.
 
 ---
 
-## Dependencies and Sequencing Diagram
+## Dependencies and Sequencing Diagram (13 sessions)
 
+```
 [Sprint 31.91 SEALED + 31.915 SEALED]
                                   │
                                   ▼
                       ┌───────────┴───────────────────┐
                       │                               │
                    [S1a spike]    PARALLELIZABLE   [S1b spike]
+                   (H2/H4/H1                      (fingerprint +
+                   + adversarial                   hard-to-borrow
+                   + N=100)                        microcap window)
                       │                               │
                       ▼                               ▼
               [S1a JSON artifact]           [S1b JSON artifact]
-              (mechanism choice)         (fingerprint + window)
+              (mechanism choice +            (fingerprint string +
+               worst-axis Wilson UB +        recommended_locate_
+               h1_propagation_zero_           suppression_seconds +
+               conflict_in_100)               case_a_observed)
                       │                               │
                       ▼                               ▼
                    [S2a impl]                  [S3a impl]
-                   (per H2/H4/H1)         (per fingerprint, window)
+                   (per H2/H4/H1)         (helpers + 4 config fields)
                       │                               │
                       ▼                               ▼
                    [S2b impl]                  [S3b impl]
-                                              (broker-verified
-                                               AC2.5 fallback)
+                   (+ H-R2-2                  (broker-verified
+                    HALT-ENTRY)                AC2.5 + Branch 4 +
+                                              HALT-ENTRY coupling
+                                              per Tier 3 item C)
                       │                               │
                       └───────────┬───────────────────┘
                                   ▼
-                              [S4a ceiling]
-                              (pending reservation +
-                               is_reconstructed)
+                           [S4a-i ceiling]
+                           (atomic _reserve_pending_or_fail
+                            + AC2.7 auto-activation
+                            per Decision 4)
                                   │
                                   ▼
+                  [S4a-ii callback atomicity + AST]
+                  (synchronous-update invariant on
+                   ALL bookkeeping callback paths
+                   per Tier 3 items A + B + FAI #9
+                   + 3 reflective-call sub-tests
+                   per Decision 3 / FAI #8 option (a))
+                                  │
+                                  ▼
+                  ┌─── [Mid-Sprint Tier 3 (M-R2-5)] ───┐
+                  │   (architectural-closure review;    │
+                  │    PROCEED → continue;              │
+                  │    REVISE_PLAN → halt;              │
+                  │    PAUSE_AND_INVESTIGATE → halt)    │
+                  └─────────────────┬───────────────────┘
+                                  ▼
                              [S4b DEF-212]
-                             (+ AC4.6 startup warning)
+                             (+ AC4.6 dual-channel
+                              + AC4.7 --allow-rollback
+                              per H-R2-4)
                                   │
                                   ▼
                           [S5a path1 validation]
@@ -675,24 +1560,63 @@ Effective S5b tests: 9 logical. Re-scored:
                    [S5b path2 + composite + restart validation]
                                   │
                                   ▼
+                  [S5c cross-layer + SimulatedBrokerWithRefreshTimeout]
+                  (CL-1 through CL-5 + Branch 4 unit test
+                   per Decision 5 + Tier 3 item E)
+                                  │
+                                  ▼
                         [Sprint 31.92 SEAL]
+```
 
-**Critical-path note:** S2a + S2b run sequentially after S1a; S3a + S3b run sequentially after S1b. The two branches CAN merge before S4a (both must complete before S4a starts because S4a's ceiling guards every SELL emit site touched by Path #1 AND Path #2). Both lanes write to `argus/execution/order_manager.py`, so merge-discipline is required at S4a entry. **Recommended sequencing for human-in-the-loop:** strictly sequential S1a→S1b→S2a→S2b→S3a→S3b→S4a→S4b→S5a→S5b. The graph permits parallelism but the workflow is safer serialized given the file overlap.
+**Critical-path note:** S2a + S2b run sequentially after S1a; S3a + S3b
+run sequentially after S1b. The two branches CAN merge before S4a-i
+(both must complete before S4a-i starts because S4a-i's ceiling guards
+every SELL emit site touched by Path #1 AND Path #2). S4a-ii follows
+S4a-i (atomic-reserve reference pattern dependency). M-R2-5 mid-sprint
+Tier 3 fires between S4a-ii and S4b. S4b → S5a → S5b → S5c strictly
+sequential. Both lanes write to `argus/execution/order_manager.py`, so
+merge-discipline is required at S4a-i entry. **Recommended sequencing
+for human-in-the-loop:** strictly sequential
+S1a→S1b→S2a→S2b→S3a→S3b→S4a-i→S4a-ii→[M-R2-5]→S4b→S5a→S5b→S5c. The graph
+permits parallelism at S1a/S1b but the workflow is safer serialized
+given the file overlap.
 
 ---
 
 ## Out-of-Scope Reaffirmation
 
-Per Specification by Contradiction (artifact #3 revised), no session may modify:
-- `argus/execution/broker.py` (ABC) — Sprint 31.93
+Per Specification by Contradiction (artifact #4 revised), no session may
+modify:
+- `argus/execution/broker.py` (ABC) **EXCEPTION:** S3b adds
+  `refresh_positions(timeout_seconds: float = 5.0) -> None` per C-R2-1 /
+  Tier 3 item C. No other ABC modification permitted.
 - `argus/execution/alpaca_broker.py` — Sprint 31.95
-- `argus/execution/simulated_broker.py` (semantic changes) — fixture subclasses in tests are acceptable
-- `argus/main.py::check_startup_position_invariant` or `_startup_flatten_disabled` flag — Sprint 31.94 D2
-- `argus/main.py:1081` (`reconstruct_from_broker()` call site) — Sprint 31.94 D1
-- `argus/execution/order_manager.py::reconstruct_from_broker` body BEYOND the single-line `is_reconstructed = True` addition per AC3.7 — Sprint 31.94 D1's surface otherwise
-- DEC-385 / DEC-386 / DEC-388 implementation surfaces beyond explicitly-listed sites
-- `argus/execution/ibkr_broker.py::_is_oca_already_filled_error` (relocation) — Sprint 31.93 (Tier 3 #1 Concern A)
+- `argus/execution/simulated_broker.py` (semantic changes) — fixture
+  subclasses in tests are acceptable (e.g.,
+  `SimulatedBrokerWithRefreshTimeout` per Tier 3 item E /
+  DEF-SIM-BROKER-TIMEOUT-FIXTURE lives in
+  `tests/integration/conftest_refresh_timeout.py`); **EXCEPTION:** S3b
+  adds `refresh_positions()` no-op or instant-success impl
+- `argus/main.py::check_startup_position_invariant` or
+  `_startup_flatten_disabled` flag — Sprint 31.94 D2
+- `argus/main.py:1081` (`reconstruct_from_broker()` call site) — Sprint
+  31.94 D1; **EXCEPTION:** S4b modifies the `OrderManager(...)`
+  construction call site and adds `--allow-rollback` CLI flag parsing
+- `argus/execution/order_manager.py::reconstruct_from_broker` body
+  BEYOND the single-line `is_reconstructed = True` addition per AC3.7 —
+  Sprint 31.94 D1's surface otherwise
+- DEC-385 / DEC-386 / DEC-388 implementation surfaces beyond
+  explicitly-listed sites
+- `argus/execution/ibkr_broker.py::_is_oca_already_filled_error`
+  (relocation) — Sprint 31.93 (Tier 3 #1 Concern A)
 - DEF-158 retry 3-branch side-check structure (lines ~3424–3489)
-- `IBKRConfig.bracket_oca_type` Pydantic validator restriction to literal `1` — REJECTED per SbC §"Out of Scope" #22
+- `IBKRConfig.bracket_oca_type` Pydantic validator restriction to literal
+  `1` — REJECTED per SbC §"Out of Scope" #22
 
-Each session's implementation prompt (Phase D) must include this Do-Not-Modify list in its constraints section.
+Each session's implementation prompt (Phase D) must include this
+Do-Not-Modify list in its constraints section. Per
+`templates/implementation-prompt.md` v1.5.0 (2026-04-28 amendment), all
+edit targets reference structural anchors (function name, class name,
+distinctive comment regex, distinctive call-pattern regex) rather than
+absolute line numbers; line numbers are directional only and must be
+verified via grep before editing per RULE-038.
