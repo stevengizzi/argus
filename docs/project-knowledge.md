@@ -1,6 +1,6 @@
 # ARGUS — Project Knowledge (Claude Context)
 
-> *Tier A operational context for Claude Code and Claude.ai. Last updated: April 24, 2026 (Sprint 31.9 campaign-close — A1 short-flip fix validated, DEF-204 mechanism identified).*
+> *Tier A operational context for Claude Code and Claude.ai. Last updated: April 28, 2026 (Sprint 31.91 SEALED — Reconciliation Drift / Phantom-Short Fix + Alert Observability Completion; DEF-014 + DEF-204 mechanism architecturally CLOSED; DEC-385 + DEC-386 + DEC-388 materialized).*
 > *Full decision rationale: `docs/decision-log.md` | Sprint details: `docs/sprint-history.md` | DEC index: `docs/dec-index.md`*
 
 ---
@@ -11,9 +11,9 @@ ARGUS is a fully automated, AI-enhanced multi-strategy day trading system for US
 
 ## Current State
 
-**Tests:** 5,080 pytest (--ignore=tests/test_main.py) + 39 pass / 5 skip on tests/test_main.py + 866 Vitest. Sprint 31.9 net delta: +146 pytest, +20 Vitest. Known flakes: DEF-150 (time-of-day arithmetic, first 2 min of every hour) + DEF-167 (Vitest hardcoded-date scan) + DEF-171 (ibkr_broker xdist) + DEF-190 (pyarrow/xdist register_extension_type race) + DEF-192 (runtime warning cleanup debt, ~25–27 warnings, xdist-order-dependent within categories). DEF-205 (pytest date-decay sibling of DEF-167) RESOLVED by TEST-HYGIENE-01 on 2026-04-24. Treat all listed flakes as pre-existing.
-**Sprints completed:** 1 through 29 + 21.6 + 25.9 + 27.5 + 27.6 + 27.65 + 27.7 + 27.75 + 27.8 + 27.9 + 27.95 + 28.5 + 28.75 + 29.5 + 32 + 32.5 + 32.75 + 32.8 + 32.9 + 32.95 + impromptu hotfix Apr 3 + 31A + 31A.5 + 31A.75 + 31.5 + 31.75 + 31.8 + 31.85 + 31.9 (35 full sprints incl. campaign-close phase + 45 sub-sprints + 10 impromptus + 11 campaign-close sessions + 3 paper-session debriefs)
-**Active sprint:** Between sprints. **Sprint 31.9 (Health & Hardening campaign-close) sealed on 2026-04-24.** 22 shadow variants collecting CounterfactualTracker data. Parquet consolidation script delivered (Sprint 31.85); operator repoint of `config/historical_query.yaml` pending. **Next sprint:** operator-decided ordering between (a) `post-31.9-reconciliation-drift` (CRITICAL safety per DEF-204 mechanism identified by IMPROMPTU-11), (b) `post-31.9-component-ownership` (DEF-175/182/193/201/202), (c) `post-31.9-reconnect-recovery-and-rejectionstage` (DEF-194/195/196/177/184), (d) `post-31.9-alpaca-retirement` (DEF-178/183), (e) Sprint 31B (Research Console / Variant Factory). Operational mitigation in effect until DEF-204 lands: operator runs `scripts/ibkr_close_all_positions.py` daily.
+**Tests:** 5,269 pytest (--ignore=tests/test_main.py) + 39 pass / 5 skip on tests/test_main.py + 913 Vitest. Sprint 31.91 net delta: +189 pytest, +47 Vitest. Known flakes: DEF-150 (time-of-day arithmetic, first 2 min of every hour) + DEF-167 (Vitest hardcoded-date scan) + DEF-171 (ibkr_broker xdist) + DEF-190 (pyarrow/xdist register_extension_type race) + DEF-192 (runtime warning cleanup debt, ~25–27 warnings, xdist-order-dependent within categories). DEF-205 (pytest date-decay sibling of DEF-167) RESOLVED by TEST-HYGIENE-01 on 2026-04-24. Treat all listed flakes as pre-existing.
+**Sprints completed:** 1 through 29 + 21.6 + 25.9 + 27.5 + 27.6 + 27.65 + 27.7 + 27.75 + 27.8 + 27.9 + 27.95 + 28.5 + 28.75 + 29.5 + 32 + 32.5 + 32.75 + 32.8 + 32.9 + 32.95 + impromptu hotfix Apr 3 + 31A + 31A.5 + 31A.75 + 31.5 + 31.75 + 31.8 + 31.85 + 31.9 + 31.91 (36 full sprints incl. campaign-close + Sprint 31.91 + 46 sub-sprints + 10 impromptus + 11 campaign-close sessions + 3 paper-session debriefs + Sprint 31.91's 25 implementation sessions + 2 Tier 3 reviews + 2 in-sprint hotfixes)
+**Active sprint:** Between sprints. **Sprint 31.91 (Reconciliation Drift / Phantom-Short Fix + Alert Observability Completion) SEALED on 2026-04-28.** DEF-014 (PRIMARY DEFECT, October 2025) FULLY RESOLVED via end-to-end alert observability pipeline. DEF-204 mechanism architecturally CLOSED via DEC-386 + DEC-385 + S3 retry side-check + S4 falsifiable validation infrastructure. Migration framework now spans all 8 ARGUS SQLite DBs (Impromptu C). 22 shadow variants still collecting CounterfactualTracker data. **Operator daily-flatten mitigation cessation criteria:** #1+#2+#3 SATISFIED post-S4; #4 (sprint sealed) MET 2026-04-28; #5 (5 paper sessions clean post-seal) PENDING — operator continues `scripts/ibkr_close_all_positions.py` daily until criterion #5 satisfied. Parquet consolidation script delivered (Sprint 31.85); operator repoint of `config/historical_query.yaml` still pending. **Next named horizons:** Sprint 31B (Research Console / Variant Factory), `post-31.9-component-ownership` (DEF-175/182/193/201/202 + 3 absorbed sibling-class items), Sprint 31.92 (DEF-212 `_OCA_TYPE_BRACKET` constant fix), Sprint 31.93 (DEF-211 D1+D2+D3 + RSK-DEC-386-DOCSTRING bound), `post-31.9-reconnect-recovery` (likely first DEF-222 audit firing surface), `post-31.9-alpaca-retirement`.
 **GitHub:** `https://github.com/stevengizzi/argus.git` (public)
 
 ### Sprint History (Summary)
@@ -43,17 +43,21 @@ Sprints 1–28 (Feb 14 – Mar 29): see `docs/sprint-history.md` for full detail
 | 31.85 | Parquet Cache Consolidation (DEF-161 resolved) | 4934+846V | Apr 20 | — |
 | (Audit Phase 3 in progress) | FIX-00/15/17/20/01/11/02/12/03/21/14 + IMPROMPTU-def172-173-175 | 4965+859V | Apr 21–22 | DEC-384 (FIX-01 standalone overlay registry) |
 | 31.9 | Health & Hardening Campaign-Close (A1 short-flip fix validated, DEF-204 mechanism identified, RETRO-FOLD P1–P25) | 5080+866V | Apr 22–24 | — (no new DECs) |
+| 31.91 | Reconciliation Drift / Phantom-Short Fix + Alert Observability Completion (DEF-014 + DEF-204 mechanism CLOSED; 25 sessions + 2 Tier 3 reviews + 2 hotfixes; migration framework universal adoption) | 5269+913V | Apr 22–28 | DEC-385 (Side-Aware Reconciliation), DEC-386 (OCA-Group Threading), DEC-388 (Alert Observability Architecture) |
 
 *Full sprint scopes and session details: `docs/sprint-history.md`*
 
 ### Build Track Queue
 
-**Next 5 sprints (priority order):**
+**Next 6 sprints (priority order):**
 1. **31B (Research Console / Variant Factory)** — reframed as fast Stage 1 screen: generate configs → quick-reject backtest → push survivors to shadow.
-2. **Post-31.9 Component Ownership Refactor** (DEF-175) — dedicated sprint migrating `CatalystStorage` / `SetupQualityEngine` / `DynamicPositionSizer` / `ExperimentStore` construction out of `api/server.py` lifespan into `ArgusSystem` Phase 9.x.
-3. **30** (Short Selling) — deferred until longs profitable.
-4. **33** (Statistical Validation) — applied to shadow-proven configs, not raw grid sweeps.
-5. **33.5** (Adversarial Stress Testing).
+2. **`post-31.9-component-ownership`** (DEF-175/182/193/201/202 + 3 absorbed sibling-class items: Impromptu B Concern 2, Impromptu C LOW #1, S2c.1 OrderManager.stop()) — explicit absorption per Sprint 31.91 `def-disposition-matrix.md`.
+3. **Sprint 31.92** — DEF-212 (`_OCA_TYPE_BRACKET` constant drift fix per Tier 3 #1 Concern B; wire `IBKRConfig.bracket_oca_type` into `OrderManager.__init__`).
+4. **Sprint 31.93** — DEF-211 D1+D2+D3 sprint-gating items + reconnect-recovery (DEF-194/195/196). Inherits RSK-DEC-386-DOCSTRING bound (D1 converts STARTUP-ONLY contract from docstring to runtime gate). Likely first DEF-222 audit firing surface.
+5. **`post-31.9-reconnect-recovery`** — folded into Sprint 31.93 above per DEF-211 EXTENDED SCOPE.
+6. **30** (Short Selling) — deferred until longs profitable.
+
+**Horizon:** 33 (Statistical Validation, applied to shadow-proven configs not raw grid sweeps) → 33.5 (Adversarial Stress Testing) → 34 (FRED Macro, DEF-148) → 35–42 (Cross-Family Search, Ensemble Orchestrator V2, Synapse, Learning Loop V2 — inherits DEF-209 Position.side persistence, Continuous Discovery, Performance Workbench).
 
 **Horizon:** 34 (FRED Macro, DEF-148) → 35–42 (Cross-Family Search, Ensemble Orchestrator V2, Synapse, Learning Loop V2, Continuous Discovery, Performance Workbench).
 
@@ -113,13 +117,14 @@ ARGUS evolves into a fully autonomous evolutionary ecosystem of hundreds to thou
 - **Universe Manager:** FMPReferenceClient + fail-closed semantic filters (DEC-277). Pre-computed routing table, O(1) lookups. `trust_cache_on_startup` + background refresh (DEC-362). `UniverseFilterConfig` Pydantic model with `min_price`/`max_price`/`min_avg_volume`/`min_relative_volume`/`min_gap_percent`/`min_premarket_volume`. Arch §3.7d.
 - **Broker Abstraction:** IBKRBroker (live) + AlpacaBroker (incubator) + SimulatedBroker (backtest). Atomic bracket orders (DEC-117). `cancel_all_orders()` on ABC (DEC-364). Arch §3.3 + §3.3c.
 - **Backtesting:** VectorBT legacy + Replay Harness + PatternBacktester + **BacktestEngine** (Sprint 27: SynchronousEventBus, Databento Parquet, shared `TheoreticalFillModel`, walk-forward via `oos_engine`, `to_multi_objective_result()`). Full-universe Parquet cache: 24,321 symbols × 153 months, 44.73 GB. Arch §5.
-- **Evaluation Framework:** `MultiObjectiveResult` + per-regime `RegimeMetrics` + `ConfidenceTier`. Comparison API (Pareto, soft-dominance, regime-robust). Ensemble evaluation (leave-one-out MarginalContribution). Slippage model from `execution_records`. Arch §14.
+- **Evaluation Framework:** `MultiObjectiveResult` + per-regime `RegimeMetrics` + `ConfidenceTier`. Comparison API (Pareto, soft-dominance, regime-robust). Ensemble evaluation (leave-one-out MarginalContribution). Slippage model from `execution_records`. Arch §15.
 - **Counterfactual Engine:** Shadow tracking for rejected signals. `SignalRejectedEvent` + `RejectionStage` enum. CounterfactualTracker (MAE/MFE per bar). SQLite `data/counterfactual.db`. `GET /api/v1/counterfactual/accuracy`. Config-gated. Arch §3.11 Counterfactual block.
 - **Learning Loop V1:** OutcomeCollector → WeightAnalyzer (Spearman per-dimension) → ThresholdAnalyzer → CorrelationAnalyzer → LearningService → ConfigProposalManager (atomic YAML writes, 20%/30d drift guard). SQLite `data/learning.db`. 8 REST endpoints. Advisory-only (human approval required). Config-gated (`learning_loop.enabled`). Arch §3.11 Learning Loop block.
 - **Event Bus:** FIFO per subscriber, monotonic sequence numbers, in-process asyncio only (DEC-025). Arch §3.1.
 - **Order Manager:** Event-driven + 5s fallback poll + EOD flatten (DEC-030). `_flatten_pending` guard (DEC-363), bracket amendment on fill slippage (DEC-366), broker-confirmed reconciliation (DEC-369/370), overflow routing (DEC-375), startup zombie cleanup (DEC-376), flatten circuit breaker (Sprint 29.5), MFE/MAE tracking. Arch §3.7.
 - **Exit Management:** Pure-function `core/exit_math.py` (trail stop, escalation, time stop). `config/exit_management.yaml` with per-strategy overrides + `deep_update()` merge. SignalEvent `atr_value` field. Arch §3.11 Exit block.
-- **Experiment Pipeline:** Pattern factory + parameter fingerprinting (SHA-256 of canonical JSON of detection params + exit_overrides) + VariantSpawner + ExperimentRunner (parallel via `ProcessPoolExecutor`, universe pre-filter via `HistoricalQueryService`) + PromotionEvaluator (Pareto + hysteresis + SessionEndEvent). SQLite `data/experiments.db`. 3 REST endpoints (variants, promotions, counterfactual positions). 22 shadow variants in `config/experiments.yaml`. Config-gated. Arch §15.
+- **Experiment Pipeline:** Pattern factory + parameter fingerprinting (SHA-256 of canonical JSON of detection params + exit_overrides) + VariantSpawner + ExperimentRunner (parallel via `ProcessPoolExecutor`, universe pre-filter via `HistoricalQueryService`) + PromotionEvaluator (Pareto + hysteresis + SessionEndEvent). SQLite `data/experiments.db`. 3 REST endpoints (variants, promotions, counterfactual positions). 22 shadow variants in `config/experiments.yaml`. Config-gated. Arch §16.
+- **Alert Observability Subsystem (Sprint 31.91, DEC-388):** Multi-emitter consumer pattern with HealthMonitor as central consumer. 5-layer: producer (15 emitter sites populating `SystemAlertEvent.metadata`), consumer (HealthMonitor + per-alert-type `POLICY_TABLE` 13 entries + 4 predicate handlers + AST regression guard), storage (`data/operations.db` 5 tables + restart recovery via `rehydrate_alerts_from_db()` + migration framework universal adoption across all 8 ARGUS SQLite DBs), REST + WebSocket (4 REST endpoints + JWT-authenticated `/ws/v1/alerts`), frontend (`useAlerts` hook + `AlertBanner` cross-page mount + `AlertToastStack` + `AlertAcknowledgmentModal` + `AlertsPanel` Observatory + `AlertDetailView` modal with audit trail). Resolves DEF-014 (PRIMARY DEFECT, October 2025). Arch §14.
 - **Historical Query Service:** DuckDB read-only analytical layer over Parquet cache. 6 query methods; `validate_symbol_coverage()` is the sweep-tooling integration point. 4 REST endpoints. `scripts/query_cache.py` CLI. Config-gated. Arch §3.8.2.
 - **The Arena:** 10th Command Center page. REST `/api/v1/arena/positions` + `/candles/{symbol}`. WS `/ws/v1/arena` with 6 message types including `arena_tick_price` (bypasses 1s throttle). Per-connection `trail_stop_cache`. Arch §13.5.
 
@@ -225,7 +230,7 @@ Per-trade risk: 0.5–1% of strategy allocation. Daily loss limit: 3–5%. Weekl
 - DEC-025 (Event Bus FIFO) · DEC-027 (Risk Manager modifications — share/target only, never stops/entry) · DEC-028 (strategy daily-stateful, session-stateless)
 - DEC-029 (Event Bus sole streaming mechanism) · DEC-032 (Pydantic config, not BaseSettings) · DEC-047 (walk-forward validation mandatory, WFE > 0.3)
 - DEC-117 (atomic bracket orders) · DEC-248 (Databento EQUS.MINI primary) · DEC-345 (separate-DB pattern for telemetry stores)
-- DEC-383 (22 shadow variant fleet) · DEC-384 (FIX-01: standalone overlay registry — `_STANDALONE_SYSTEM_OVERLAYS` extensible registry in `argus/core/config.py`) · **DEC-386 (Sprint 31.91 OCA-group threading + broker-only safety — 4-layer architecture closing ~98% of DEF-204's mechanism, Tier 3 verdict 2026-04-27, most recent)**
+- DEC-383 (22 shadow variant fleet) · DEC-384 (FIX-01: standalone overlay registry — `_STANDALONE_SYSTEM_OVERLAYS` extensible registry in `argus/core/config.py`) · **DEC-385 (Sprint 31.91 Side-Aware Reconciliation Contract — 6-layer; sprint-close materialization 2026-04-28)** · **DEC-386 (Sprint 31.91 OCA-Group Threading + Broker-Only Safety — 4-layer architecture closing ~98% of DEF-204's mechanism, Tier 3 verdict 2026-04-27)** · **DEC-388 (Sprint 31.91 Alert Observability Architecture — multi-emitter consumer pattern with HealthMonitor as central consumer; 5-layer; sprint-close materialization 2026-04-28; resolves DEF-014, most recent)**
 
 **Superseded (do not use):** DEC-031 → DEC-083; DEC-089 → DEC-248; DEC-097 → DEC-143/161; DEC-165 → DEC-237; DEC-234 → DEC-248.
 
@@ -252,7 +257,7 @@ Three-tier architecture: Claude.ai (strategic + planning) → Autonomous Sprint 
 | `docs/architecture.md` | Technical blueprint — how |
 | `docs/roadmap.md` | Strategic vision + sprint queue (DEC-262) |
 | `docs/sprint-campaign.md` | Operational sprint choreography |
-| `docs/decision-log.md` | All DEC entries with full rationale. Latest: DEC-386 (Sprint 31.91 OCA-group threading + broker-only safety, Tier 3 verdict 2026-04-27). |
+| `docs/decision-log.md` | All DEC entries with full rationale. Latest: DEC-388 (Sprint 31.91 Alert Observability Architecture; sprint-close materialization 2026-04-28). Sibling Sprint 31.91: DEC-385 (Side-Aware Reconciliation Contract — 6 layers; S2d) + DEC-386 (OCA-Group Threading + Broker-Only Safety — 4 layers; Tier 3 #1 2026-04-27). |
 | `docs/dec-index.md` | Quick-reference DEC index with status |
 | `docs/sprint-history.md` | Complete sprint history + per-sprint follow-on detail |
 | `docs/pre-live-transition-checklist.md` | Config + test values to restore before live trading |

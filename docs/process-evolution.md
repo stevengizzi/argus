@@ -144,4 +144,58 @@ As of March 4, 2026, ARGUS adopts a structured workflow system:
 - **Documentation tiers:** Tier A (operational context in Claude.ai Project Knowledge + `.claude/`) and Tier B (human-readable history in `docs/`)
 - **Sprint numbering:** Continues from current (next sprint is 22)
 
+---
+
+## Phase G — Mid-Sprint Doc-Sync + Per-Session Register Discipline (Sprint 31.91, April 22–28, 2026)
+
+Sprint 31.91 surfaced four process-improvement observations (F.1–F.4) that should inform the next campaign's RETRO-FOLD into the workflow metarepo. The observations were captured live in the sprint folder's `def-disposition-matrix.md` Section F and are reproduced here for cross-sprint persistence.
+
+### F.1 — DEC-328 full-suite-at-Tier-1 process gap
+
+**Surfaced by:** Post-S5e catalog freshness hotfix (`4c737d5`).
+
+**Observation:** S5e Tier 2 reviewer + S5e closeout both reported scoped tests (`test_alerts.py` 12→15 + Vitest 902→913) without running full pytest. The catalog freshness gate (`tests/docs/test_architecture_api_catalog_freshness.py`, DEF-168 regression guard) only fires on full suite, so the missing audit endpoint in `docs/architecture.md` slipped through to CI on the S5e final commit `7efd0a0`. CI surfaced the failure on the next push; hotfix `4c737d5` regenerated the catalog row in a single mechanical commit. DEC-328 mandates "full suite required at sprint entry, each close-out, and final review" — scoped-only at Tier 1 boundary (S5e closeout) was the gap.
+
+**Resolution path (next sprint planning):**
+
+- Tighten DEC-328 with explicit "full suite required at Tier 1 boundary" language; OR
+- Add a CI-side guard that fires on PR boundaries regardless of session-local test scope; OR
+- Amend `templates/work-journal-closeout.md` to require explicit declaration of "full suite verified" vs "scoped only" — with mandatory full-suite-required at sprint-final-session boundary.
+
+**Carry-forward target:** Next sprint planning conversation (Sprint 31.92 likely).
+
+### F.2 — RULE-038 drift surface area (already addressed)
+
+**Surfaced by:** Sprint 31.91's RULE-038 drift counts ranged from 2 (S5b: 2 stale line numbers) to 7 (S5d: 7 prompt-vs-current-code drifts).
+
+**Observation:** Specific drift instances included (S5b) line-number references `:453` actual `~:570` and `:531` actual `~:416-420`; (S2b.2) spec line range `:1670-1750` for `order_manager.py` didn't actually contain claimed SELL-detection branching; (S5d) frontend path `frontend/src/` vs actual `argus/ui/src/`, `Layout.tsx` vs actual `AppShell.tsx`, hook contract drifts, 404 handling drift, 409-vs-200 backend behavior drift, test command drift, DEF numbering collisions; (S5e) similar layout-file drifts plus `/audit` endpoint pre-existence (triggered halt-and-fix), DEF numbering collisions (resolved via reviewer grep).
+
+**Resolution:** Already addressed in workflow metarepo at `templates/implementation-prompt.md` v1.5.0 (structural-anchor amendment 2026-04-28) — implementation prompts now reference structural anchors (function names, class names, config keys) rather than line numbers, which drift. Ongoing reinforcement in next sprint planning recommended.
+
+### F.3 — Per-session register discipline (pattern working)
+
+**Observation:** The per-session register discipline formalized at S2a (workflow v1.2.0 — `protocols/in-flight-triage.md` § "Per-Session Register Discipline") held firm through 18 register refreshes covering 25 implementation sessions + 2 in-sprint hotfixes. Zero conversation drift across the entire sprint despite accumulated context from multiple Tier 3 reviews + amended verdicts + 9 mid-sprint DEF assignments. The `work-journal-register.md` is refreshed after every session close-out AND every Tier 3 verdict; even sessions that don't materially change the register receive a refresh with updated test counts, commit SHAs, and timestamps. Git history of the register file is the session-grain audit trail.
+
+**Carry-forward:** N/A — pattern is working; document as positive case study for future sprint-planning reference. Recommend reuse for any sprint with ≥10 sessions, multiple Tier 3 reviews, or significant cross-session context dependencies.
+
+### F.4 — Bookkeeping discipline (8 consecutive sessions clean)
+
+**Observation:** S5a.2 + S5b + Impromptu A + Impromptu B + S5c + Impromptu C + S5d + S5e closeouts cited `tests_added` matching actual delta. S5a.1's +21 vs +18 cosmetic discrepancy was a one-off; RULE-038 sub-bullet feedback was internalized cleanly across the trailing 8 sessions.
+
+**Carry-forward:** N/A — pattern is working; document as positive reinforcement. The pattern indicates that close-out skill discipline can be sustained across long sprints when reviewer + register both serve as bookkeeping anchors.
+
+---
+
+## Phase H — DEC-388 Alert Observability Pattern (Sprint 31.91)
+
+Sprint 31.91 introduced the multi-emitter consumer pattern as the canonical reference for any future ARGUS subsystem requiring end-to-end observability. The pattern is documented as `docs/architecture.md` §14 Alert Observability Subsystem and is summarized as DEC-388 in the decision log. Key architectural choices that future similar subsystems should consider reusing:
+
+1. **Per-emitter-type policy table** — decouples producers from consumers via a single registry of `PolicyEntry` rows mapping alert-type strings to predicate functions. Producer code only needs to publish `SystemAlertEvent(alert_type=<key>)`; consumer code dispatches via the table. AST-based regression guard at `tests/api/test_policy_table_exhaustiveness.py` enforces that every producer-side string literal appears as a table key.
+
+2. **Migration framework as universal SQLite owner** — Sprint 31.91 introduced the framework at S5a.2 for `data/operations.db`, then extended it at Impromptu C to all 8 ARGUS SQLite DBs (sprint-spec D16 fulfilled). Each per-DB module follows the `argus/data/migrations/operations.py` template; each owning service's `initialize()` calls `apply_migrations()`; `schema_version` table tracks versions. Future DB schema evolution belongs in this framework, not in ad-hoc inline ALTERs.
+
+3. **Pattern B sprint-close DEC materialization** — when a DEC's cross-references would otherwise document architecture-with-known-defects state (because the resolving sessions land later in-sprint), defer materialization to sprint-close. Sprint 31.91 deferred DEC-388 from Tier 3 #2 to D14 sprint-close because it cross-referenced 8 DEFs being resolved by Impromptus A+B+C and S5c. Pattern B is documented in `protocols/mid-sprint-doc-sync.md` v1.0.0.
+
+4. **Cross-page mount at AppShell layer** — frontend observability surfaces (banners, toast stacks) belong at the layout layer (`AppShell.tsx`) rather than per-page. Sprint 31.91's S5e relocated 5 in-Dashboard banner mounts + 5 in-Dashboard toast mounts to `AppShell.tsx`; regression invariant 17 structurally pinned by `AppShell.alerts.test.tsx:163` (Dashboard → TradeLog → Performance navigation, banner persists across all transitions). This pattern protects against the "operator misses critical alert because they navigated to a different page" failure mode.
+
 The retrofit preserves the core two-Claude workflow that drove the project's velocity while adding structure to prevent the documentation sync overhead that was becoming the primary bottleneck.

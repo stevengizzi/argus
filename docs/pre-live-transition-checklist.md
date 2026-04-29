@@ -239,17 +239,19 @@ standard sizing on day 2.
 Disconnect-reconnect resilience testing is **deferred to Sprint 31.93**
 and is NOT a Sprint 31.91 live-enable gate criterion.
 
-### Sprint 31.91 must be sealed (all 18 sessions complete)
+### Sprint 31.91 must be sealed (all 25 implementation sessions + 2 Tier 3 reviews + 2 in-sprint hotfixes complete) — ✅ MET 2026-04-28
 
-- [ ] Sessions 0 + 1a + 1b + 1c (OCA architecture; DEC-386) — **LANDED 2026-04-27**, Tier 3 review #1 verdict PROCEED.
-- [ ] Sessions 2a / 2b.1 / 2b.2 / 2c.1 / 2c.2 / 2d (side-aware reconciliation contract; DEC-385 reserved) — **NOT YET LANDED.**
-- [ ] Session 3 (DEF-158 retry side-check) — **NOT YET LANDED.**
-- [ ] Session 4 (mass-balance + IMSR replay validation; pre-live-gate criteria 3a + 3b decomposition) — **NOT YET LANDED.**
-- [ ] Sessions 5a.1 + 5a.2 + 5b + 5c + 5d + 5e (alert observability; DEC-388 reserved; resolves DEF-014) — **NOT YET LANDED.**
+- [x] Sessions 0 + 1a + 1b + 1c (OCA architecture; DEC-386) — **LANDED 2026-04-27**, Tier 3 review #1 verdict PROCEED.
+- [x] Sessions 2a / 2b.1 / 2b.2 / 2c.1 / 2c.2 / 2d (side-aware reconciliation contract; DEC-385 materialized at sprint-close per Pattern B) — **LANDED 2026-04-28.**
+- [x] Session 3 (DEF-158 retry side-check; 3-branch side-aware gate; new `phantom_short_retry_blocked` CRITICAL alert) — **LANDED 2026-04-28** (anchor `a11c001`).
+- [x] Session 4 (mass-balance + IMSR replay validation; `scripts/validate_session_oca_mass_balance.py`; pre-live-gate criteria 3a + 3b decomposition) — **LANDED 2026-04-28.**
+- [x] Sessions 5a.1 + 5a.2 + 5b + Impromptus A+B+C + 5c + 5d + 5e (alert observability; DEC-388 materialized at sprint-close per Pattern B; resolves DEF-014 PRIMARY DEFECT) — **LANDED 2026-04-28** (anchor `7efd0a0` for S5e final closure; post-S5e catalog hotfix `4c737d5`).
+- [x] DEF-216 in-sprint hotfix (ET-midnight rollover flake) — **LANDED 2026-04-28** (anchor `c36a30c`).
+- [x] Sprint 31.91 D14 doc-sync — **LANDED 2026-04-28** (this doc-sync).
 
-### Session 5a.1 (HealthMonitor consumer) is a HARD live-trading prerequisite
+### Session 5a.1 (HealthMonitor consumer) was a HARD live-trading prerequisite — ✅ MET
 
-- [ ] Session 5a.1 lands. Until then, the new `cancel_propagation_timeout` and `phantom_short`/`phantom_short_retry_blocked` `SystemAlertEvent`s emitted by Sessions 1c / 2b / 3 are visible **only in logs** — there is no Command Center surface, no banner, no toast. A leaked-long position from a `cancel_propagation_timeout` (Session 1c's failure mode trade-off) would be invisible to anyone not actively tailing logs. Per Tier 3 review #1 Focus Area 1 caveat (2026-04-27), this is a strict gating condition, not a soft preference.
+- [x] Session 5a.1 LANDED. The new `cancel_propagation_timeout`, `phantom_short`, `phantom_short_retry_blocked`, `eod_residual_shorts`, `eod_flatten_failed`, `databento_dead_feed`, `ibkr_disconnect`, `ibkr_auth_failure` `SystemAlertEvent`s are now consumed end-to-end by HealthMonitor + persisted to `data/operations.db` + surfaced in Command Center via cross-page `AlertBanner` (S5e `AppShell.tsx`) + toast stack (S5d) + Observatory `AlertsPanel` (S5e). Operator-acknowledgment + audit-trail surface is live. Per Tier 3 review #1 Focus Area 1 caveat (2026-04-27), this gate is satisfied.
 
 ### Mass-balance + zero-alert gate (Session 4 deliverable)
 
@@ -287,7 +289,7 @@ and is NOT a Sprint 31.91 live-enable gate criterion.
 
 ### Operator daily-flatten mitigation removal
 
-- [ ] Once all gates above are satisfied, **operator daily flatten via `scripts/ibkr_close_all_positions.py` becomes optional rather than required.** Until that point — including throughout the entire Sprint 31.91 sprint window and the gate-satisfaction window — continue running it daily at session close.
+- [ ] Once all gates above are satisfied, **operator daily flatten via `scripts/ibkr_close_all_positions.py` becomes optional rather than required.** Until that point — including throughout the post-Sprint-31.91 paper-session validation window (criterion #5: 5 paper sessions clean post-seal) — continue running it daily at session close. **Sprint 31.91 sealed 2026-04-28; cessation criterion #4 (sprint sealed) MET; criterion #5 (5 paper sessions clean post-seal) PENDING.**
 
 ---
 

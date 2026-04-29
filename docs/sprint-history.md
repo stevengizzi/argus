@@ -2946,13 +2946,82 @@ Both queued for next campaign's RETRO-FOLD.
 
 ---
 
+## Sprint 31.91 — Reconciliation Drift / Phantom-Short Fix + Alert Observability Completion (April 22–28, 2026)
+
+**Goal:** Resolve DEF-204 reconciliation drift (phantom-short cascades observed Apr 22–24, 2026) by threading OCA-group identifiers through bracket-order placement and adding broker-only safety; close DEF-014 alert observability gap (PRIMARY DEFECT, October 2025) by completing the full producer→consumer→storage→REST→WS→frontend pipeline. Secondary goal: harden the alert observability pipeline against the Tier 3 #2 concerns surfaced during architectural review.
+
+**Outcome:** Both primary defects RESOLVED. **DEF-204 mechanism architecturally CLOSED** by 4-layer DEC-386 (OCA-Group Threading + Broker-Only Safety, Tier 3 #1 verdict 2026-04-27) plus 6-layer DEC-385 (Side-Aware Reconciliation Contract, S2d) plus S3's flatten-retry side-blindness fix (DEF-158 follow-on RESOLVED) plus S4's falsifiable validation infrastructure (`scripts/validate_session_oca_mass_balance.py`). **DEF-014 FULLY RESOLVED** at S5e via the alert observability pipeline spanning S5a.1 (storage + restart recovery via SQLite migration framework), S5a.2 (auto-resolution policy table for 11+ alert types; expanded to 13 entries post-Impromptu-A), S5b (IBKR producer wiring at `_reconnect()` end-of-retries + `_on_error()` CRITICAL non-connection else-branch), Impromptus A+B+C (backend hardening + producer wiring + migration framework adoption across all 8 ARGUS SQLite DBs), S5c (frontend Layer 1: `useAlerts` hook + Dashboard banner), S5d (frontend Layer 2: toast + ack-error modal), and S5e (frontend Layer 3: Observatory `AlertsPanel` + cross-page mount in `AppShell.tsx` + RULE-007 scope-expanded `/audit` endpoint).
+
+**Architectural decisions:** DEC-385 (Side-Aware Reconciliation Contract — 6 layers covering main.py call-site, OrderManager Pass 1 + Pass 2 + EOD verify polling, side-aware classification, audit-log enrichment); DEC-386 (OCA-Group Threading + Broker-Only Safety — 4 layers closing ~98% of DEF-204's mechanism, Tier 3 #1 verdict); DEC-388 (Alert Observability Architecture — multi-emitter consumer pattern with HealthMonitor as central consumer, per-alert-type auto-resolution policy table, SQLite-backed restart recovery, frontend banner + toast + Observatory panel, scope-expanded `/audit` endpoint). DEC-387 freed.
+
+### Session-by-session highlights
+
+| Phase / Session | Anchor commit | Highlights |
+|---|---|---|
+| **S0** — `Broker.cancel_all_orders` ABC extension | `9b7246c` | Symbol filter + `await_propagation` keyword + `CancelPropagationTimeout` exception. DEC-364 no-args contract preserved verbatim. |
+| **S1a** — Bracket OCA grouping | `b25b419` | `ocaGroup = f"oca_{parent_ulid}"` + `ocaType=1` on children only; `ManagedPosition.oca_group_id`; defensive `_is_oca_already_filled_error` helper. Phase A spike `PATH_1_SAFE` 2026-04-25 verified IBKR's atomic-cancellation enforcement. |
+| **S1b** — Standalone-SELL OCA threading | `6009397` | 4 paths (`_trail_flatten`, `_escalation_update_stop`, `_submit_stop_order`, `_flatten_position`) thread `ManagedPosition.oca_group_id`; `redundant_exit_observed` SAFE marker; grep regression guard with `# OCA-EXEMPT:` exemption mechanism. |
+| **S1c** — Broker-only safety + STARTUP-ONLY contract | `49beae2` | Cancel-then-SELL/wire on 3 broker-only paths; `reconstruct_from_broker` STARTUP-ONLY contract docstring (RSK-DEC-386-DOCSTRING bounded by Sprint 31.93 DEF-211 D1). |
+| **Tier 3 #1 architectural review** | 2026-04-27 | PROCEED. DEC-386 materialized. Verdict at `docs/sprints/sprint-31.91-reconciliation-drift/tier-3-review-1-verdict.md`. |
+| **S2a** — Side-aware reconciliation L1 | various | `argus/main.py` call-site builds typed dict from `broker.get_positions()` including side. Replaces DEF-139 silent-default anti-pattern. Per-session register discipline formalized in workflow metarepo (v1.2.0). |
+| **S2b.1** — Side-aware reconciliation L2 | various | `SystemAlertEvent.metadata: dict[str, Any] | None` schema field. Closes DEF-213 schema half. |
+| **S2b.2** — Side-aware reconciliation L3 | various | `OrderManager` Pass 1 retry path side-aware 3-branch SELL detection. |
+| **S2c.1** — Side-aware reconciliation L4 | various | Phantom-short gate emits side-aware classifications + persists to `phantom_short_gated_symbols` SQLite table; new `phantom_short_retry_blocked` CRITICAL alert taxonomy. |
+| **S2c.2** — Side-aware reconciliation L5 | various | EOD verify polling treats SHORT-side as phantom-short candidates rather than long-position reconciliation targets. |
+| **DEF-216 hotfix** | `c36a30c` | ET-midnight rollover flake in `tests/regime/test_regime_history.py::test_get_regime_summary` — anchor snapshots to noon ET. Single-commit, no Tier 2 review. |
+| **S2d** — Side-aware reconciliation L6 | various | `phantom_short_override_audit` SQLite table records every operator override for forensic-grade replay. **DEC-385 MATERIALIZED at S2d** (sprint-close write to `decision-log.md` per Pattern B). |
+| **S3** — DEF-158 retry side-check | `a11c001` | 3-branch side-aware gate replaces unconditional SELL retry; new `phantom_short_retry_blocked` CRITICAL alert. **DEF-158 follow-on RESOLVED.** |
+| **S4** — Falsifiable validation infrastructure | various | `scripts/validate_session_oca_mass_balance.py` provides operator-runnable mass-balance assertion + symbol-level audit + integration markers. Decomposed live-enable gate (3 phases per Sprint Spec §D7 HIGH #4). |
+| **S5a.1** — Alert observability backend Layer 1 | various | `SystemAlertEvent` HealthMonitor consumer subscription; `AlertsConfig` Pydantic model + YAML stanza; 3 REST endpoints; `alert_acknowledgment_audit` SQLite table; 5 EOD emission paths distinct (DEF-214 RESOLVED + DEF-213 atomic-migration COMPLETE). |
+| **S5a.2** — Alert observability backend Layer 2 | various | Migration framework foundational adoption (`data/operations.db` + `schema_version` table); `alert_state` table + `rehydrate_alerts_from_db()`; auto-resolution policy table (8 alert types initially) + `NEVER_AUTO_RESOLVE` sentinel; WebSocket fan-out (`/ws/v1/alerts`, 4 message types). |
+| **S5b** — IBKR emitter producer wiring | `b324707` | 2 emitters wired at `_reconnect()` end-of-retries (`ibkr_disconnect`) + `_on_error()` CRITICAL non-connection else-branch (`ibkr_auth_failure`); 10 new E2E pipeline tests (`tests/integration/test_alert_pipeline_e2e.py`); behavioral Alpaca anti-regression via `tokenize`-based filter. **DEF-014 producer side complete.** |
+| **Tier 3 #2 architectural review (AMENDED)** | 2026-04-28 | PROCEED-with-conditions, AMENDED. DEC-388 deferred to sprint-close per Pattern B. 9 new DEFs filed (DEF-217 through DEF-225); 7 routed RESOLVED-IN-SPRINT (Impromptus A+B+C + S5c); 1 deferred (DEF-222 — bounded by first producer-wiring sprint). Workflow metarepo bumped to v1.3.0. Verdict at `docs/sprints/sprint-31.91-reconciliation-drift/tier-3-review-2-verdict.md`. |
+| **Pre-impromptu doc-sync** | `948b978` | Mechanical handoff manifest for sprint-close per `protocols/mid-sprint-doc-sync.md` v1.0.0 — captures 13 DEF transitions claimed for D14 + 2 DECs deferred per Pattern B (DEC-385 + DEC-388). |
+| **Impromptu A** — Backend hardening | `e78a994` | DEF-217 (HIGH severity Databento alert_type producer/consumer string mismatch — one-line fix, production auto-resolution path now active); DEF-218 (`eod_residual_shorts` + `eod_flatten_failed` policy table additions; 8 → 10 entries); DEF-219 (AST regression guard for policy-table exhaustiveness); DEF-224 (`_AUDIT_DDL` deduplication — migration framework canonical owner); DEF-225 (`ibkr_auth_failure` dedicated E2E test). |
+| **Impromptu B** — `DatabentoHeartbeatEvent` producer | `8efa72e` | DEF-221 (`DatabentoHeartbeatEvent` producer wiring with stale-suppression contract via existing `_stale_published`); DEF-217 dual-layer regression coverage via `TestE2EDatabentoDeadFeedAutoResolveWithRealProducer` (FIRST E2E test driving production Databento emitter chain). Configurable via `DatabentoConfig.heartbeat_publish_interval_seconds` (`gt=0.0, le=300.0`). Policy table extended to 13 entries. |
+| **S5c** — Frontend Layer 1 (banner) | `3197472` | DEF-220 (Option A REMOVAL of `acknowledgment_required_severities` field — per-alert-type `PolicyEntry.operator_ack_required` is canonical home); `useAlerts` TanStack-Query-plus-WebSocket-hybrid hook with reconnect-gated refetch via `wasDisconnectedRef`; `AlertBanner` mount on Dashboard (5 mount sites covering pre-market/desktop/phone/dense/tablet branches); 20 new Vitest tests. First user-visible alert observability surface. |
+| **Impromptu C** — Migration framework universal adoption | `3fefda8` | DEF-223 (sprint-spec D16 fulfilled). Migration framework now spans all 8 ARGUS SQLite DBs (operations + catalyst + evaluation + regime_history + learning + vix_landscape + counterfactual + experiments). 7 new migration modules + 7 owning-service `initialize()` modifications + 28 new tests (4 invariants × 7 DBs). Each DB's v1 migration codifies existing schema as-of Impromptu C, including columns from prior in-place ALTERs. |
+| **S5d** — Frontend Layer 2 (toast + ack modal) | `66d0b04` | `AlertToast` + `AlertToastStack` (queue cap at 5, oldest-dropped); `AlertAcknowledgmentModal` (reason ≥10 chars validated, role=dialog accessibility, duplicate-ack via `acknowledged_by` mismatch detection); 16 new Vitest tests; cleanest closeout of sprint (no concerns recorded). DEF-226 (full focus-trap) + DEF-227 (auth context wiring, BLOCKED) filed as opportunistic. |
+| **S5e** — Frontend Layer 3 (Observatory + cross-page) | `7efd0a0` | `AlertsPanel` Observatory browsing surface (411 LOC) + `useAlertHistory` + `useAlertAuditTrail` sub-hooks + Observatory toggle overlay; `AppShell.tsx` cross-page mount (5 in-Dashboard banner mounts + 5 in-Dashboard toast mounts removed); regression invariant 17 structurally pinned by `AppShell.alerts.test.tsx:163`. RULE-007 scope expansion: backend `/api/v1/alerts/{alert_id}/audit` endpoint added bundled (per spec halt-and-fix directive). 11 new Vitest tests + 3 new pytest tests. **DEF-014 FULLY RESOLVED.** DEF-228/229/230 filed as opportunistic. |
+| **Catalog freshness hotfix** | `4c737d5` | Post-S5e `docs/architecture.md` API catalog regenerated for `GET /api/v1/alerts/{alert_id}/audit`. Catalog freshness gate (`tests/docs/test_architecture_api_catalog_freshness.py`, DEF-168 regression guard) caught the missing entry on full-suite CI. Single commit; no Tier 2 review (mechanical script-driven regeneration). Surfaced sprint-wide observation about DEC-328 full-suite-at-Tier-1 process discipline (folded into `process-evolution.md` F.1). |
+
+### Carry-forward routing (canonical)
+
+The Sprint 31.91 carry-forward routing reference is `docs/sprints/sprint-31.91-reconciliation-drift/def-disposition-matrix.md`. It documents:
+
+- 13 DEFs RESOLVED-IN-SPRINT (DEF-014, DEF-158 follow-on, DEF-213, DEF-214, DEF-216, DEF-217, DEF-218, DEF-219, DEF-220, DEF-221, DEF-223, DEF-224, DEF-225)
+- 5 new DEFs filed in-sprint (DEF-226 focus-trap, DEF-227 auth context BLOCKED, DEF-228 `/history` `until` parameter, DEF-229 pagination virtualization, DEF-230 audit-loading state)
+- 6 pre-existing DEFs touched but unchanged (DEF-208 live-enable, DEF-209 Sprint 35+, DEF-211 Sprint 31.93 sprint-gating D1+D2+D3, DEF-212 Sprint 31.92, DEF-215 deferred-with-trigger, DEF-222 deferred-bounded-by-producer)
+- ~25 reviewer/code-level carry-forward items with confidence-graded routing
+- 4 process-improvement observations (F.1 DEC-328 full-suite gap; F.2 RULE-038 drift surface area already addressed; F.3 per-session register discipline 18 refreshes clean; F.4 bookkeeping discipline 8 consecutive sessions clean)
+
+### Sprint 31.91 Statistics
+
+- **Implementation sessions:** 25 (S0, S1a, S1b, S1c, S2a, S2b.1, S2b.2, S2c.1, S2c.2, S2d, S3, S4, S5a.1, S5a.2, S5b, Impromptu A, Impromptu B, S5c, Impromptu C, S5d, S5e — plus 2 in-sprint hotfixes `c36a30c` + `4c737d5`)
+- **Tier 3 reviews:** 2 (#1 PROCEED 2026-04-27 → DEC-386; #2 PROCEED-with-conditions AMENDED 2026-04-28 → DEC-388 deferred to sprint-close per Pattern B)
+- **In-sprint hotfixes:** 2 (`c36a30c` DEF-216; `4c737d5` post-S5e catalog freshness)
+- **Calendar days (active):** 6 (Apr 22 – Apr 28, 2026)
+- **Anchor commit at sprint-close:** `4c737d5` (CI green)
+- **Files changed:** ~120+ (source + tests + docs + config)
+- **Process discipline metrics:** 18 work-journal-register refreshes absorbed without conversation drift; 8 consecutive sessions with closeout `tests_added` claims matching actual delta; 6 `main.py` scoped exceptions documented across the sprint (all backend-layer; finalized at S5a.2); RULE-038 drift count ranged from 2 (S5b) to 7 (S5d) per session, all reviewer-verified, none materially scope-changing — already addressed by `templates/implementation-prompt.md` v1.5.0 structural-anchor amendment 2026-04-28.
+
+### Sprint 31.91 Headlines
+
+- **DEF-014 (PRIMARY DEFECT, October 2025) FULLY RESOLVED.** End-to-end alert observability pipeline from emit through operator acknowledgment with audit trail.
+- **DEF-204 mechanism architecturally CLOSED.** ~98% via DEC-386 OCA architecture; residual ~2% via DEC-385 side-aware reconciliation + S3 retry side-check + S4 falsifiable validation infrastructure.
+- **Migration framework universal adoption.** All 8 ARGUS SQLite DBs are now framework-managed (sprint-spec D16 fulfilled at Impromptu C).
+- **Operator daily-flatten cessation criteria #1+#2+#3 SATISFIED post-S4; #4 (sprint sealed) MET 2026-04-28; #5 (5 paper sessions clean post-seal) PENDING.**
+- **F.1 retrospective candidate** queued for next campaign's RETRO-FOLD (DEC-328 full-suite-at-Tier-1 process discipline gap surfaced via post-S5e catalog hotfix).
+
+---
+
 ## Sprint Statistics
 
-- **Total sprints:** 35 full + 45 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5, 31.75) + 10 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3, DEF-151 Fix Apr 4, Sweep Impromptu Apr 3–5, Lifespan Hang Apr 20, Eval DB VACUUM Apr 20, DEF-158 Duplicate SELL Apr 20, DEF-159 Reconstruction Trade Fix Apr 20, Parquet Cache Consolidation Apr 20) + 1 campaign-close (Sprint 31.9: 11 named sessions + 3 paper-session debriefs)
-- **Total sessions:** ~569+ Claude Code sessions
-- **Total tests:** 5,080 pytest + 866 Vitest = 5,946 total
-- **Total decisions:** 384 (DEC-001 through DEC-384; no new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, 31.5, DEF-151 fix, Sweep Impromptu, 31.8 impromptus, 31.85 Parquet consolidation, or Sprint 31.9 campaign-close — campaign followed established patterns)
-- **Calendar days (active dev):** ~62 (Feb 14 – Apr 5, 2026 + Apr 14, Apr 20, 2026 + Apr 22 – Apr 24, 2026)
+- **Total sprints:** 36 full + 46 sub-sprints (12.5, 17.5, 18.5, 18.75, 21.5, 21.5.1, 21.6, 21.7, 22.1–22.3, 23.05, 23.1, 23.2, 23.3, 23.5, 23.6, 23.7, 23.8, 23.9, 24.1, 24.5, 25.5, 25.6, 25.7, 25.8, 25.9, 27.5, 27.6, 27.65, 27.7, 27.75, 27.8, 27.9, 27.95, 28.5, 28.75, 29, 29.5, 32.5, 32.75, 32.8, 32.9, 32.95, 31.5, 31.75, 31.91) + 10 impromptus (Good Friday Apr 3, 31A.5 Apr 3, 31A.75 Apr 3, DEF-151 Fix Apr 4, Sweep Impromptu Apr 3–5, Lifespan Hang Apr 20, Eval DB VACUUM Apr 20, DEF-158 Duplicate SELL Apr 20, DEF-159 Reconstruction Trade Fix Apr 20, Parquet Cache Consolidation Apr 20) + 1 campaign-close (Sprint 31.9: 11 named sessions + 3 paper-session debriefs) + 5 in-sprint impromptus during Sprint 31.91 (DEF-216 hotfix, Impromptu A, Impromptu B, Impromptu C, post-S5e catalog hotfix)
+- **Total sessions:** ~594+ Claude Code sessions (Sprint 31.91 added 25 implementation sessions + 2 Tier 3 reviews + 2 in-sprint hotfixes)
+- **Total tests:** 5,269 pytest + 913 Vitest = 6,182 total
+- **Total decisions:** 387 (DEC-001 through DEC-388; DEC-387 freed during Sprint 31.91 planning. Sprint 31.91 added DEC-385 + DEC-386 + DEC-388. No new DECs in Sprints 29.5, 32, 32.5, 32.75, 32.8, 32.9, 32.95, Apr 3 hotfix, 31A, 31A.5, 31A.75, 31.5, DEF-151 fix, Sweep Impromptu, 31.8 impromptus, 31.85 Parquet consolidation, or Sprint 31.9 campaign-close — those campaigns followed established patterns)
+- **Calendar days (active dev):** ~68 (Feb 14 – Apr 5, 2026 + Apr 14, Apr 20, 2026 + Apr 22 – Apr 28, 2026)
 - **Largest sprint:** 22 (9 implementation + 5 fix + 9 reviews, largest scope)
 - **Cleanest sprint:** 23 (11 sessions, 0 regressions, 0 scope gaps requiring follow-up)
 - **Most test-dense:** Sprint 22 (286 new tests), Sprint 24 (209 new tests), Sprint 23.2 (188 new tests), Sprint 28 (179 new tests), Sprint 27.6 (171 new tests), Sprint 23 (141 new tests across 23+23.05), Sprint 28.5 (110 new tests)

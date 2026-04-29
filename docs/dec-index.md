@@ -1,8 +1,8 @@
 # ARGUS — Decision Index
 
-> 385 decisions (DEC-001 through DEC-386, with DEC-385 reserved for Sprint 31.91 Sessions 2a-d)
-> Generated: April 27, 2026 (Sprint 31.91 Tier 3 review #1 — DEC-386 OCA-group threading + broker-only safety) | Source: `docs/decision-log.md`
-> Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry | ⊘ Reserved
+> 387 decisions (DEC-001 through DEC-388; DEC-387 freed during Sprint 31.91 planning)
+> Generated: April 28, 2026 (Sprint 31.91 D14 doc-sync — DEC-385 Side-Aware Reconciliation Contract + DEC-388 Alert Observability Architecture materialized at sprint-close) | Source: `docs/decision-log.md`
+> Legend: ● Active | ○ Superseded | △ Amended | ✗ Duplicate entry | ⊘ Reserved | ⊗ Freed
 
 
 ## Phase A — Core Engine (Sprints 1–5)
@@ -510,11 +510,11 @@ No new DECs across 11 named sessions + 3 paper-session debriefs. All design deci
 
 ## Sprint 31.91 — Reconciliation Drift / Phantom-Short Fix + Alert Observability (April 27, 2026 onward)
 
-DEC-385 / 387 / 388 reserved during Sprint 31.91 planning. DEC-386 written following Tier 3 architectural review #1 (CLEAR, 2026-04-27) covering Sessions 0+1a+1b+1c.
+DEC-385 / 386 / 388 written for Sprint 31.91. DEC-387 freed at Tier 3 #1 close. DEC-386 written following Tier 3 architectural review #1 (PROCEED, 2026-04-27); DEC-385 + DEC-388 materialized at sprint-close (D14, 2026-04-28) per Pattern B per `protocols/mid-sprint-doc-sync.md` v1.0.0.
 
-- ⊘ **DEC-385**: RESERVED — Side-aware reconciliation contract (Sessions 2a / 2b.1 / 2b.2 / 2c.1 / 2c.2 / 2d). Will be written at Session 2d close.
+- ● **DEC-385**: Side-Aware Reconciliation Contract — 6-layer architecture: (L1, S2a) `argus/main.py` call-site builds typed dict from `broker.get_positions()` including side; replaces DEF-139 silent-default anti-pattern. (L2, S2b.1) `SystemAlertEvent.metadata: dict[str, Any] | None` schema field — closes DEF-213 jointly with S5a.1's atomic emitter migration. (L3, S2b.2) `OrderManager` Pass 1 retry path side-aware 3-branch SELL detection. (L4, S2c.1) Phantom-short gate emits side-aware classifications + persists to `phantom_short_gated_symbols` SQLite table; new `phantom_short_retry_blocked` CRITICAL alert. (L5, S2c.2) EOD verify polling treats SHORT-side as phantom-short candidates. (L6, S2d) `phantom_short_override_audit` SQLite table records every operator override for forensic-grade replay. Sprint-close materialization 2026-04-28 per Pattern B. Cross-refs: DEF-204 (closed by mechanism alongside DEC-386), DEF-158 (extended scope flatten-retry side-blindness — RESOLVED via S3 `a11c001`), DEF-213 (closed by L2 + S5a.1), DEC-386 (parallel structural-prevention closure), DEC-388 (audit + alert consumer surface), DEF-211 D1+D2+D3 (Sprint 31.93 reconnect-recovery counterpart).
 - ● **DEC-386**: OCA-group threading + broker-only safety — 4-layer architecture: (1) `Broker.cancel_all_orders(symbol, *, await_propagation)` ABC extension + `CancelPropagationTimeout` exception (S0); (2) bracket OCA grouping with `ocaGroup=f"oca_{parent_ulid}"` + `ocaType=1` on children only + `ManagedPosition.oca_group_id` + Error-201/OCA-filled distinguishing helper (S1a); (3) standalone-SELL OCA threading on 4 paths + `redundant_exit_observed` SAFE-outcome marker + grep regression guard with `# OCA-EXEMPT:` exemption mechanism (S1b); (4) broker-only safety via cancel-then-SELL/wire on 3 paths + `reconstruct_from_broker` STARTUP-ONLY contract docstring + `_emit_cancel_propagation_timeout_alert` shared helper (S1c). Closes ~98% of DEF-204's mechanism per IMPROMPTU-11. Tier 3 PROCEED verdict 2026-04-27. Cross-refs: DEF-211 (Sprint 31.93 `ReconstructContext` parameter), DEF-212 (Sprint 31.92 `IBKRConfig` wiring into `OrderManager`), Phase A spike `PATH_1_SAFE` (2026-04-25).
-- ⊘ **DEC-387**: RESERVED — Placeholder; allocation TBD during Session 3 / Session 4 planning if a non-trivial design decision surfaces.
-- ⊘ **DEC-388**: RESERVED — Alert observability architecture (Sessions 5a.1 / 5a.2 / 5b / 5c / 5d / 5e). Resolves DEF-014. Will be written at Session 5e close.
+- ⊗ **DEC-387**: FREED at Tier 3 #1 close (reserved during Sprint 31.91 planning but not consumed).
+- ● **DEC-388**: Alert Observability Architecture — multi-emitter consumer pattern with HealthMonitor as central consumer, 5 layers: (L1 Producer) 15 emitter sites populating `SystemAlertEvent.metadata`; (L2 Consumer) `POLICY_TABLE` with 13 entries + 4 predicate handlers + AST regression guard; (L3 Storage) `data/operations.db` 5 tables + restart recovery via `rehydrate_alerts_from_db()` + migration framework (extended at Impromptu C to all 8 ARGUS SQLite DBs, sprint-spec D16 fulfilled); (L4 REST + WebSocket) 4 REST endpoints + JWT-authenticated `/ws/v1/alerts`; (L5 Frontend) `useAlerts` hook + `AlertBanner` (S5c) + `AlertToast`/`AlertToastStack`/`AlertAcknowledgmentModal` (S5d) + `AlertsPanel` Observatory + `AppShell.tsx` cross-page mount (S5e). Resolves DEF-014 (PRIMARY DEFECT, October 2025). 8 of 9 Tier-3-#2-spawned DEFs RESOLVED-IN-SPRINT (DEF-217/218/219/220/221/223/224/225); 1 deferred (DEF-222). Sprint-close materialization 2026-04-28 per Pattern B per Tier 3 #2 amended verdict. Cross-refs: DEC-385 (parallel architectural closure; L2 metadata schema is shared structural foundation), DEC-386 (parallel closure pattern), DEC-345 (separate-DB pattern for `operations.db`), DEC-328 (test discipline; lesson learned at post-S5e catalog hotfix → process-evolution.md F.1).
 
 Next DEC: 387 (385/388 reserved as noted above).

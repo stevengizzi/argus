@@ -863,7 +863,7 @@ class OrderManager:
 
 **Sprint 28.75 flatten-pending timeout (DEF-112):** `flatten_pending_timeout_seconds` (default 120s) + `max_flatten_retries` (default 3) on OrderManagerConfig. Stale flatten orders cancelled and resubmitted. Exhausted retries removed from `_flatten_pending` (caught by EOD flatten). `_flatten_pending` type changed from `dict[str, str]` to `dict[str, tuple[str, float, int]]` (order_id, monotonic_time, retry_count). ThrottledLogger rate-limiting on "flatten already pending" (60s/symbol) and "IBKR portfolio snapshot missing" (600s/symbol).
 
-> **Active fix in flight (DEF-204, identified Apr 24, 2026 — IMPROMPTU-11 mechanism diagnostic; Sprint 31.91 in progress).** DEF-204's mechanism is a fill-side race: bracket children placed via `parentId` only without explicit `ocaGroup`, combined with redundant standalone SELL orders from trail/escalation paths sharing no OCA group with bracket children, produced ~98% of the unexpected-short blast radius observed during Apr 22–24 paper trading (44 symbols / 14,249 unintended short shares on Apr 24 alone, accumulated through gradual reconciliation-mismatch drift over a 6-hour session). ARGUS's exit-side accounting was also side-blind in three surfaces (reconcile orphan-loop one-direction-only; reconcile call site strips side info via `Position.shares = abs(int(ib_pos.position))`; DEF-158 retry path side-blind via `abs(int(getattr(bp, "shares", 0)))`). DEF-199's IMPROMPTU-04 fix correctly refuses to amplify these at EOD (1.00× signature, zero doubling) and escalates to operator with CRITICAL alert; the upstream mechanism is now being closed in Sprint 31.91. **Status as of 2026-04-27:** Sessions 0+1a+1b+1c have landed (DEC-386, Tier 3 architectural review #1 PROCEED) — the OCA architecture closes the ~98% mechanism. Sessions 2a–2d (side-aware reconciliation contract; DEC-385 reserved), Session 3 (DEF-158 retry side-check), and Session 4 (mass-balance + IMSR replay validation) remain in flight to close the secondary detection-blindness mechanism. Sessions 5a.1–5e (alert observability; DEC-388 reserved) remain in flight to make the new `phantom_short`/`cancel_propagation_timeout` alerts visible in the Command Center. **Operator mitigation in effect** (daily `scripts/ibkr_close_all_positions.py` at session close) until Sprint 31.91 sprint close + ≥3 paper sessions of zero `unaccounted_leak` mass-balance rows. See `docs/sprints/sprint-31.9/IMPROMPTU-11-mechanism-diagnostic.md` for the original forensic analysis, `docs/sprints/sprint-31.91-reconciliation-drift/sprint-spec.md` for the Sprint 31.91 deliverables, and DEC-386 for the OCA architecture rationale.
+> **DEF-204 mechanism CLOSED (Sprint 31.91 SEALED 2026-04-28).** DEF-204's mechanism was a fill-side race: bracket children placed via `parentId` only without explicit `ocaGroup`, combined with redundant standalone SELL orders from trail/escalation paths sharing no OCA group with bracket children, produced ~98% of the unexpected-short blast radius observed during Apr 22–24 paper trading (44 symbols / 14,249 unintended short shares on Apr 24 alone, accumulated through gradual reconciliation-mismatch drift over a 6-hour session). ARGUS's exit-side accounting was also side-blind in three surfaces (reconcile orphan-loop one-direction-only; reconcile call site stripped side info via `Position.shares = abs(int(ib_pos.position))`; DEF-158 retry path side-blind via `abs(int(getattr(bp, "shares", 0)))`). **Sprint 31.91 architectural closure:** Sessions 0+1a+1b+1c landed DEC-386 (4-layer OCA-Group Threading + Broker-Only Safety, Tier 3 architectural review #1 PROCEED 2026-04-27) — closes ~98% of the cascade mechanism. Sessions 2a–2d landed DEC-385 (6-layer Side-Aware Reconciliation Contract, sprint-close materialization 2026-04-28) — closes the residual detection-blindness mechanism. Session 3 landed the DEF-158 retry side-check (3-branch side-aware gate; anchor `a11c001`). Session 4 landed the falsifiable mass-balance + IMSR replay validation infrastructure (`scripts/validate_session_oca_mass_balance.py`). Sessions 5a.1–5e + Impromptus A+B+C landed DEC-388 (Alert Observability Architecture, see §14) — `phantom_short`/`cancel_propagation_timeout` alerts now surface end-to-end in the Command Center. **Operator daily-flatten mitigation cessation criteria:** #1+#2+#3 SATISFIED post-S4; #4 (sprint sealed) MET 2026-04-28 at D14 doc-sync; #5 (5 paper sessions clean post-seal showing zero `unaccounted_leak` mass-balance rows + zero `phantom_short` alerts) pending. See `docs/sprints/sprint-31.9/IMPROMPTU-11-mechanism-diagnostic.md` for the original forensic analysis, `docs/sprints/sprint-31.91-reconciliation-drift/sprint-spec.md` for the Sprint 31.91 deliverables, DEC-386 + DEC-385 for the architectural closure rationale, and §14 of this document for the alert observability subsystem that surfaces the new alert taxonomy.
 
 #### OCA Architecture (Sprint 31.91 Sessions 0+1a+1b+1c, DEC-386 — PROCEED 2026-04-27)
 
@@ -875,7 +875,7 @@ The OCA architecture is a 4-layer stack closing the bracket-internal fill race t
 
 3. **Standalone-SELL OCA (Session 1b).** Four paths thread `ManagedPosition.oca_group_id` onto the placed SELL Order: `_trail_flatten`, `_escalation_update_stop`, `_submit_stop_order` (which covers `_resubmit_stop_with_retry` per DEC-372), and `_flatten_position` (the central exit path used by EOD Pass 1, `close_position()`, `emergency_flatten()`, and time-stop). `oca_group_id is None` (covers `reconstruct_from_broker`-derived positions) falls through to legacy no-OCA behavior. Graceful Error 201 / OCA-filled handling: sets `ManagedPosition.redundant_exit_observed = True`, logs INFO, and short-circuits the DEF-158 retry path by deliberately NOT seeding `_flatten_pending`. The grep regression guard `tests/_regression_guards/test_oca_threading_completeness.py::test_no_sell_without_oca_when_managed_position_has_oca` enforces threading discipline; legitimate broker-only paths are exempted via the canonical `# OCA-EXEMPT: <reason>` comment.
 
-4. **Broker-only safety (Session 1c).** Three broker-only SELL paths that have no `ManagedPosition` to thread (`_flatten_unknown_position`, `_drain_startup_flatten_queue`, `reconstruct_from_broker`) invoke `cancel_all_orders(symbol=X, await_propagation=True)` BEFORE placing the SELL (or BEFORE wiring the position into `_managed_positions`, for `reconstruct_from_broker`). On `CancelPropagationTimeout` (2-second budget exceeded), the SELL/wire is aborted, a critical `SystemAlertEvent(alert_type="cancel_propagation_timeout")` is emitted, and the position remains at the broker as a phantom long with no working stop. **The leaked-long failure mode is the intended trade-off** — phantom long is bounded exposure (the long position size; price floor of 0); an incorrect SELL placed without cancellation propagation could create an unbounded phantom short on a runaway upside. Operator response is manual flatten via `scripts/ibkr_close_all_positions.py`. **Critical caveat:** until Sprint 31.91 Session 5a.1 lands (HealthMonitor consumer for `SystemAlertEvent`), the alert is visible only in logs — not in the Command Center. Live-trading transition MUST NOT proceed before 5a.1 lands; see `docs/pre-live-transition-checklist.md`.
+4. **Broker-only safety (Session 1c).** Three broker-only SELL paths that have no `ManagedPosition` to thread (`_flatten_unknown_position`, `_drain_startup_flatten_queue`, `reconstruct_from_broker`) invoke `cancel_all_orders(symbol=X, await_propagation=True)` BEFORE placing the SELL (or BEFORE wiring the position into `_managed_positions`, for `reconstruct_from_broker`). On `CancelPropagationTimeout` (2-second budget exceeded), the SELL/wire is aborted, a critical `SystemAlertEvent(alert_type="cancel_propagation_timeout")` is emitted, and the position remains at the broker as a phantom long with no working stop. **The leaked-long failure mode is the intended trade-off** — phantom long is bounded exposure (the long position size; price floor of 0); an incorrect SELL placed without cancellation propagation could create an unbounded phantom short on a runaway upside. Operator response is manual flatten via `scripts/ibkr_close_all_positions.py`. **Alert observability:** the `cancel_propagation_timeout` alert is now end-to-end visible in the Command Center via DEC-388's alert observability pipeline (HealthMonitor consumer + cross-page banner; see §14 for the canonical reference pattern). The alert is registered in `POLICY_TABLE` with `operator_ack_required=True` and no auto-resolution predicate.
 
 `reconstruct_from_broker()` carries a contractual STARTUP-ONLY docstring documenting that future RECONNECT_MID_SESSION callers MUST add a `ReconstructContext` parameter — the unconditional cancel-orders invocation is correct ONLY at startup (clears yesterday's stale OCA siblings); a mid-session reconnect would WIPE OUT today's working bracket children. The docstring is a time-bounded contract — Sprint 31.93 (DEF-194/195/196 reconnect-recovery) will replace the docstring with a runtime gate (DEF-211, sprint-gating). Until then, ARGUS does not support mid-session reconnect.
 
@@ -1727,8 +1727,8 @@ Handles chat messages with context injection. Manages conversation history. Rout
 
 Tier 1 exposes a REST + WebSocket API for the Command Center. In-process with the trading engine (Phase 11 of startup). Also runnable standalone in dev mode.
 
-> **Catalog freshness (DEF-168, IMPROMPTU-08 — 2026-04-23).** The endpoint
-> listings in §4, §7.8–7.9, §13.5.1, §14.2, and §15.8 are regenerated from
+> **Catalog freshness (DEF-168, IMPROMPTU-08 — 2026-04-23; renumbered Sprint 31.91 D14 — Alert Observability subsystem inserted as §14, prior §14/§15/§16 shifted to §15/§16/§17).** The endpoint
+> listings in §4, §7.8–7.9, §13.5.1, §14.5, §15.2, and §16.8 are regenerated from
 > the FastAPI `app.openapi()` schema via
 > [`scripts/generate_api_catalog.py`](../scripts/generate_api_catalog.py).
 > The WebSocket sub-section falls back to scanning
@@ -2781,11 +2781,135 @@ Both endpoints are JWT-protected._
 
 ---
 
-## 14. Evaluation Framework (Sprint 27.5)
+## 14. Alert Observability Subsystem (Sprint 31.91)
+
+End-to-end alert observability spanning emit → consume → persist → REST/WS → frontend operator surface. Materialized at sprint-close as DEC-388 (Alert Observability Architecture). Resolves DEF-014 (PRIMARY DEFECT, October 2025). This section is the canonical reference pattern for adding any new alert type to ARGUS.
+
+### 14.1 Overview
+
+Multi-emitter consumer pattern with HealthMonitor as central consumer. Five architectural layers, each with a discrete responsibility and independently testable surface:
+
+| Layer | Owner | Responsibility |
+|---|---|---|
+| L1 — Producer | Various (HealthMonitor, OrderManager, IBKRBroker, DatabentoDataService) | Emit `SystemAlertEvent` with structured `metadata` |
+| L2 — Consumer | `argus/core/health.py::HealthMonitor` | Subscribe + run auto-resolution policy via `POLICY_TABLE` |
+| L3 — Storage | `data/operations.db` (5 tables, migration framework v1) | Persist active alerts + audit trail; restart recovery |
+| L4 — REST + WebSocket | `argus/api/routes/alerts.py` + `argus/api/websocket/alerts_ws.py` | Operator query + acknowledge surface |
+| L5 — Frontend | `argus/ui/src/features/alerts/` | Banner + toast + Observatory panel + cross-page mount |
+
+Pre-Sprint-31.91, ARGUS had no consumer-side architecture for the ~11 alert types emitted across HealthMonitor, OrderManager, IBKRBroker, and Databento data services. `SystemAlertEvent` was emitted but had no central consumer, no persistence, no UI surface — the system was operationally blind to its own alarms. DEC-388 closes that gap.
+
+### 14.2 Producer pattern (15 emitter sites)
+
+All emitter sites publish `SystemAlertEvent` with the structured `metadata: dict[str, Any] | None` field added at S2b.1 (DEC-385 L2 schema; closes DEF-213 jointly with S5a.1's atomic emitter migration).
+
+**Sites by source:**
+
+- **HealthMonitor** (`argus/core/health.py`): `eod_residual_shorts`, `eod_flatten_failed` (S5a.1); `phantom_short`, `phantom_short_retry_blocked` (S2c.1, S3).
+- **OrderManager** (`argus/execution/order_manager.py`): `cancel_propagation_timeout` (S1c, fired from `_flatten_unknown_position`, `_drain_startup_flatten_queue`, `reconstruct_from_broker`).
+- **IBKRBroker** (`argus/execution/ibkr_broker.py`): `ibkr_disconnect` (S5b, `_reconnect()` end-of-retries); `ibkr_auth_failure` (S5b, `_on_error()` CRITICAL non-connection else-branch).
+- **DatabentoDataService** (`argus/data/databento_data_service.py`): `databento_dead_feed` (FIX-06 emitter, DEF-217 string-mismatch fix at Impromptu A); `DatabentoHeartbeatEvent` producer with stale-suppression contract via existing `_stale_published` (Impromptu B).
+
+**Emitter contract:**
+
+```python
+event_bus.publish(SystemAlertEvent(
+    source="<emitter_name>",
+    alert_type="<canonical_string>",   # MUST appear as a key in POLICY_TABLE
+    severity="critical" | "warning" | "info",
+    message="<human-readable summary>",
+    metadata={                          # Structured forensic surface (DEC-385 L2)
+        "symbol": "...",
+        "shares": ...,
+        "stage": "...",
+        # ... alert-type-specific fields
+    },
+))
+```
+
+**Stale-suppression contract example** (`DatabentoHeartbeatEvent`, Impromptu B): the producer guards re-emission via an existing `_stale_published` flag — `if self._stale_published: continue` — so the heartbeat does not re-fire repeatedly while the dead-feed alert is already active. The contract is documented in the producer's docstring; the test surface validates `len(heartbeats) == heartbeats_before_recovery` across a 5-interval observation window.
+
+### 14.3 Consumer pattern (HealthMonitor + POLICY_TABLE)
+
+`HealthMonitor` subscribes to `SystemAlertEvent` plus 4 predicate-handler events (`OrderFilledEvent`, `IBKRReconnectedEvent`, `DatabentoHeartbeatEvent`, `ReconciliationCompletedEvent`) at startup. Per-alert-type auto-resolution policy table at `argus/core/alert_auto_resolution.py::POLICY_TABLE` maps each canonical alert-type string to a `PolicyEntry` describing the auto-resolution predicate and the `operator_ack_required` flag.
+
+**Policy entry shape:**
+
+```python
+@dataclass(frozen=True)
+class PolicyEntry:
+    alert_type: str
+    auto_resolution_predicate: AutoResolutionPredicate | None  # None ⇒ NEVER_AUTO_RESOLVE sentinel
+    operator_ack_required: bool
+```
+
+**Current entries (13 post-Impromptu A):** `phantom_short`, `phantom_short_retry_blocked`, `cancel_propagation_timeout`, `ibkr_disconnect`, `ibkr_auth_failure`, `databento_dead_feed` (auto-resolves on `DatabentoHeartbeatEvent` AND `_stale_published == False`), `eod_residual_shorts` (NEVER_AUTO_RESOLVE; operator_ack_required=True), `eod_flatten_failed` (NEVER_AUTO_RESOLVE; operator_ack_required=True), plus 5 additional entries from S5a.1+S5a.2 baseline.
+
+**Auto-resolution flow:** when a predicate-handler event arrives, `HealthMonitor` evaluates each active alert against its predicate; matching alerts transition `state: active → auto_resolved` and an `alert_auto_resolved` WebSocket delta fires. The `_evaluate_predicates` block uses a defensive broad exception catch around the predicate body (S5a.2 reviewer F4) so one buggy predicate cannot break the consumer.
+
+**Regression guards:**
+
+- AST exhaustiveness (`tests/api/test_policy_table_exhaustiveness.py`, 4 tests, Impromptu A — DEF-219): scans `argus/` for `SystemAlertEvent(alert_type=<literal>)` constructions and asserts every literal appears as a `POLICY_TABLE` key. Mental-revert of DEF-217 fix confirms guard fails on producer-side drift.
+- Dynamic E2E (`TestE2EDatabentoDeadFeedAutoResolveWithRealProducer`, Impromptu B — DEF-217 dual-layer): drives the production Databento emitter chain and asserts `alert_type == "databento_dead_feed"` is consumable end-to-end.
+
+### 14.4 Storage layer (`data/operations.db`)
+
+SQLite separate-DB pattern per DEC-345. Five tables managed by the migration framework introduced at S5a.2 (extended at Impromptu C to all 8 ARGUS SQLite DBs, sprint-spec D16 fulfilled):
+
+| Table | Owner session | Purpose |
+|---|---|---|
+| `phantom_short_gated_symbols` | S2c.1 | Side-aware classifications persisted from phantom-short gate (DEC-385 L4) |
+| `phantom_short_override_audit` | S2d | Forensic-grade audit log of every operator override (DEC-385 L6); no retention policy by design |
+| `alert_acknowledgment_audit` | S5a.1 | Audit trail for ack lifecycle (`audit_kinds`: `ack`, `duplicate_ack`, `late_ack`, `auto_resolution`) |
+| `alert_state` | S5a.2 + 3 indexes | Active-alert state (powers `rehydrate_alerts_from_db()`) |
+| `schema_version` | S5a.2 | Migration framework version tracking |
+
+**Restart recovery:** `HealthMonitor.rehydrate_alerts_from_db()` reconstructs `_alerts_active` from `alert_state` rows on startup. Predicate handlers are subscribed before rehydrate via `_subscribe_predicate_handlers()`. (Subscribe-before-rehydrate audit deferred as DEF-222 — bounded by first producer-wiring sprint introducing producer for `ReconciliationCompletedEvent` / `IBKRReconnectedEvent` / `DatabentoHeartbeatEvent`.)
+
+**Migration framework universal adoption (Impromptu C):** All 8 ARGUS SQLite DBs are now framework-managed (operations + catalyst + evaluation + regime_history + learning + vix_landscape + counterfactual + experiments). Each per-DB module follows the `argus/data/migrations/operations.py` template; `apply_migrations()` is called in each owning service's `initialize()` method; `schema_version` table tracks migration versions. Each DB's v1 migration codifies existing schema as-of Impromptu C, including columns from prior in-place ALTERs (catalyst.fetched_at from Sprint 23.6; regime_snapshots.vix_close from Sprint 27.9; counterfactual variant_id from Sprint 32.5 S5; counterfactual scoring_fingerprint from FIX-01; experiments variants.exit_overrides from Sprint 32.5 S1).
+
+### 14.5 REST + WebSocket interfaces
+
+**REST endpoints** (`argus/api/routes/alerts.py`, all JWT-gated):
+
+- `GET /api/v1/alerts/active` — list currently-active alerts.
+- `GET /api/v1/alerts/history` — paginated history with `since` query parameter (RFC3339 / ISO-8601). `until` parameter deferred as DEF-228; `useAlertHistory` currently filters upper bound client-side.
+- `POST /api/v1/alerts/{alert_id}/acknowledge` — atomic + idempotent: 200 (success), 404 (unknown alert), 200-late-ack (alert auto-resolved before ack landed; original acknowledger preserved). Duplicate-ack is detected via `acknowledged_by` mismatch — backend returns 200 with original acknowledger preserved; no 409.
+- `GET /api/v1/alerts/{alert_id}/audit` — audit trail per alert for Observatory `AlertDetailView` (S5e RULE-007 scope expansion; halt-and-fix-bundled into S5e vs separate Impromptu D).
+
+Routes have no rate limiting (JWT-only); per-route throttle deferred to opportunistic — see S5a.1 reviewer F8.
+
+**WebSocket** (`argus/api/websocket/alerts_ws.py`): `/ws/v1/alerts` JWT-authenticated; emits `auth_success` → `snapshot` → 4 lifecycle deltas (`alert_active`, `alert_acknowledged`, `alert_auto_resolved`, `alert_archived` defensive forward-compat though no producer exists today).
+
+### 14.6 Frontend integration
+
+Three layers, each delivered in a discrete frontend session:
+
+**Layer 1 (S5c, anchor `3197472`):** `useAlerts` TanStack-Query-plus-WebSocket-hybrid hook with reconnect-gated refetch via `wasDisconnectedRef` (avoids double-fetch on initial connect). Full WS contract coverage (6 message types). `AlertBanner` renders `severity === 'critical' && state === 'active'` only — `warning` / `info` are toast-only. JWT auth on WS connection mirrors `useArenaWebSocket.ts:209-216` precedent.
+
+**Layer 2 (S5d, anchor `66d0b04`):** `AlertToast` + `AlertToastStack` (queue cap at 5, oldest-dropped via `slice(-5).reverse()`); `AlertAcknowledgmentModal` (reason ≥10 chars validated, `role="dialog"`, `aria-modal="true"`, `aria-labelledby` matching heading id, initial focus on textarea, Escape closes). Mirrors `ConfirmModal` accessibility pattern; full focus-trap deferred to DEF-226. Duplicate-ack mechanism via `result.acknowledged_by !== submitted operator_id` (no 409 in actual backend per DEF-220 Option A REMOVAL of `AlertsConfig.acknowledgment_required_severities`).
+
+**Layer 3 (S5e, anchor `7efd0a0`):** `AlertsPanel` (Observatory browsing surface — active + history tables, filters by severity/source/symbol, sortable, date-range picker default last-7-days UTC; `AlertDetailView` modal with metadata + audit trail). `AlertBanner` + `AlertToastStack` mounted at `AppShell.tsx` layout level for cross-page persistence (regression invariant 17 structurally pinned by `AppShell.alerts.test.tsx:163-184`: navigates Dashboard → TradeLog → Performance, banner persists across all transitions). 5 in-Dashboard banner mounts + 5 in-Dashboard toast mounts removed at S5e.
+
+**Severity policy:** banner displays `critical` only; `warning` / `info` are toast-only. Per-alert-type `PolicyEntry.operator_ack_required` is canonical home for severity-based ack gating (replaced removed `AlertsConfig.acknowledgment_required_severities` field per DEF-220 Option A REMOVAL via S5c).
+
+### 14.7 Reference materials
+
+- DEC-388 (this section's source decision; full text in `docs/decision-log.md`).
+- DEC-385 (parallel architectural closure for reconciliation drift; L2 metadata schema is shared structural foundation).
+- DEC-386 (parallel architectural closure pattern for DEF-204).
+- DEC-345 (separate-DB pattern for `data/operations.db`).
+- DEF-014 closure (PRIMARY DEFECT, October 2025).
+- Sprint 31.91 closeout files: `docs/sprints/sprint-31.91-reconciliation-drift/session-{5a.1,5a.2,5b,5c,5d,5e}-closeout.md` + `impromptu-{a,b,c}-closeout.md`.
+- Tier 3 #2 amended verdict: `docs/sprints/sprint-31.91-reconciliation-drift/tier-3-review-2-verdict.md`.
+
+---
+
+## 15. Evaluation Framework (Sprint 27.5)
 
 Universal evaluation infrastructure that becomes the shared currency for all downstream optimization and experiment sprints (28, 32.5, 33, 34, 38, 40, 41). Pure backend — no frontend, no API endpoints, no new YAML config.
 
-### 14.1 MultiObjectiveResult (`analytics/evaluation.py`)
+### 15.1 MultiObjectiveResult (`analytics/evaluation.py`)
 
 Core evaluation dataclass capturing:
 - **Primary metrics:** Sharpe ratio, max drawdown %, profit factor, win rate, trade count, expectancy
@@ -2798,7 +2922,7 @@ Core evaluation dataclass capturing:
 - `from_backtest_result()` factory: bridges `BacktestResult` → `MultiObjectiveResult`
 - JSON serialization roundtrip (`to_dict()`/`from_dict()`) with infinity and None handling
 
-### 14.2 Comparison Module API (`analytics/comparison.py`)
+### 15.2 Comparison Module API (`analytics/comparison.py`)
 
 _This section documents a **Python module**, not an HTTP API — `comparison.py`
 is not route-exposed. Regeneration from `app.openapi()` is not applicable
@@ -2814,7 +2938,7 @@ Pairwise and set-level comparison using Pareto dominance:
 - `format_comparison_report(a, b) -> str` — human-readable diff of two MultiObjectiveResults
 - NaN → INSUFFICIENT_DATA, `float('inf')` handled natively
 
-### 14.3 Ensemble Evaluation (`analytics/ensemble_evaluation.py`)
+### 15.3 Ensemble Evaluation (`analytics/ensemble_evaluation.py`)
 
 First-class evaluation for strategy cohorts:
 - **EnsembleResult:** aggregate portfolio-level `MultiObjectiveResult` + `diversification_ratio` + `tail_correlation` + `capital_utilization` + `turnover_rate` + per-strategy `MarginalContribution`
@@ -2824,7 +2948,7 @@ First-class evaluation for strategy cohorts:
 - `identify_deadweight()`: finds strategies with negative marginal contribution
 - **Metric-level approximation** documented (aggregate metrics computed from per-strategy metrics, not trade-level). Trade-level upgrade deferred to Sprint 32.5.
 
-### 14.4 Slippage Model (`analytics/slippage_model.py`)
+### 15.4 Slippage Model (`analytics/slippage_model.py`)
 
 Calibration from live execution data:
 - **StrategySlippageModel** dataclass: per-strategy slippage calibration
@@ -2835,7 +2959,7 @@ Calibration from live execution data:
 - Atomic JSON persistence (`save_slippage_model()` / `load_slippage_model()`) via tempfile + rename
 - Pure Python math (no numpy dependency)
 
-### 14.5 Directory Structure
+### 15.5 Directory Structure
 
 ```
 analytics/
@@ -2847,11 +2971,11 @@ analytics/
 
 ---
 
-## 15. Experiment Pipeline (Sprints 32 + 32.5)
+## 16. Experiment Pipeline (Sprints 32 + 32.5)
 
 Complete variant lifecycle infrastructure for autonomous parameter optimization. Config-gated via `experiments.enabled` (default: false). All existing strategies are unaffected when disabled.
 
-### 15.1 Pattern Factory (`strategies/patterns/factory.py`)
+### 16.1 Pattern Factory (`strategies/patterns/factory.py`)
 
 Generic pattern instantiation with PatternParam introspection:
 - **`build_pattern_from_config(pattern_name, config_dict)`** — maps config dict keys to PatternParam-declared detection params. No hardcoded switch statements. Unknown keys are silently ignored; missing required params fall back to PatternParam defaults.
@@ -2861,7 +2985,7 @@ Generic pattern instantiation with PatternParam introspection:
 
 All 7 PatternModule patterns in `main.py` now construct via `build_pattern_from_config()`. PatternBacktester `_create_pattern_by_name()` also delegates to factory (DEF-121 resolved).
 
-### 15.2 Experiment Models (`intelligence/experiments/models.py`)
+### 16.2 Experiment Models (`intelligence/experiments/models.py`)
 
 Core dataclasses for the experiment lifecycle:
 - **`ExperimentRecord`** — frozen dataclass: experiment_id (ULID), pattern_name, fingerprint, config_dict, status (ExperimentStatus enum), backtest_result (MultiObjectiveResult | None), shadow_days, shadow_trades, promotion_events.
@@ -2869,7 +2993,7 @@ Core dataclasses for the experiment lifecycle:
 - **`PromotionEvent`** — frozen dataclass: event_id (ULID), strategy_id, event_type (PROMOTED/DEMOTED/KILLED), reason, timestamp, metrics_snapshot.
 - **`ExperimentStatus`** enum: PENDING → BACKTESTING → SHADOW → LIVE → DEMOTED → KILLED.
 
-### 15.3 ExperimentStore (`intelligence/experiments/store.py`)
+### 16.3 ExperimentStore (`intelligence/experiments/store.py`)
 
 SQLite persistence following the DEC-345 pattern:
 - Database: `data/experiments.db`
@@ -2878,7 +3002,7 @@ SQLite persistence following the DEC-345 pattern:
 - 90-day retention enforcement at startup and daily
 - Methods: `save_experiment()`, `update_experiment_status()`, `get_experiment()`, `list_experiments()`, `save_variant()`, `get_variant_by_fingerprint()`, `save_promotion_event()`, `get_promotion_history()`
 
-### 15.4 VariantSpawner (`intelligence/experiments/spawner.py`)
+### 16.4 VariantSpawner (`intelligence/experiments/spawner.py`)
 
 Shadow strategy instantiation from `config/experiments.yaml`:
 - Reads `variants` list from experiments YAML config
@@ -2888,7 +3012,7 @@ Shadow strategy instantiation from `config/experiments.yaml`:
 - Shadow variants are identical to live strategies except: signals bypass quality pipeline and risk manager, routed directly to CounterfactualTracker
 - Max variants per pattern enforced by `max_variants_per_pattern` config field
 
-### 15.5 ExperimentRunner (`intelligence/experiments/runner.py`)
+### 16.5 ExperimentRunner (`intelligence/experiments/runner.py`)
 
 Backtest pre-filter for candidate parameter combinations:
 - Grid generation from PatternParam metadata (`min_value`, `max_value`, `step`) × optional `exit_sweep_params` cross-product (Sprint 32.5)
@@ -2897,7 +3021,7 @@ Backtest pre-filter for candidate parameter combinations:
 - Config-gated pre-filter thresholds: `min_sharpe`, `min_trade_count`, `min_win_rate`
 - CLI: `scripts/run_experiment.py --pattern bull_flag --dry-run` for standalone sweep execution
 
-### 15.6 PromotionEvaluator (`intelligence/experiments/promotion.py`)
+### 16.6 PromotionEvaluator (`intelligence/experiments/promotion.py`)
 
 Autonomous promote/demote based on accumulated shadow evidence:
 - Wired to `SessionEndEvent` (fires after EOD flatten)
@@ -2908,7 +3032,7 @@ Autonomous promote/demote based on accumulated shadow evidence:
 - Writes PromotionEvent to ExperimentStore on every state change
 - `counterfactual_store=None` guard: gracefully skips if counterfactual tracking is disabled
 
-### 15.7 Variant Lifecycle
+### 16.7 Variant Lifecycle
 
 ```
 PENDING (config/experiments.yaml entry)
@@ -2927,7 +3051,7 @@ KILLED
 
 Variants are never deleted from ExperimentStore — only status transitions occur. A DEMOTED variant remains eligible for re-promotion when market conditions change.
 
-### 15.8 REST API
+### 16.8 REST API
 
 _Auto-regenerated (DEF-168, IMPROMPTU-08). JWT-protected endpoints under
 `/api/v1/experiments` (Sprint 32) and `/api/v1/counterfactual` (Sprint 32.5)._
@@ -2949,13 +3073,13 @@ _Auto-regenerated (DEF-168, IMPROMPTU-08). JWT-protected endpoints under
 - `GET /api/v1/counterfactual/positions` supports strategy / date / rejection-stage filters + pagination; R-multiple fields (`mfe_r`, `mae_r`) are serialized alongside preserved dollar excursions (IMPROMPTU-07, 2026-04-23).
 - `GET /api/v1/counterfactual/accuracy` returns the `FilterAccuracyReport` breakdown (per-stage / per-reason / per-grade / per-regime / per-strategy).
 
-### 15.9 UI (Sprint 32.5)
+### 16.9 UI (Sprint 32.5)
 
 Two new surfaces added to the Command Center:
 - **Shadow Trades tab** — second tab on the Trade Log page (keyboard shortcut `2` or tab click). Filter bar (strategy, rejection stage, date range), summary stats (total shadow trades, win rate, avg P&L), 13-column table (symbol, stage badge, grade badge, entry, stop, target, result P&L, MFE/MAE, duration, exit reason, strategy), pagination, empty state.
 - **Experiments page** — 9th Command Center page (route `/experiments`, keyboard shortcut `9`, FlaskConical icon). Variant status table grouped by pattern (sortable by Win Rate, Expectancy, Sharpe), promotion event log, pattern comparison on group-header click (best Sharpe + best win rate highlighted), disabled state (503 → instructions to enable in `config/experiments.yaml`), empty state (0 variants → instructions to run `scripts/run_experiment.py`).
 
-### 15.10 Allocation Intelligence Vision
+### 16.10 Allocation Intelligence Vision
 
 The long-range architectural direction for capital allocation is documented in `docs/architecture/allocation-intelligence-vision.md`. Key points:
 - **Problem:** Stacked guardrail chain asks "does this violate limits?" instead of "what is optimal capital?"
@@ -2965,7 +3089,7 @@ The long-range architectural direction for capital allocation is documented in `
 - **Phase 2** (~Sprint 38+): Full AllocationIntelligence unification, Hard Floor as separate non-bypassable layer
 - **Hard Floor** (non-overridable in all phases): circuit breakers, position size floor (0.25R), concentration limits, buying power check
 
-### 15.11 Config
+### 16.11 Config
 
 `config/experiments.yaml`:
 ```yaml
@@ -2982,7 +3106,7 @@ runner:
 variants: []  # List of {pattern_name, params} to spawn as shadow strategies
 ```
 
-### 15.12 Directory Structure
+### 16.12 Directory Structure
 
 ```
 intelligence/experiments/
@@ -3003,7 +3127,7 @@ scripts/
 
 ---
 
-## 16. Technology Stack Summary
+## 17. Technology Stack Summary
 
 See `docs/project-knowledge.md` § Tech Stack — authoritative. This section previously duplicated that content with drift (Deployment + Notifications rows were aspirational, not shipped) and is retained as a pointer.
 

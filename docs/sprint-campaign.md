@@ -10,9 +10,16 @@
 > From Sprint 21.5 to Full Vision — every step mapped
 > March 29, 2026 | Based on Unified Vision Roadmap v2.8 + Metarepo Workflow System v1.2
 > Last template refresh: Sprint 28 planning (2026-03-29). Current live sprint state as of
-> 2026-04-21: between sprints; 22 shadow variants collecting CounterfactualTracker data; next
-> planned sprint is 31B (Research Console / Variant Factory). See `CLAUDE.md` "Active Sprint"
-> for authoritative state.
+> 2026-04-28: between sprints; **Sprint 31.91 SEALED 2026-04-28** (Reconciliation Drift /
+> Phantom-Short Fix + Alert Observability Completion — DEC-385 + DEC-386 + DEC-388
+> materialized; DEF-014 + DEF-204 mechanism architecturally CLOSED; daily-flatten cessation
+> criterion #4 MET, criterion #5 pending 5 paper sessions clean post-seal). 22 shadow variants
+> still collecting CounterfactualTracker data. Next named horizons: Sprint 31B (Research Console
+> / Variant Factory), `post-31.9-component-ownership` (DEF-175/182/193/201/202 + 3 absorbed
+> sibling-class items), Sprint 31.92 (DEF-212 `_OCA_TYPE_BRACKET` constant fix), Sprint 31.93
+> (DEF-211 D1+D2+D3 + RSK-DEC-386-DOCSTRING bound), `post-31.9-reconnect-recovery` (likely
+> first DEF-222 audit firing surface), `post-31.9-alpaca-retirement`. See `CLAUDE.md`
+> "Active Sprint" and `docs/roadmap.md` for authoritative state.
 
 ---
 
@@ -2063,6 +2070,23 @@ Sprint 31.9 (April 22 – April 24, 2026) ran as a campaign-close, a multi-sessi
 - Demonstrated **mechanism-signature validation** through Apr 24 debrief (proving DEF-199 closed via 1.00× signature vs prior 2.00×, while simultaneously identifying DEF-204 as a different mechanism that A1 had been masking)
 
 Key operational insights captured as P26/P27 retrospective candidates for next campaign's RETRO-FOLD. See `docs/sprints/sprint-31.9/SPRINT-31.9-SUMMARY.md` and `docs/sprint-history.md` for details.
+
+---
+
+## Sprint 31.91 — Mid-Sprint Doc-Sync Pattern (Pre-Impromptu Manifest + Pattern B)
+
+Sprint 31.91 (April 22 – April 28, 2026) consolidated several workflow innovations that should be reused in future complex sprints with multiple Tier 3 reviews:
+
+- **Pre-impromptu doc-sync manifest** (`protocols/mid-sprint-doc-sync.md` v1.0.0): when a Tier 3 architectural review surfaces multiple new DEFs that route to subsequent in-sprint impromptus, write a manifest that captures the planned DEF transitions + DEC deferrals so the sprint-close doc-sync can mechanically apply them. Sprint 31.91's `pre-impromptu-doc-sync-manifest.md` (commit `948b978`) covered 13 DEF transitions + 2 DEC deferrals (DEC-385 + DEC-388 per Pattern B). The sprint-close doc-sync read the manifest and applied each transition with provenance citations.
+- **Pattern B DEC materialization** (`protocols/mid-sprint-doc-sync.md` v1.0.0): when a DEC's cross-references would otherwise document architecture-with-known-defects state (because the resolving sessions land later in-sprint), defer materialization to sprint-close after all RESOLVED-IN-SPRINT DEFs land. Sprint 31.91 deferred DEC-388 from Tier 3 #2 to D14 sprint-close because it cross-referenced 8 DEFs being resolved by Impromptus A+B+C and S5c.
+- **Per-session register discipline** (workflow v1.2.0, formalized at S2a): the `work-journal-register.md` is refreshed after every session close-out + Tier 3 verdict. 18 refreshes across Sprint 31.91 absorbed without conversation drift; pattern is the structured truth backstop for the Work Journal conversation.
+- **DEF disposition matrix** (`def-disposition-matrix.md`, sprint-close artifact): confidence-graded routing for every open carry-forward item from the sprint, intended to be consumed by the D14 doc-sync. Sprint 31.91's matrix routed 5 new opportunistic DEFs, 6 pre-existing-touched-but-unchanged DEFs, ~25 reviewer/code-level items, and 4 process-improvement observations (F.1–F.4). The matrix is the canonical reference for "everything gets documented well so it can be picked up later."
+- **In-sprint impromptu pattern (Impromptus A/B/C)**: when a Tier 3 review surfaces hardening work that's small but architecturally distinct, file as named impromptus (each with own impl prompt + closeout + reviewer pass) rather than expanding session scope. Sprint 31.91 used this pattern for backend hardening (A), producer wiring (B), and migration framework adoption (C) — each impromptu landed clean and the surrounding session sequence was unaffected.
+- **Sibling-class DEF routing**: when a DEF found in one sprint clearly belongs to another named sprint's scope (e.g., DEF-202 task-lifecycle hygiene → component-ownership), route in the disposition matrix rather than queuing as an independent sprint. Sprint 31.91 absorbed 3 sibling-class items into `post-31.9-component-ownership` and 1 into Sprint 31.5.
+
+Sprint 31.91 also surfaced one carry-forward process observation: F.1 — DEC-328 full-suite-at-Tier-1 process gap (post-S5e catalog freshness hotfix `4c737d5` revealed that scoped-only test runs at Tier 1 boundaries can miss freshness gates). Routed to next sprint planning conversation per `def-disposition-matrix.md` Section F.
+
+See `docs/sprints/sprint-31.91-reconciliation-drift/{def-disposition-matrix.md, work-journal-register.md, pre-impromptu-doc-sync-manifest.md}` and `docs/sprint-history.md` for details.
 
 ---
 
