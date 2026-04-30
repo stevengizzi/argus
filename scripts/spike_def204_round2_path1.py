@@ -189,6 +189,91 @@ class _MarketClosedDetector:
             self.last_message = error_string
 
 
+class _OcaRejectionTracker:
+    """DEF-243 Fix B.1: ib_async errorEvent listener that records IBKR
+    error code 10326 ("OCA group revision is not allowed") events keyed by
+    reqId (which equals the IBKR order ID for order-targeted errors).
+
+    Spike v2 attempt 1 (Sprint 31.92 Unit 5) observed that `modify_order`
+    against bracket-stop children returns synchronous "accepted" but is
+    then async-cancelled by the broker emitting error 10326 ~1-6ms later.
+    Without this listener, `_amend_one()` records every async-cancelled
+    amend as success, producing axis (i) Wilson UB ~0% despite 100%
+    broker-side rejection. The tracker enables `_amend_one()` to override
+    the trial's success determination by observing errorEvent activity in
+    a small window after the synchronous return.
+
+    The tracker stores per-reqId event lists; consumers snapshot the count
+    BEFORE issuing modify_order, then check whether the count grew within
+    `wait_window_s` after the synchronous return.
+    """
+
+    OCA_REJECTION_CODE = 10326
+
+    def __init__(self) -> None:
+        self.events: dict[int, list[tuple[float, int, str]]] = {}
+
+    def __call__(
+        self,
+        req_id: int,
+        error_code: int,
+        error_string: str,
+        contract: Any = None,
+    ) -> None:
+        if error_code != self.OCA_REJECTION_CODE:
+            return
+        self.events.setdefault(req_id, []).append(
+            (time.monotonic(), error_code, error_string or "")
+        )
+
+    def event_count(self, req_id: int) -> int:
+        return len(self.events.get(req_id, []))
+
+    def latest_message(self, req_id: int) -> str | None:
+        evs = self.events.get(req_id, [])
+        return evs[-1][2] if evs else None
+
+
+# ---------------------------------------------------------------------------
+# DEF-243 Fix B.2: log file preservation
+# ---------------------------------------------------------------------------
+
+
+def _generate_run_timestamp() -> str:
+    """Filesystem-safe UTC timestamp (YYYYMMDDTHHMMSSZ). Used as a stable
+    correlation key between the log file and the JSON output so a future
+    operator inspecting the JSON can locate the corresponding run log
+    without relying on filesystem mtimes."""
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _setup_file_handler(timestamp: str) -> str:
+    """DEF-243 Fix B.2: attach a logging.FileHandler to the root logger so
+    a mid-run crash leaves the full run log on disk for forensic analysis.
+
+    Spike v2 attempt 1 wrote only to stdout; when the script crashed in
+    axis (iv), the empirical evidence preceding the crash-recovery JSON
+    existed only in operator scrollback. Returns the log file path; the
+    same `timestamp` argument is logged at INFO so the operator can
+    correlate the log file with the JSON artifact emitted later in the run.
+
+    Both stdout and file handlers remain active simultaneously. Format
+    mirrors the existing `logging.basicConfig` format established at
+    module load.
+    """
+    log_dir = os.path.join("scripts", "spike-results")
+    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.path.join(log_dir, f"spike-run-{timestamp}.log")
+    fh = logging.FileHandler(log_path)
+    fh.setLevel(logging.INFO)
+    fh.setFormatter(logging.Formatter(
+        "%(asctime)s.%(msecs)03d [%(levelname)s] %(message)s",
+        datefmt="%H:%M:%S",
+    ))
+    logging.getLogger().addHandler(fh)
+    return log_path
+
+
 # ---------------------------------------------------------------------------
 # Result dataclasses — JSON output schema mirrors these
 # ---------------------------------------------------------------------------
@@ -206,6 +291,17 @@ class AxisResult:
     # binding axis (i) (no disconnect prompt) and on informational axes
     # whose disconnect was actually observed.
     instrumentation_warning: str | None = None
+    # DEF-243 Fix B.1: count of trials whose async-cancellation by IBKR
+    # error 10326 was caught by the errorEvent listener. A non-zero value
+    # under sync-success counts indicates the trial-tagging flipped the
+    # determination (success → oca_rejected) for those trials.
+    n_oca_rejections: int = 0
+    # DEF-243 Fix B.3: set by `_axis_joint`'s isConnected() precondition
+    # gate when Gateway is disconnected at axis entry and reconnect fails.
+    # The axis returns immediately without firing trials. JSON output
+    # carries both fields under `informational_axes_results.<axis>`.
+    skipped: bool = False
+    skip_reason: str | None = None
 
 
 @dataclass
@@ -216,6 +312,12 @@ class ModeATrial:
     propagation_ok: bool
     round_trip_ms: float
     error: str | None = None
+    # DEF-243 Fix B.1: True when the IBKR error 10326 listener observed
+    # an async OCA-rejection for this trial's reqId AFTER the synchronous
+    # modify_order return (i.e., the broker silently cancelled the
+    # modification). Overrides `success` to False and `rejected` to True
+    # so the JSON artifact does not record a falsely-successful trial.
+    oca_rejected: bool = False
 
 
 @dataclass
@@ -543,8 +645,17 @@ def _verify_aux_price(
 
 
 async def _measure_mode_a(
-    broker: IBKRBroker, symbols: list[str], num_trials: int
+    broker: IBKRBroker,
+    symbols: list[str],
+    num_trials: int,
+    oca_tracker: _OcaRejectionTracker | None = None,
 ) -> list[ModeATrial]:
+    """DEF-243 Fix B.1: when `oca_tracker` is provided, observe the
+    errorEvent stream after the Cat A.1 2.5s + reqOpenOrders block. If
+    error code 10326 fires for this trial's reqId, override `success` to
+    False, `rejected` to True, and tag `oca_rejected=True` so the JSON
+    artifact records the broker's async rejection rather than reporting
+    a falsely-successful trial."""
     log.info("=== Mode A: H2 baseline modify_order — %d trials ===", num_trials)
     trials: list[ModeATrial] = []
     sym_idx = 0
@@ -563,6 +674,16 @@ async def _measure_mode_a(
             await _flatten(broker, symbol)
             continue
         _, stop_ulid = opened
+        ib_order_id = (
+            broker._ulid_to_ibkr.get(stop_ulid)
+            if oca_tracker is not None
+            else None
+        )
+        baseline_oca = (
+            oca_tracker.event_count(ib_order_id)
+            if oca_tracker is not None and ib_order_id is not None
+            else 0
+        )
         new_aux = round(price - _safe_modified_stop_offset(price), 2)
         t0 = time.monotonic()
         try:
@@ -581,13 +702,32 @@ async def _measure_mode_a(
             await asyncio.sleep(2.5)
             await broker._ib.reqOpenOrders()
             propagated = _verify_aux_price(broker, stop_ulid, new_aux)
+            # DEF-243 Fix B.1: any new 10326 events on this trial's reqId
+            # observed during the 2.5s window are async rejections; override
+            # success/rejected to reflect the broker's actual determination.
+            oca_rejected = False
+            oca_error_msg: str | None = None
+            if oca_tracker is not None and ib_order_id is not None:
+                if oca_tracker.event_count(ib_order_id) > baseline_oca:
+                    oca_rejected = True
+                    oca_error_msg = oca_tracker.latest_message(ib_order_id)
+            effective_rejected = rejected or oca_rejected
+            if rejected:
+                effective_error = res.message
+            elif oca_rejected:
+                effective_error = (
+                    f"oca_rejected: {oca_error_msg or 'OCA rejection (10326)'}"
+                )
+            else:
+                effective_error = None
             trials.append(ModeATrial(
                 symbol=symbol,
-                success=not rejected,
-                rejected=rejected,
+                success=not effective_rejected,
+                rejected=effective_rejected,
                 propagation_ok=propagated,
                 round_trip_ms=round(rtt_ms, 2),
-                error=res.message if rejected else None,
+                error=effective_error,
+                oca_rejected=oca_rejected,
             ))
         except Exception as e:
             rtt_ms = (time.monotonic() - t0) * 1000.0
@@ -606,24 +746,89 @@ async def _measure_mode_a(
 
 
 async def _amend_one(
-    broker: IBKRBroker, stop_ulid: str, new_aux: float
-) -> tuple[bool, str | None]:
-    """Single modify_order — returns (rejected, error_str). Used by axes."""
+    broker: IBKRBroker,
+    stop_ulid: str,
+    new_aux: float,
+    oca_tracker: _OcaRejectionTracker | None = None,
+    wait_window_s: float = 0.25,
+) -> tuple[bool, str | None, bool]:
+    """Single modify_order — returns (rejected, error_str, oca_rejected).
+
+    DEF-243 Fix B.1: when `oca_tracker` is provided, observe the IBKR
+    errorEvent stream for `wait_window_s` seconds (or until the underlying
+    trade reaches Cancelled status, whichever first) AFTER the synchronous
+    modify_order return. If error code 10326 fires for this trial's reqId
+    within that window, override the trial's success determination by
+    returning `(rejected=True, error_str="oca_rejected: <message>",
+    oca_rejected=True)`.
+
+    With `oca_tracker=None`, behaves identically to the pre-Fix-B.1 path
+    and returns `(rejected, error_str, False)` — the third element is
+    always False so a None-tracker run produces a falsifiable signal that
+    the OCA-rejection check did not run, never a silent True.
+    """
+    ib_order_id = (
+        broker._ulid_to_ibkr.get(stop_ulid)
+        if oca_tracker is not None
+        else None
+    )
+    baseline_count = (
+        oca_tracker.event_count(ib_order_id)
+        if oca_tracker is not None and ib_order_id is not None
+        else 0
+    )
     try:
         res = await broker.modify_order(stop_ulid, {"price": new_aux})
-        if res.status == OrderStatus.REJECTED:
-            return True, res.message or "REJECTED"
-        return False, None
+        sync_rejected = res.status == OrderStatus.REJECTED
+        sync_error = (res.message or "REJECTED") if sync_rejected else None
     except Exception as e:
-        return True, str(e)
+        return True, str(e), False
+
+    if oca_tracker is None or ib_order_id is None:
+        return sync_rejected, sync_error, False
+
+    deadline = time.monotonic() + wait_window_s
+    while time.monotonic() < deadline:
+        if oca_tracker.event_count(ib_order_id) > baseline_count:
+            msg = oca_tracker.latest_message(ib_order_id) or "OCA rejection (10326)"
+            return True, f"oca_rejected: {msg}", True
+        # Status-cancelled short-circuit: if the trade transitions to
+        # Cancelled, sample the tracker one more time and exit (the
+        # errorEvent and orderStatus updates can race).
+        for trade in broker._ib.trades():
+            if trade.order.orderId == ib_order_id:
+                if trade.orderStatus.status == "Cancelled":
+                    if oca_tracker.event_count(ib_order_id) > baseline_count:
+                        msg = (
+                            oca_tracker.latest_message(ib_order_id)
+                            or "OCA rejection (10326)"
+                        )
+                        return True, f"oca_rejected: {msg}", True
+                    # Status-cancelled but no 10326 event recorded — treat as
+                    # the synchronous path's determination (rejection might
+                    # be a different code; we only flag 10326 here).
+                    return sync_rejected, sync_error, False
+                break
+        await asyncio.sleep(0.02)
+
+    return sync_rejected, sync_error, False
 
 
 async def _axis_concurrent(
-    broker: IBKRBroker, symbols: list[str], num_trials: int
+    broker: IBKRBroker,
+    symbols: list[str],
+    num_trials: int,
+    oca_tracker: _OcaRejectionTracker | None = None,
 ) -> AxisResult:
     """Axis (i): concurrent amends across N>=3 positions. Each TRIAL fires
     >=3 amends inside <=10ms via asyncio.gather; trial counts contribute
-    one rejection-or-success per amend."""
+    one rejection-or-success per amend.
+
+    DEF-243 Fix B.1: passes `oca_tracker` to `_amend_one` so async-cancelled
+    amends (IBKR error 10326) are correctly counted as rejections. Without
+    this, axis (i) Wilson UB collapses to ~0% under DEC-386 OCA-immutability
+    even when 100% of amends are broker-side rejected.
+    """
     log.info("=== Mode B axis (i) concurrent — %d trials ===", num_trials)
     result = AxisResult()
     n_pos = max(3, min(len(symbols), 4))
@@ -648,13 +853,22 @@ async def _axis_concurrent(
             continue
         # Fire all amends inside <=10ms by constructing the coroutines first
         # then handing the batch to asyncio.gather (which schedules eagerly).
-        coros = [_amend_one(broker, ulid, round(price - _safe_modified_stop_offset(price), 2))
-                 for _, ulid, price in opens]
+        coros = [
+            _amend_one(
+                broker,
+                ulid,
+                round(price - _safe_modified_stop_offset(price), 2),
+                oca_tracker=oca_tracker,
+            )
+            for _, ulid, price in opens
+        ]
         outcomes = await asyncio.gather(*coros, return_exceptions=False)
-        for rejected, _err in outcomes:
+        for rejected, _err, oca_rejected in outcomes:
             result.n_trials += 1
             if rejected:
                 result.n_rejections += 1
+            if oca_rejected:
+                result.n_oca_rejections += 1
         for s, _, _ in opens:
             await _flatten(broker, s)
         if trial_num % 5 == 0:
@@ -670,7 +884,10 @@ async def _axis_concurrent(
 
 
 async def _axis_reconnect(
-    broker: IBKRBroker, symbols: list[str], num_trials: int
+    broker: IBKRBroker,
+    symbols: list[str],
+    num_trials: int,
+    oca_tracker: _OcaRejectionTracker | None = None,
 ) -> AxisResult:
     """Axis (ii): amends during Gateway reconnect window. Operator-orchestrated:
     pause for operator to disconnect Gateway, fire amends rapidly during the
@@ -738,10 +955,14 @@ async def _axis_reconnect(
                     "(broker._ib.isConnected() returned False mid-loop)"
                 )
             new_aux = round(price - _safe_modified_stop_offset(price), 2)
-            rejected, _err = await _amend_one(broker, stop_ulid, new_aux)
+            rejected, _err, oca_rejected = await _amend_one(
+                broker, stop_ulid, new_aux, oca_tracker=oca_tracker,
+            )
             result.n_trials += 1
             if rejected:
                 result.n_rejections += 1
+            if oca_rejected:
+                result.n_oca_rejections += 1
             await asyncio.sleep(0.5)
     finally:
         if not watcher.done():
@@ -779,16 +1000,53 @@ async def _axis_reconnect(
 
 
 async def _axis_joint(
-    broker: IBKRBroker, symbols: list[str], num_trials: int
+    broker: IBKRBroker,
+    symbols: list[str],
+    num_trials: int,
+    oca_tracker: _OcaRejectionTracker | None = None,
 ) -> AxisResult:
     """Axis (iv): joint reconnect + concurrent — N>=3 concurrent amends
     DURING a Gateway reconnect window. Worst-case for H2.
 
     Cat B.3 (DEF-238): samples `broker._ib.isConnected()` immediately before
     each concurrent-amend round. Same fail-loud contract as `_axis_reconnect`.
+
+    DEF-243 Fix B.3: precondition gate at axis entry — if the broker is
+    disconnected at the start (e.g., axis (ii) drained the reconnect budget),
+    attempt one fresh reconnect with a 30s timeout. If reconnect fails, the
+    axis returns immediately with `skipped=True` and `skip_reason` populated
+    so downstream JSON consumers can distinguish "axis ran and observed N
+    rejections" from "axis could not run". Without this gate, spike v2
+    attempt 1 crashed on `reqMktData → ConnectionError: Not connected` when
+    axis (iv) tried to open positions on a still-disconnected broker.
     """
     log.info("=== Mode B axis (iv) joint — up to %d trials ===", num_trials)
     result = AxisResult()
+
+    # DEF-243 Fix B.3: precondition gate — refuse to start if Gateway is
+    # disconnected at axis entry, attempting one fresh reconnect first.
+    if not broker._ib.isConnected():
+        log.warning(
+            "axis (iv) precondition: broker._ib.isConnected() returned False "
+            "at axis entry. Attempting one fresh reconnect (30s timeout)..."
+        )
+        try:
+            await asyncio.wait_for(broker.connect(), timeout=30.0)
+        except (asyncio.TimeoutError, Exception) as e:
+            skip_reason = (
+                "Gateway disconnected and reconnect failed before axis (iv) "
+                "could begin"
+            )
+            log.warning(
+                "axis (iv) reconnect failed: %s. Skipping axis (iv) gracefully.",
+                e,
+            )
+            result.skipped = True
+            result.skip_reason = skip_reason
+            result.notes.append(f"axis (iv): SKIPPED — {skip_reason}: {e}")
+            return result
+        log.info("axis (iv) reconnect succeeded; proceeding to position open")
+
     n_pos = max(3, min(len(symbols), 4))
     syms_round = symbols[:n_pos]
 
@@ -846,13 +1104,22 @@ async def _axis_joint(
                     "axis_iv_disconnect_observed: true "
                     "(broker._ib.isConnected() returned False mid-loop)"
                 )
-            coros = [_amend_one(broker, ulid, round(price - _safe_modified_stop_offset(price), 2))
-                     for _, ulid, price in opens]
+            coros = [
+                _amend_one(
+                    broker,
+                    ulid,
+                    round(price - _safe_modified_stop_offset(price), 2),
+                    oca_tracker=oca_tracker,
+                )
+                for _, ulid, price in opens
+            ]
             outcomes = await asyncio.gather(*coros, return_exceptions=False)
-            for rejected, _err in outcomes:
+            for rejected, _err, oca_rejected in outcomes:
                 result.n_trials += 1
                 if rejected:
                     result.n_rejections += 1
+                if oca_rejected:
+                    result.n_oca_rejections += 1
             await asyncio.sleep(0.5)
     finally:
         if not watcher.done():
@@ -1193,6 +1460,13 @@ async def _abort_with_inconclusive(
 
 
 async def main_async(args: argparse.Namespace) -> int:
+    # DEF-243 Fix B.2: attach a FileHandler at the very top of main_async so
+    # any subsequent failure (pre-flight, connection error, mid-run crash)
+    # leaves the full run log on disk co-correlatable with the JSON output.
+    run_timestamp = _generate_run_timestamp()
+    log_path = _setup_file_handler(run_timestamp)
+    log.info("Spike run timestamp: %s (log file: %s)", run_timestamp, log_path)
+
     log.info(
         "Sprint 31.92 S1a Path #1 spike — account=%s clientId=%d symbols=%s",
         args.account, args.client_id, args.symbols,
@@ -1307,6 +1581,13 @@ async def main_async(args: argparse.Namespace) -> int:
     detector = _MarketClosedDetector()
     broker._ib.errorEvent += detector
 
+    # DEF-243 Fix B.1: attach the OCA-rejection tracker so subsequent
+    # measurement modes can detect async-cancelled amends (IBKR error 10326).
+    # Must be attached BEFORE any modify_order call so the listener is live
+    # for the very first amend.
+    oca_tracker = _OcaRejectionTracker()
+    broker._ib.errorEvent += oca_tracker
+
     out_path = args.output_json
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
 
@@ -1358,7 +1639,10 @@ async def main_async(args: argparse.Namespace) -> int:
     await _flatten(broker, symbols[0])
 
     try:
-        mode_a = await _measure_mode_a(broker, symbols, args.num_trials_per_axis)
+        mode_a = await _measure_mode_a(
+            broker, symbols, args.num_trials_per_axis,
+            oca_tracker=oca_tracker,
+        )
         # Guard 4: first-trial sentinel for Mode A. If the first trial
         # failed entry-fill and Guard 3 didn't catch it, something
         # changed mid-run (Gateway disconnect, market-hours edge). Halt
@@ -1371,14 +1655,17 @@ async def main_async(args: argparse.Namespace) -> int:
         # Cat B.2 (DEC-390): binding axis (i) measured first; informational
         # axes (ii)+(iv) measured after. Axis (iii) deleted at Cat B.1.
         binding_axis = await _axis_concurrent(
-            broker, symbols, max(30, args.num_trials_per_axis // 2)
+            broker, symbols, max(30, args.num_trials_per_axis // 2),
+            oca_tracker=oca_tracker,
         )
         informational_axes = {
             AXIS_RECONNECT: await _axis_reconnect(
-                broker, symbols, max(30, args.num_trials_per_axis // 2)
+                broker, symbols, max(30, args.num_trials_per_axis // 2),
+                oca_tracker=oca_tracker,
             ),
             AXIS_JOINT: await _axis_joint(
-                broker, symbols, max(30, args.num_trials_per_axis // 2)
+                broker, symbols, max(30, args.num_trials_per_axis // 2),
+                oca_tracker=oca_tracker,
             ),
         }
         mode_c = await _measure_mode_c(broker, symbols, args.num_trials_per_axis)
