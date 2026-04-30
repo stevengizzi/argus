@@ -483,7 +483,7 @@ default, `long_only_sell_ceiling_enabled`,
   `recommended_locate_suppression_seconds` value with hard floor 18000s if
   H6 ruled out; `pending_sell_age_watchdog_enabled` per Decision 4 with
   `Literal["auto", "enabled", "disabled"]` validator)
-- `config/order_management.yaml` (surface new
+- `config/order_manager.yaml` (surface new
   `pending_sell_age_watchdog_enabled` field per Decision 4)
 
 **Integrates:** S1b spike fingerprint string from
@@ -528,7 +528,7 @@ default.
 | Factor | Count | Points |
 |--------|------:|------:|
 | New files | 1 (test file ≤150 LOC) | +2 |
-| Modified files | 4 (ibkr_broker.py + order_manager.py + config.py + order_management.yaml) | +4 |
+| Modified files | 4 (ibkr_broker.py + order_manager.py + config.py + order_manager.yaml) | +4 |
 | Pre-flight reads | 5 | +5 |
 | New tests | 6 logical (~7 effective with parametrize) | +3 to +3.5 |
 | Complex integration (helper plumbing + 4 config fields — no fan-out yet) | NO | 0 |

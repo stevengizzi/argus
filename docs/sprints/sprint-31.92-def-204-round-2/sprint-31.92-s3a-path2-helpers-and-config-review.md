@@ -90,7 +90,7 @@ docs/sprints/sprint-31.92-def-204-round-2/sprint-31.92-s3a-path2-helpers-and-con
    - `long_only_sell_ceiling_alert_on_violation`: `default=True`.
    - `pending_sell_age_watchdog_enabled`: `Literal["auto", "enabled", "disabled"]` with `default="auto"` per Decision 4.
 
-5. **YAML→Pydantic alignment + silent-drop class.** Verify the new test asserts YAML keys under `order_manager.*` are a subset of `OrderManagerConfig.model_fields.keys()`. Mental-revert: temporarily add a typo'd YAML key (e.g., `locate_supression_seconds` — note misspelling); the test should FAIL. The reviewer can request the close-out cite the mental-revert verification. The close-out's "YAML Overlay Path" section must document the actual YAML file path used for `pending_sell_age_watchdog_enabled` (in case the project's convention diverged from `config/order_management.yaml`).
+5. **YAML→Pydantic alignment + silent-drop class.** Verify the new test asserts YAML keys under `order_manager.*` are a subset of `OrderManagerConfig.model_fields.keys()`. Mental-revert: temporarily add a typo'd YAML key (e.g., `locate_supression_seconds` — note misspelling); the test should FAIL. The reviewer can request the close-out cite the mental-revert verification. The close-out's "YAML Overlay Path" section must document the actual YAML file path used for `pending_sell_age_watchdog_enabled` (in case the project's convention diverged from `config/order_manager.yaml`).
 
 6. **No emit-site wiring (S3b's surface).** Verify the diff in `argus/execution/order_manager.py` does NOT touch any of `_flatten_position`, `_trail_flatten`, `_check_flatten_pending_timeouts`, or `_escalation_update_stop` exception handlers. The helpers exist but are NOT yet consumed by emit-site code; that's S3b.
 

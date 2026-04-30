@@ -125,7 +125,7 @@ add 3 OrderManagerConfig fields (`locate_suppression_seconds`,
 - **Creates:** `tests/execution/order_manager/test_def204_round2_path2.py`
   (~100 LOC).
 - **Modifies:** `argus/execution/ibkr_broker.py`, `argus/execution/order_manager.py`,
-  `argus/core/config.py`, `config/order_management.yaml` (new field).
+  `argus/core/config.py`, `config/order_manager.yaml` (new field).
 - **Integrates:** S1b spike's fingerprint string + `recommended_locate_suppression_seconds`.
 - **Compaction:** Medium 13.
 
@@ -334,7 +334,7 @@ design summary is self-sufficient if context is lost.
    falsifying-spike-scheduled.
 
 4. **Decision 4 — M-R2-1 strengthening (AC2.7 watchdog auto-activation).**
-   New config field `config/order_management.yaml: pending_sell_age_watchdog_enabled`
+   New config field `config/order_manager.yaml: pending_sell_age_watchdog_enabled`
    with values `auto` (default) / `enabled` / `disabled`. `auto` mode flips to
    `enabled` on first observed `case_a_in_production` event. NOT manual
    operator activation. The watchdog provides the structural fallback for any
@@ -594,7 +594,7 @@ frontend immutability.
 - `argus/core/config.py` (S3a) — `OrderManagerConfig` 4 new fields total (3 from Round-1-revised + `pending_sell_age_watchdog_enabled` from Decision 4).
 - `argus/core/alert_auto_resolution.py` (S4a-i) — `POLICY_TABLE` 14th entry for `sell_ceiling_violation`.
 - `config/system_live.yaml` (S3a) — surface new fields.
-- `config/order_management.yaml` (S3a) — new `pending_sell_age_watchdog_enabled` field per Decision 4.
+- `config/order_manager.yaml` (S3a) — new `pending_sell_age_watchdog_enabled` field per Decision 4.
 - `config/ibkr.yaml` — existing `bracket_oca_type` (S4b consumer-side wiring; field itself unchanged).
 - `tests/execution/order_manager/test_def204_round2_path1.py` (new, S2a + S2b).
 - `tests/execution/order_manager/test_def204_round2_path2.py` (new, S3a + S3b).

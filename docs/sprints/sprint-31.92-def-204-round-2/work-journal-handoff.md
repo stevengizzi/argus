@@ -96,7 +96,7 @@ The following surfaces are protected across the entire sprint. Each session's im
 - `argus/main.py:1081` (`reconstruct_from_broker()` call site) — Sprint 31.94 D1 surface. **EXCEPTION at S4b:** modify the `OrderManager(...)` construction call site to pass `bracket_oca_type=config.ibkr.bracket_oca_type`; add `--allow-rollback` CLI flag parsing.
 - `argus/core/health.py::HealthMonitor` consumer + `POLICY_TABLE` 13 existing entries (DEC-388 L2) — preserve. Add ONE new entry per AC3.9 (the 14th — `sell_ceiling_violation`).
 - `argus/core/health.py::rehydrate_alerts_from_db` (DEC-388 L3) — preserve.
-- `argus/api/v1/alerts.py` REST endpoints (DEC-388 L4) — preserve. **EXCEPTION at S3b (per H-R3-3):** new sibling file `argus/api/v1/positions.py` with `POST /api/v1/positions/{position_id}/clear_halt` endpoint.
+- `argus/api/v1/alerts.py` REST endpoints (DEC-388 L4) — preserve. **EXCEPTION at S3b (per H-R3-3):** new sibling file `argus/api/routes/positions.py` (path corrected from disposition draft `argus/api/v1/positions.py`; actual ARGUS routes live under `argus/api/routes/`) with `POST /api/v1/positions/{position_id}/clear_halt` endpoint.
 - `argus/ws/v1/alerts.py` WebSocket endpoint (DEC-388 L4) — preserve.
 - `frontend/` (entire) — **ZERO UI changes** in this sprint; Vitest stays at 913.
 - `data/operations.db` schema — preserve. New `sell_ceiling_violation` alerts use existing `alert_state` table; no schema migration.

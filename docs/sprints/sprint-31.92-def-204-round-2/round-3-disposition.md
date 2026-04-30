@@ -192,8 +192,8 @@ test. Within budget.
 **Test additions:** `test_risk_manager_check0_rejects_when_halt_entry_set`
 + `test_clear_halt_endpoint_requires_position_id_and_clears_flag`.
 
-**LOC impact:** ~70 LOC across `argus/risk/risk_manager.py`,
-`argus/api/v1/positions.py` (new), `scripts/clear_position_halt.py`
+**LOC impact:** ~70 LOC across `argus/core/risk_manager.py`,
+`argus/api/routes/positions.py` (new), `scripts/clear_position_halt.py`
 (new). Distributed across files; OrderManager budget unaffected.
 
 ### 3.4 H-R3-4 — AC4.6 dual-channel CRITICAL warning hardening
@@ -451,11 +451,13 @@ to Phase C artifacts.
 | Session Count Estimate | Increase pytest target: was 88–134 effective, now 95–145 effective (~7–11 net new tests for C-R3-1 + 4 High findings) | aggregate |
 | Cumulative Diff Bound | Recalibrate `argus/execution/order_manager.py` ceiling: was ~1150–1300 LOC, now ~1200–1350 LOC | aggregate |
 | Cumulative Diff Bound (NEW) | Add `argus/execution/ibkr_broker.py`: ~30–50 LOC for serialization wrapper | C-R3-1 |
-| Cumulative Diff Bound (NEW) | Add `argus/risk/risk_manager.py`: ~20 LOC for halt-entry Check 0 extension | H-R3-3 |
-| Cumulative Diff Bound (NEW) | Add `argus/api/v1/positions.py` (NEW file): ~30 LOC for halt-clear endpoint | H-R3-3 |
+| Cumulative Diff Bound (NEW) | Add `argus/core/risk_manager.py`: ~20 LOC for halt-entry Check 0 extension [^path-corr] | H-R3-3 |
+| Cumulative Diff Bound (NEW) | Add `argus/api/routes/positions.py` (NEW file): ~30 LOC for halt-clear endpoint [^path-corr] | H-R3-3 |
 | Cumulative Diff Bound (NEW) | Add `scripts/clear_position_halt.py` (NEW file): ~20 LOC for CLI tool | H-R3-3 |
 | Cumulative Diff Bound (NEW) | Add `argus/main.py`: ~30 LOC for interactive ack + periodic re-ack | H-R3-4 |
 | Sprint Abort Condition (NEW) | Add #N: "If Fix A serialization spike (S3b) fails AND no alternative serialization design surfaces, sprint halts; operator decides whether to escalate to Phase A re-entry retroactively." | C-R3-1 |
+
+[^path-corr]: Paths corrected from disposition draft; original draft cited `argus/risk/risk_manager.py` and `argus/api/v1/positions.py` based on naming convention; actual repo-HEAD paths are `argus/core/risk_manager.py` and `argus/api/routes/positions.py`.
 
 ### 7.2 `spec-by-contradiction.md` amendments
 

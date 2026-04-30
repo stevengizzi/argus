@@ -258,7 +258,7 @@ Sprint Spec § AC2.5 Branch 4 amended to specify:
 - **Restart behavior:** post-restart, `is_reconstructed=True` already refuses ALL ARGUS-emitted SELLs per AC3.7. The halt-entry flag is therefore subsumed by the broader refusal posture for reconstructed positions; the flag's purpose is the narrow window between Branch-4-firing and either fill-observation OR position-close. Halt state need NOT survive restart because the broader is_reconstructed refusal handles the post-restart case.
 - **Logged transition:** structured log line `event="halt_entry_set"` on Branch 4 + H1 firing; `event="halt_entry_cleared"` on operator-ack via CLI.
 
-Cumulative diff bound recalibration: ~20 LOC in `argus/risk/risk_manager.py` (extend Check 0) + ~30 LOC for the new endpoint + ~20 LOC for the CLI tool. Total ~70 LOC. Falls within the existing ~1150–1300 LOC OrderManager bound (these are NEW files, not OrderManager).
+Cumulative diff bound recalibration: ~20 LOC in `argus/core/risk_manager.py` (extend Check 0; path corrected from draft `argus/risk/risk_manager.py`) + ~30 LOC for the new endpoint at `argus/api/routes/positions.py` (path corrected from draft `argus/api/v1/positions.py`) + ~20 LOC for the CLI tool. Total ~70 LOC. Falls within the existing ~1150–1300 LOC OrderManager bound (these are NEW files, not OrderManager).
 
 **Test coverage:** new test `test_risk_manager_check0_rejects_when_halt_entry_set` + new test `test_clear_halt_endpoint_requires_position_id_and_clears_flag`.
 

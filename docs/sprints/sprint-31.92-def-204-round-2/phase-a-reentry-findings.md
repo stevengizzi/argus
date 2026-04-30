@@ -296,7 +296,7 @@ recommended Phase A action:
 Strengthen the deferred-DEF filing to include automatic activation of AC2.7
 watchdog on first observed case A in production paper trading. The
 activation is implemented as a config toggle
-(`config/order_management.yaml: pending_sell_age_watchdog_enabled: auto`)
+(`config/order_manager.yaml: pending_sell_age_watchdog_enabled: auto`)
 with `auto` mode flipping to `enabled` on first observed
 `case_a_in_production` event. This converts FAI #4 from
 measured-only-acceptable to measured-only-with-auto-activating-defense.

@@ -245,7 +245,7 @@ Specifically:
    land at S4a-i, NOT this session. This session ADDS the fields to the model
    AND tests only `locate_suppression_seconds` Pydantic validation (test 6 below).
 
-4. **In `config/order_management.yaml`** (or wherever the operator-facing
+4. **In `config/order_manager.yaml`** (or wherever the operator-facing
    `OrderManagerConfig` YAML overlay lives — verify the exact path during
    pre-flight): surface the new `pending_sell_age_watchdog_enabled` field with
    its default value `auto`. Per Decision 4, the field is operator-visible
@@ -294,7 +294,7 @@ Specifically:
    suppression dict + `locate_suppression_seconds` Pydantic surface.
 
 6. **Config Validation test** (mandatory; see § "Config Validation" below):
-   write a test that loads `config/system_live.yaml` + `config/order_management.yaml`
+   write a test that loads `config/system_live.yaml` + `config/order_manager.yaml`
    and asserts no keys under `order_manager.*` are absent from
    `OrderManagerConfig.model_fields.keys()`. Per regression-checklist.md "New
    `OrderManagerConfig` fields verified against Pydantic model" item.
@@ -349,14 +349,14 @@ For each file the session edits, specify:
      # Expected: 0 hits pre-session.
      ```
 
-4. **`config/order_management.yaml`** (MODIFY):
+4. **`config/order_manager.yaml`** (MODIFY):
    - Anchor: top-level YAML key `order_manager:` (or whatever the existing top-
      level key is; verify during pre-flight).
    - Edit shape: insertion (`pending_sell_age_watchdog_enabled: "auto"` under
      the `order_manager:` block, plus the other 3 fields if convention dictates).
    - Pre-flight grep-verify:
      ```
-     $ test -f config/order_management.yaml && head -5 config/order_management.yaml
+     $ test -f config/order_manager.yaml && head -5 config/order_manager.yaml
      # Expected: file exists; first key is order_manager: (verify).
      # If file does NOT exist, locate the actual YAML overlay with a grep:
      $ grep -rn "order_manager:" config/*.yaml | head -5
@@ -498,7 +498,7 @@ This session adds 4 new fields to `OrderManagerConfig`. Per regression-checklist
 test that loads the YAML config files and verifies all keys under the relevant
 section are recognized by the Pydantic model:
 
-1. Load `config/system_live.yaml` AND `config/order_management.yaml` (or
+1. Load `config/system_live.yaml` AND `config/order_manager.yaml` (or
    whichever YAML files the operator-facing overlay lives in; verify during
    pre-flight).
 2. Extract the keys under `order_manager.*` (or the equivalent top-level key).
@@ -528,16 +528,16 @@ def test_order_manager_yaml_keys_subset_of_pydantic_model():
         f"OrderManagerConfig: {extra}"
     )
 
-    # Same for config/order_management.yaml:
+    # Same for config/order_manager.yaml:
     import os
-    if os.path.exists("config/order_management.yaml"):
-        with open("config/order_management.yaml") as fh:
+    if os.path.exists("config/order_manager.yaml"):
+        with open("config/order_manager.yaml") as fh:
             cfg2 = yaml.safe_load(fh) or {}
         om_cfg2 = cfg2.get("order_manager", cfg2)  # may be top-level
         yaml_keys2 = set(om_cfg2.keys()) if isinstance(om_cfg2, dict) else set()
         extra2 = yaml_keys2 - model_fields
         assert not extra2, (
-            f"config/order_management.yaml has order_manager keys not in "
+            f"config/order_manager.yaml has order_manager keys not in "
             f"OrderManagerConfig: {extra2}"
         )
 ```
@@ -576,7 +576,7 @@ No UI changes. Backend-only session.
 - [ ] `OrderManager._is_locate_suppressed(position, now)` helper added.
 - [ ] 4 new `OrderManagerConfig` fields added with correct defaults +
       validators per Requirement 3.
-- [ ] `config/order_management.yaml` (or equivalent) updated with
+- [ ] `config/order_manager.yaml` (or equivalent) updated with
       `pending_sell_age_watchdog_enabled` (and other 3 fields per project
       convention).
 - [ ] All 6 new tests in `tests/execution/order_manager/test_def204_round2_path2.py`
@@ -640,7 +640,7 @@ The close-out report MUST include:
    re-discovering the helper shape.
 3. **A "YAML Overlay Path" section** documenting the actual YAML file path
    used for `pending_sell_age_watchdog_enabled` (in case the project's
-   convention diverged from the prompt's `config/order_management.yaml`
+   convention diverged from the prompt's `config/order_manager.yaml`
    default).
 4. **A structured JSON appendix** at the end, fenced with
    ` ```json:structured-closeout `.

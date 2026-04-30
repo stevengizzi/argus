@@ -988,10 +988,13 @@ transitions (per Round 3 H-R3-3).
 - `argus/execution/ibkr_broker.py`: ~30–50 LOC for the single-flight
   serialization wrapper (`asyncio.Lock` + 250ms coalesce window) per
   Round 3 C-R3-1.
-- `argus/risk/risk_manager.py`: ~20 LOC for the halt-entry Check 0
-  extension per Round 3 H-R3-3.
-- `argus/api/v1/positions.py` (NEW file): ~30 LOC for the halt-clear
-  REST endpoint per Round 3 H-R3-3.
+- `argus/core/risk_manager.py`: ~20 LOC for the halt-entry Check 0
+  extension per Round 3 H-R3-3. (Path corrected from disposition draft
+  `argus/risk/risk_manager.py`; actual repo-HEAD path is `argus/core/`.)
+- `argus/api/routes/positions.py` (NEW file): ~30 LOC for the halt-clear
+  REST endpoint per Round 3 H-R3-3. (Path corrected from disposition
+  draft `argus/api/v1/positions.py`; actual ARGUS routes live under
+  `argus/api/routes/`.)
 - `scripts/clear_position_halt.py` (NEW file): ~20 LOC for the operator
   CLI tool per Round 3 H-R3-3.
 - `argus/main.py`: ~30 LOC for the interactive ack at startup +
