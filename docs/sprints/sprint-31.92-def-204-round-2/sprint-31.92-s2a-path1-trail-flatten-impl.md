@@ -1,12 +1,57 @@
-# Sprint 31.92, Session 2a: Path #1 Fix in `_trail_flatten` (mechanism per S1a) + M-R3-3 precondition check for existing per-position serialization
+# Sprint 31.92, Session 2a: Path #1 Fix in `_trail_flatten` (Mechanism A per Tier 3 Review #3 2026-04-30) + M-R3-3 precondition check for existing per-position serialization
+
+> **🔄 TIER 3 REVIEW #3 AMENDMENT NOTICE (2026-04-30)**
+>
+> This impl-prompt was AMENDED at the Tier 3 Review #3 mid-sync. Key changes
+> from the original threshold-tiered framing:
+>
+> - **Mechanism is Mechanism A** (cancel-and-resubmit-fresh-stop, formerly H1,
+>   now PRIMARY DEFAULT). H2 (`modify_order` PRIMARY DEFAULT) and H4 (hybrid
+>   amend) are ELIMINATED-EMPIRICALLY by DEF-242 (IBKR broker-side categorical
+>   rejection of `modify_order` against any OCA group member under DEC-386
+>   `ocaType=1` threading; Error 10326; 100% async-cancel rate observed in
+>   spike v2 attempt 1, 2026-04-30).
+> - **AMD-2 SUPERSEDED by AMD-2-prime.** Unprotected window bounded by
+>   `cancel_propagation_timeout` ≤ 2 s + fresh-stop placement ≤ 200 ms p95
+>   (~2.2 s total). DEC-391's Layer 1 primitive is Mechanism A.
+> - **Operator-audit logging at INFO (not WARN).** Every trail-stop /
+>   escalation / emergency-flatten update fires a cancel-and-resubmit
+>   cycle — frequency higher than the original H1-as-fallback spec assumed;
+>   WARN-level logging would produce log spam under normal trail-stop cadence.
+> - **The H2/H4 mock-test branches in Requirement 4 are obsolete.** Tests
+>   collapse to a single Mechanism A test set: cancel-and-resubmit invariant,
+>   OCA-already-filled preservation, AMD-8/AMD-4 guards, AMD-2-prime framing,
+>   AC1.6 logging at INFO every cycle, cancel-propagation-timeout HALT-ENTRY
+>   handling per the existing C-R2-1↔H-R2-2 coupling.
+> - **Spike artifact is now `scripts/spike-results/spike-def204-mechanism-a-followon-results.json`**
+>   (Unit 6 follow-on spike), NOT `spike-def204-round2-path1-results.json` (S1a v2).
+>   Pre-flight reads + grep-verify commands below need re-anchoring against
+>   the Unit 6 artifact filename used by the operator (the impl-prompt is not
+>   re-authored at this mid-sync; the original prompt body is retained as
+>   reference but Mechanism A is the binding mechanism throughout).
+>
+> Cross-references: `docs/sprints/sprint-31.92-def-204-round-2/tier-3-review-3-verdict.md`
+> §Question 2 Answer / Mechanism A in detail; sprint-spec.md §"Hypothesis
+> Prescription" (Mechanism A binary gate); DEF-242 (architectural finding);
+> DEF-244 (cross-sprint constraint to Sprint 31.94); DEF-245 (Unit 6 spike
+> scope); RSK-DEC386-MODIFY-INCOMPATIBILITY (permanent architectural
+> constraint); RSK-MECHANISM-A-UNPROTECTED-WINDOW (gate-coupling).
 
 > **⚠️ PENDING OPERATOR CONFIRMATION**
 >
 > This prompt is finalized only when:
-> 1. S1a JSON artifact at `scripts/spike-results/spike-def204-round2-path1-results.json` is committed to `main` AND
-> 2. Operator confirms `selected_mechanism` ∈ {`h2_amend`, `h4_hybrid`, `h1_cancel_and_await`} in writing per Decision 7 (and the H-R2-2-tightened gate language in `sprint-spec.md` § Hypothesis Prescription).
+> 1. Unit 6 follow-on spike JSON artifact at
+>    `scripts/spike-results/spike-def204-mechanism-a-followon-results.json`
+>    (or operator-chosen equivalent path) is committed to `main` AND
+> 2. Operator confirms `selected_mechanism == "mechanism_a"` AND all four
+>    binary-gate conditions hold (`mechanism_a_zero_conflict_in_100 == true`
+>    AND `cancel_propagation_p50_ms ≤ 1000` AND `cancel_propagation_p95_ms ≤ 2000`
+>    AND `fresh_stop_placement_p95_ms ≤ 200`) in writing per Decision 7
+>    (and the Mechanism A binary gate language in `sprint-spec.md` § Hypothesis
+>    Prescription as amended at Tier 3 #3 2026-04-30).
 >
-> The Pre-Flight Checks below assume the spike artifact is present. If absent, halt and surface to operator.
+> The Pre-Flight Checks below assume the Unit 6 spike artifact is present.
+> If absent, halt and surface to operator.
 
 ## Pre-Flight Checks
 

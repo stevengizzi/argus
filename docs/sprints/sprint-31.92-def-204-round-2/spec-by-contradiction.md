@@ -323,11 +323,49 @@ calls**, not empirical falsifications, per L-R2-1 rephrasing
     The loose reading recovers the engineering question: "does H2 work
     in steady-state production load, and does it fail loud — not silent
     — during the separately-addressed reconnect failure mode?"
-    Cross-references: DEC-390 (Pattern B sprint-close materialization);
-    sprint-spec.md §Hypothesis Prescription amended halt-or-proceed
-    gate language; FAI #3 (this file's §Edge Case 2 + companion
-    `falsifiable-assumption-inventory.md` entry #3);
-    RSK-VERDICT-VS-FAI-3-COMPATIBILITY (`docs/risk-register.md`).
+    **Status update (Tier 3 Review #3 2026-04-30):** STRUCTURALLY MOOT.
+    Item 27's framing presumes the H2/H4/H1 threshold-tiered selection
+    rule, which Tier 3 #3 replaced with the Mechanism A binary gate
+    (item 28 below). The axis-binding distinction is preserved here
+    only as historical narrative for the prior selection rule. The
+    spike v2 attempt 1 JSON artifact's `informational_axes_results`
+    (axes (ii)/(iv)) remain available to Sprint 31.94 grounding per
+    DEF-241; that cross-sprint coupling is unaffected by item 28.
+    Cross-references: DEC-390 (Pattern B sprint-close materialization;
+    Tier 3 #3 amends DEC-390's narrative to describe Mechanism A's
+    binary gate); sprint-spec.md §Hypothesis Prescription amended
+    halt-or-proceed gate language; FAI #3 (this file's §Edge Case 2
+    + companion `falsifiable-assumption-inventory.md` entry #3 —
+    both amended at this Tier 3 #3 mid-sync);
+    RSK-VERDICT-VS-FAI-3-COMPATIBILITY (`docs/risk-register.md` —
+    CLOSED-SUPERSEDED at Tier 3 #3).
+
+28. **Mechanism B (cancel-bracket / submit-fresh-bracket) and Mechanism
+    C (OCA-membership manipulation) — eliminated per Tier 3 Review #3
+    verdict; future architectural reconsideration only if Mechanism A's
+    Mode-D-equivalent gate fails.** Per Tier 3 Review #3 verdict
+    2026-04-30 / Question 2 Answer / Candidates evaluated table:
+    Mechanism B has strictly larger surface area than Mechanism A for
+    the same outcome (larger unprotected window: must wait for cancel
+    propagation AND new bracket placement; stronger interaction with
+    DEC-385 mid-flight reconciliation; no advantage). Mechanism C is
+    empirically uncharacterized but most likely eliminated by the same
+    broker-policy class that blocks `modify_order` against auxPrice
+    (OCA membership is overwhelmingly likely to be immutable
+    post-creation under the same enforcement regime); even if it
+    works, the "removed-from-OCA" window introduces a NEW unprotected
+    window during which a concurrent fill of an OCA sibling can fire
+    without atomic cancellation. Both are STRICTLY WORSE than
+    Mechanism A and are out of scope for Sprint 31.92. Future
+    architectural reconsideration is gated on Mechanism A's Unit 6
+    Mode-D-equivalent gate failing (escalation-criteria.md A20). In
+    that case, Tier 3 Review #4 would relitigate the architectural
+    space; until then, Mechanism A is the sole viable mechanism.
+    Cross-references: DEF-242 (architectural finding driving the
+    elimination of H2/H4); DEF-245 (Unit 6 follow-on spike scope);
+    RSK-MECHANISM-A-UNPROTECTED-WINDOW (`docs/risk-register.md` —
+    gate-coupling; revisit at Unit 6 close-out);
+    `tier-3-review-3-verdict.md` §Question 2 Answer.
 
 ---
 
@@ -364,18 +402,18 @@ The implementation should NOT handle these cases in this sprint:
    ("only `_reserve_pending_or_fail`") was incomplete and has been
    corrected per Tier 3 item A.
 
-2. **IBKR returning a `modifyOrder` rejection during Path #1 H2 for
+2. **IBKR returning a `modifyOrder` rejection during Path #1 for
    reasons other than "stop price invalid" (e.g., 201 margin rejection,
-   transmit-flag conflict).** Out of scope. If S1a spike confirms H2,
-   the impl assumes amend rejections are rare AND non-deterministic ones
-   are caught by AC1.2's regression test (mock `IBKRBroker.modify_order`
-   to raise; assert fall-through to H4 hybrid OR halt with operator
-   escalation). Production-side robustness for unusual amend rejections
-   is post-revenue concern; if rejection rate exceeds 5% on
-   **`axis_i_wilson_ub` per DEC-390 amended rule** (Tier 3 #2 verdict
-   2026-04-30 — axis (i) production-reachable steady-state binds; axes
-   (ii)/(iv) demoted to informational; axis (iii) deleted), mechanism
-   shifts to H4 hybrid per Hypothesis Prescription.
+   transmit-flag conflict).** **AMENDED (Tier 3 Review #3 2026-04-30):**
+   Out of scope, AND structurally moot because Path #1's mechanism
+   is now Mechanism A (cancel-and-resubmit-fresh-stop) — H2 (modify_order
+   PRIMARY DEFAULT) and H4 (hybrid amend) were ELIMINATED-EMPIRICALLY
+   when IBKR's broker policy was confirmed to categorically reject
+   `modify_order` against any OCA group member (Error 10326; DEF-242).
+   Mechanism A does not call `modify_order`, so unusual amend rejections
+   cannot fire on the Path #1 hot path. Cross-references: DEF-242
+   (architectural finding); §"Out of Scope" item 28 (Mechanism B + C
+   eliminated); `tier-3-review-3-verdict.md` §Question 1 Answer.
 
 3. **`cumulative_pending_sell_shares` or `cumulative_sold_shares`
    integer overflow.** A `ManagedPosition` that pending-or-sold > 2³¹

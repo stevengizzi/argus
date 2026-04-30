@@ -1,5 +1,27 @@
 # Sprint 31.92, Session S5c: Cross-Layer Composition Tests (CL-1..CL-5 + CL-7) + `SimulatedBrokerWithRefreshTimeout` Fixture — FINAL SESSION per Decision 5 + Tier 3 item E + Round 3 C-R3-1
 
+> **🔄 TIER 3 REVIEW #3 AMENDMENT NOTICE (2026-04-30)**
+>
+> **CL-3 parameterization amended:** `selected_mechanism = Mechanism A`
+> (was `selected_mechanism ∈ {H2, H4, H1}` / mock to `"h1_cancel_and_await"`
+> pre-Tier-3-#3). H2 and H4 ELIMINATED-EMPIRICALLY by DEF-242; only
+> Mechanism A (cancel-and-resubmit-fresh-stop, formerly H1, now PRIMARY
+> DEFAULT) remains viable. CL-3 no longer needs to MOCK `selected_mechanism`
+> to `"h1_cancel_and_await"` to exercise the HALT-ENTRY coupling — the
+> production code's mechanism IS Mechanism A, so the test directly
+> exercises the production path. The Branch 4 unit test parameter
+> remains the same. **CL-1, CL-2, CL-4, CL-5, CL-7 untouched.** CL-6
+> remains out of scope per Decision 5 and now also per Tier 3 #3
+> (spec-by-contradiction.md §Out-of-Scope item 28). The
+> `SimulatedBrokerWithRefreshTimeout` fixture is unchanged. Spike
+> artifact source switches from `spike-def204-round2-path1-results.json`
+> (S1a v2) to `spike-def204-mechanism-a-followon-results.json`
+> (Unit 6 follow-on spike) for the mechanism-name read.
+> Cross-references: `docs/sprints/sprint-31.92-def-204-round-2/tier-3-review-3-verdict.md`;
+> sprint-spec.md §"Defense-in-Depth Cross-Layer Composition Tests" CL-3
+> entry (amended); DEF-242, DEF-245;
+> RSK-MECHANISM-A-UNPROTECTED-WINDOW.
+
 ## Pre-Flight Checks
 
 Before making any changes:

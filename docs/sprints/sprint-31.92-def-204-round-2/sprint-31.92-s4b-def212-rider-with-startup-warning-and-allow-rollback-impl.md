@@ -1,5 +1,43 @@
 # Sprint 31.92, Session S4b: DEF-212 Rider + AC4.6 Dual-Channel Startup Warning + AC4.7 `--allow-rollback` CLI Gate per H-R2-4 + Interactive Ack + Periodic Re-Ack + CI-Override Flag per Round 3 H-R3-4
 
+> **🔄 ELEVATED PRIORITY per Tier 3 Review #3 verdict 2026-04-30**
+>
+> **This session was originally scoped as cleanup; the Tier 3 #3 verdict
+> elevates `IBKRConfig.bracket_oca_type` wiring to a load-bearing
+> escape-hatch primitive.** Under Tier 3 #3 (Question 3 Answer / DEF-244 /
+> RSK-DEC386-MODIFY-INCOMPATIBILITY), the rollback to `ocaType=0` is the
+> operator's **last-resort architectural fallback** if Mechanism A's
+> Mode-D-equivalent gate (Unit 6 follow-on spike) ever fails in
+> production. Treat the `IBKRConfig.bracket_oca_type` wiring as
+> architecturally critical, not cleanup:
+>
+> - The dual-channel startup warning (AC4.6) and `--allow-rollback`
+>   CLI gate (AC4.7) protect the operator from accidentally invoking
+>   the rollback path; under Tier 3 #3 the rollback path is now the
+>   only documented escape from "no viable mechanism in the H-class
+>   space" if Mechanism A's gate fails.
+> - DEC-386's `ocaType=1` threading on bracket children is the
+>   architectural property whose downstream consequence is the
+>   `modify_order` incompatibility (see DEF-242). Rolling back to
+>   `ocaType=0` recovers `modify_order` capability AT THE COST of
+>   losing OCA atomic cancellation (re-opens DEF-204's blast radius;
+>   the asymmetric-risk-aware default selected DEC-386's atomic
+>   cancellation; rollback inverts that choice).
+> - `IBKRConfig.bracket_oca_type` wiring through
+>   `OrderManager.__init__` becomes the operator's interface to the
+>   rollback. Without S4b's rider landing cleanly, the operator's
+>   only remaining option under a Mechanism A gate failure would be
+>   ad-hoc code editing — exactly the kind of pressure point Tier 3 #3
+>   identifies as architecturally critical.
+>
+> Cross-references: `docs/sprints/sprint-31.92-def-204-round-2/tier-3-review-3-verdict.md`
+> §Question 3 Answer / Cross-sprint constraint disposition; DEF-242
+> (architectural finding); DEF-244 (Sprint 31.94 binding via Mechanism A);
+> RSK-DEC386-MODIFY-INCOMPATIBILITY (permanent architectural constraint);
+> escalation-criteria.md A20 (Mechanism A Unit 6 hard-gate failure trigger,
+> at which point S4b's rollback escape hatch becomes operationally
+> load-bearing).
+
 ## Pre-Flight Checks
 
 Before making any changes:

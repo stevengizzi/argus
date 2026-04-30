@@ -1,5 +1,21 @@
 # Sprint 31.92, Session S5a: Path #1 In-Process Falsifiable Validation Against SimulatedBroker
 
+> **🔄 TIER 3 REVIEW #3 AMENDMENT NOTICE (2026-04-30)**
+>
+> CL-3 parameterization amended: `selected_mechanism = Mechanism A` (was
+> `selected_mechanism ∈ {h2_amend_stop, h4_hybrid, h1_cancel_and_await}`).
+> H2 and H4 ELIMINATED-EMPIRICALLY by DEF-242; only Mechanism A
+> (cancel-and-resubmit-fresh-stop, formerly H1, now PRIMARY DEFAULT)
+> remains viable. The `mechanism_under_test` field in the validation
+> JSON should equal `"mechanism_a"`. Spike artifact source switches from
+> `scripts/spike-results/spike-def204-round2-path1-results.json` (S1a v2)
+> to `scripts/spike-results/spike-def204-mechanism-a-followon-results.json`
+> (Unit 6 follow-on spike). Other cross-layer tests (CL-1, CL-2, CL-4,
+> CL-5, CL-7) untouched. Cross-references:
+> `docs/sprints/sprint-31.92-def-204-round-2/tier-3-review-3-verdict.md`;
+> sprint-spec.md §"Defense-in-Depth Cross-Layer Composition Tests" CL-3
+> entry (amended); DEF-242, DEF-245.
+
 ## Pre-Flight Checks
 
 Before making any changes:
