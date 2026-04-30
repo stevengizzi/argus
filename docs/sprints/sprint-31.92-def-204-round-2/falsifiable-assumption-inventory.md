@@ -272,3 +272,74 @@ Round 3 reviewer's FAI-specific tasks:
 for what happens after Round 3 produces a Critical finding.** Reviewer is
 referred to the revised `escalation-criteria.md` § Round 3 Outcome
 Pre-Commitment for the verbatim text.
+
+---
+
+## Pending FAI extensions committed in `round-3-disposition.md`
+
+**Operator-override audit-trail anchor per Round 3 disposition (Decision
+7 (b) routing for C-R3-1).** The two FAI entries below are committed in
+`round-3-disposition.md` § 6 with deferred materialization; the FAI
+table above stays at 9 entries until S3b / S4a-ii sprint-close materialize
+the new entries inline. This subsection makes the deferred materialization
+auditable from this artifact directly (not just from the disposition).
+
+### Pending FAI #10 — `Broker.refresh_positions()` concurrent-caller correlation (NEW per Round 3 C-R3-1)
+
+**Materialization timing:** S3b sprint-close (per Decision 7 (b)
+operator-override rationale; per `doc-update-checklist.md` D15).
+
+**Text (verbatim from `round-3-disposition.md` § 6.1):**
+
+> *FAI #10:* `Broker.refresh_positions()` synchronizes broker
+> round-trip per-caller — concurrent callers each correctly correlate
+> their `wait_for` return with their own `reqPositions()` invocation,
+> OR the implementation explicitly serializes concurrent callers via
+> single-flight pattern with coalesce window. The AC2.5
+> broker-verification-at-timeout fallback's correctness depends on this.
+>
+> **Falsifying spike:** S3b sub-spike spawns N=20 coroutines calling
+> `refresh_positions()` near-simultaneously (≤10ms separation) WITHOUT
+> serialization mitigation; mocked-await injection between A's
+> `reqPositions()` and B's `reqPositions()` with deterministic
+> broker-state-change between; assert the race IS observable
+> (stale-for-B classification). Then with the Fix A serialization
+> mitigation enabled, assert the race is NOT observable. Cross-layer
+> falsification at CL-7 in S5c.
+>
+> **Status:** unverified — falsifying spike scheduled in S3b. Will
+> become falsified on green S3b spike + green CL-7. Sprint Abort
+> Condition (NEW): if Fix A spike fails AND no alternative
+> serialization design, sprint halts and operator decides whether to
+> escalate to Phase A re-entry retroactively.
+
+### Pending FAI #11 — Bookkeeping callsite-enumeration exhaustiveness (NEW per Round 3 H-R3-5)
+
+**Materialization timing:** S4a-ii sprint-close (per
+`doc-update-checklist.md` D16).
+
+**Text (verbatim from `round-3-disposition.md` § 6.2):**
+
+> *FAI #11:* All sites in `argus/execution/order_manager.py` that
+> mutate `cumulative_pending_sell_shares` or `cumulative_sold_shares`
+> are enumerated in the FAI #9 protected callsite list (`_reserve_pending_or_fail`,
+> `on_fill`, `on_cancel`, `on_reject`, `_on_order_status`, plus
+> `_check_sell_ceiling`'s multi-attribute read; plus `reconstruct_from_broker`
+> for initialization). The L3 ceiling correctness depends on FAI #9's
+> protection covering EVERY mutation site, not just the enumerated
+> ones.
+>
+> **Falsifying spike:** S4a-ii regression test
+> `test_bookkeeping_callsite_enumeration_exhaustive` — AST scan walks
+> `OrderManager`'s source for `ast.AugAssign` nodes targeting
+> `cumulative_pending_sell_shares` or `cumulative_sold_shares`; finds
+> the enclosing function name for each; asserts the set of enclosing
+> functions is a subset of the expected callsite list. Falsifies if a
+> mutation site exists outside the expected list (e.g.,
+> `_on_exec_details` if it exists in code).
+>
+> **Status:** unverified — falsifying spike scheduled in S4a-ii. Will
+> become falsified on green S4a-ii regression run. Resolution if
+> falsified: either add the discovered callsite to FAI #9's protection
+> scope (preferred) or document the coverage gap with explicit
+> rationale.

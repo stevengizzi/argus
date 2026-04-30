@@ -513,7 +513,8 @@ The implementation should NOT handle these cases in this sprint:
     "fully closed," or "covers ~N%" language. Reviewer halts on these
     tokens.
 
-18. **(NEW per Tier 3 item C — Branch 4 refresh-failure semantics.)**
+18. **(NEW per Tier 3 item C — Branch 4 refresh-failure semantics; EXTENDED
+    per Round 3 C-R3-1 — concurrent-caller serialization.)**
     Treating `Broker.refresh_positions()` failure (timeout or exception)
     as equivalent to a successful refresh with stale data, OR treating it
     as a "best-effort" warn-only path. **Branch 4 (`verification_stale:
@@ -534,6 +535,57 @@ The implementation should NOT handle these cases in this sprint:
     property). The structural-distinct-Branch-4 design with HALT-ENTRY
     coupling under H1 is load-bearing — this is the structural defense
     against the FAI #2 + #5 cross-falsification path.
+    **Per Round 3 C-R3-1 extension:** treating concurrent
+    `Broker.refresh_positions()` callers as serialized at the IBKR /
+    `ib_async` layer without single-flight protection is also a rejected
+    edge case. The single-flight `asyncio.Lock` + 250ms coalesce window
+    per C-R3-1 Fix A is the structural defense; relying on `ib_async`'s
+    internal de-duplication is NOT sufficient because the per-caller
+    `wait_for(positionEndEvent)` correlation is unverified — coroutine
+    A's `wait_for` may return successfully on coroutine B's
+    `positionEnd`, leading to stale-for-A cache reads.
+
+19. **(NEW per Round 3 H-R3-4 — `--allow-rollback-skip-confirm` in
+    production startup.)** `--allow-rollback-skip-confirm` used in
+    production startup scripts is a rejected edge case. The flag exists
+    for CI ONLY; production startup MUST require the interactive ack
+    per H-R3-4 fix shape — operator-presence verification at
+    rollback-active boot is the structural property the flag is gating.
+    Edge case to reject: operator-convenience use of the skip-confirm
+    flag in production wrapper scripts to avoid the interactive prompt;
+    automation that wraps `argus/main.py` with both flags set without
+    explicit CI-context confirmation. Pre-live transition checklist
+    flags any production startup config containing
+    `--allow-rollback-skip-confirm` as a sprint-close gate (per
+    `doc-update-checklist.md` C9 amendment).
+
+20. **(NEW per Round 3 M-R3-2 — Branch 4 alert spam on repeated
+    refresh-failure.)** Treating Branch 4 alert spam under repeated
+    refresh-failure on the same `ManagedPosition.id` as expected
+    behavior is a rejected edge case. Per M-R3-2 fix shape, Branch 4
+    firings on the same `ManagedPosition.id` are throttled to one per
+    hour at alert layer; first firing publishes; subsequent within
+    1 hour are suppressed at alert layer (logged INFO with
+    `branch_4_throttled: true`); HALT-ENTRY effect persists; throttle
+    resets on `on_position_closed` or successful refresh observation.
+    Edge case to reject: implementing Branch 4 as fire-on-every-trigger
+    without throttle (operator-noise burden); throttling at the
+    publish layer in a way that silently drops the HALT-ENTRY effect
+    (the throttle is alert-layer only, not effect-layer).
+
+21. **(NEW per Round 3 H-R3-2 — watchdog flip restart-survival.)**
+    Treating the AC2.7 watchdog `auto`→`enabled` flip as surviving
+    ARGUS restart is a rejected edge case. Per H-R3-2 fix shape, the
+    flip is in-memory only; restart resets to `auto`. Post-restart
+    `is_reconstructed=True` posture (AC3.7) provides the structural
+    defense for reconstructed positions; new positions entered
+    post-restart that hit case-A before the watchdog re-enables are
+    exposed (RSK-WATCHDOG-AUTO-FLIP-RESTART-LOSS, MEDIUM, time-bounded
+    by Sprint 31.94 D3). Edge case to reject: persisting the flipped
+    state to a SQLite or in-memory cache with restart restoration —
+    couples to persistence semantics that DEC-369 reconciliation
+    immunity doesn't model and would re-introduce the same
+    architectural sequencing problem the renumbering resolved.
 
 ---
 

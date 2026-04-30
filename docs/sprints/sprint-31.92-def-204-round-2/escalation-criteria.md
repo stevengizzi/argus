@@ -28,6 +28,109 @@
 
 ---
 
+## Round 3 Operator Override Log Entry
+
+**Audit-trail anchor required by Decision 7's "explicit and logged" clause.**
+This subsection reproduces `round-3-disposition.md` § 1 (Operator Override
+Invocation) verbatim to provide the in-document audit-trail anchor. The
+override is auditable from this artifact directly without requiring
+the disposition document.
+
+### 1. Operator Override Invocation (per Decision 7 verbatim)
+
+Decision 7 (verbatim from § Round 3 Outcome Pre-Commitment below)
+provides:
+
+> *"Operator override at Round 3 verdict time is permitted but must be
+> explicit and logged in the Round 3 disposition."*
+
+**Operator hereby invokes this override.** This subsection logs the
+override explicitly per the audit requirement.
+
+### 1.1 What is being overridden
+
+Reviewer recommended Decision 7 (a) routing for C-R3-1 — primitive-
+semantics-class Critical → Phase A re-entry per Outcome C. Reviewer's
+confidence on FAI-class designation was characterized as
+"moderate-to-high" with explicit acknowledgment of the borderline
+definitional question of "extension of FAI #2" vs. "new FAI entry."
+
+**Operator overrides to Decision 7 (b) routing** — RSK-and-ship with
+in-sprint mitigation, treating C-R3-1 as a known limitation with a
+committed in-sprint structural fix (Fix A: single-flight serialization).
+
+### 1.2 Operator's rationale
+
+Three considerations support the override:
+
+**(i) The proposed fix is mechanically simple and well-bounded.** Fix A
+(single-flight `asyncio.Lock` + 250ms coalesce window on
+`IBKRBroker.refresh_positions()`) is a textbook asyncio concurrency
+pattern, ~50 LOC, with a regression test that exercises N concurrent
+callers and asserts the race is no longer observable. The fix does NOT
+require structural design exploration; it requires implementation +
+verification. A full Phase A re-entry's primary value (re-running design
+exploration) is low for a fix of this shape.
+
+**(ii) The borderline definitional aspect favors override.** Reviewer
+explicitly flagged C-R3-1 as ambiguous-class — "extension of FAI #2" is a
+defensible reading. Operator's reading: FAI #2's text covers
+*"`ib_async`'s position cache catches up to broker state within
+`Broker.refresh_positions(timeout_seconds=5.0)` under all observed
+reconnect-window conditions"* — the concurrent-caller surface is a
+sibling axis to the reconnect-window axis FAI #2 explicitly covers, not
+a structurally-distinct primitive. Treating it as an FAI-#2-extension
+(via FAI #10 added at S3b sprint-close) preserves the FAI's structural
+defense without invoking the full Phase A re-entry response.
+
+**(iii) Proportionality of response.** Path A (override + in-sprint fix)
+costs ~2–3 days from disposition to Phase D start. Path B (Phase A
+re-entry + Round 4 full-scope) costs ~5–6 days. The marginal value of
+the additional 2–3 days of structured re-review on a settled fix is
+bounded; the marginal cost of delayed cessation criterion #5 progress
+is real (every day of operator daily-flatten mitigation is operational
+risk + operator-process burden).
+
+### 1.3 What the override does NOT do
+
+The override does NOT:
+- Dismiss C-R3-1 as a non-finding. C-R3-1 is logged as
+  RSK-REFRESH-POSITIONS-CONCURRENT-CALLER at CRITICAL severity (per
+  `round-3-disposition.md` § 4).
+- Skip the structural fix. Fix A is committed in-sprint at S3b; no
+  RSK-and-document-only fallback.
+- Skip FAI extension. FAI #10 (concurrent-caller correlation) is
+  committed in this disposition; materialized at S3b close-out;
+  cross-checked by mid-sprint Tier 3 review (M-R2-5) at S4a-ii close.
+  FAI #11 (callsite-enumeration exhaustiveness for H-R3-5) is committed
+  in this disposition; materialized at S4a-ii close-out.
+- Skip Round 4. The mid-sprint Tier 3 review (M-R2-5) per Round 2
+  disposition remains in scope and provides the next structured
+  checkpoint after S4a-ii close. M-R2-5 IS the proportional re-review
+  for the C-R3-1 fix.
+
+### 1.4 Audit-trail anchors
+
+This override is auditable via:
+- The Round 3 disposition document (`round-3-disposition.md` § 1)
+- This subsection (in-document audit-trail anchor)
+- The Round 3 verdict (`adversarial-review-round-3-findings.md`) which
+  documents reviewer's recommended (a) routing — preserves the contrary
+  recommendation for retrospective review
+- The mid-sprint Tier 3 review verdict (M-R2-5, generated post-S4a-ii)
+  which independently checks whether the in-sprint fix successfully
+  closes C-R3-1
+- Process-evolution lesson F.8 (NEW, captured at sprint-close): "When
+  the FAI's self-falsifiability clause fires for a borderline-class
+  finding with a mechanically-simple fix, operator override per
+  Decision 7 (b) with committed-in-sprint mitigation is a proportional
+  response. The pattern is bounded: not every primitive-semantics
+  finding warrants the full ceremonial response of Phase A re-entry.
+  The mid-sprint Tier 3 review provides the structured re-review at
+  proportional cost."
+
+---
+
 ## Round 3 Outcome Pre-Commitment (Operator-Bound)
 
 **This subsection is mandatory per the Phase B re-run prompt and the Phase
@@ -166,6 +269,8 @@ The sprint as a whole is aborted (not just an individual session) if ANY of:
 7. **(per Round-1 C-2 disposition + H-R2-3 escalation per Phase B Severity Calibration Rubric) The `is_reconstructed = True` refusal posture creates a sustained operational degradation across multiple paper sessions** — i.e., reconstructed positions accumulate AND operator daily-flatten cannot keep up AND DEF-211 D3 is more than **2 weeks** away (was 4 weeks pre-Phase-B; lowered per H-R2-3 + Severity Calibration Rubric MEDIUM-HIGH floor — operator daily-flatten empirically failed Apr 28 with 27 of 87 ORPHAN-SHORT detections from a missed run). Sprint is paused (not aborted); Sprint 31.94 D3 pulled forward as priority OR operator daily-flatten infrastructure receives emergency hardening. Sprint 31.92's structural fix is correct; the operational consequence may require schedule adjustment.
 
 8. **(NEW per Tier 3 verdict — FAI self-falsifiability triggered fourth time)** Round 3 produces a primitive-semantics-class Critical AND Decision 7 routes to (a) Phase A re-entry. The fourth FAI miss within a single sprint's planning cycle (Round 1 asyncio yield-gap; Round 2 ib_async cache freshness; Phase A Tier 3 callback-path bookkeeping atomicity; Round 3 hypothetical fourth) is a structural signal that the mechanism understanding is incomplete in a way the FAI infrastructure itself cannot bound. **Default disposition: Phase A re-entry per Outcome C, NOT sprint abort.** Listed as a sprint abort consideration only for completeness — the design intent is that Decision 7 (a) routes to revision, not abort. Operator may choose to escalate to abort only if Round 3 surfaces evidence that the mechanism architecture itself (not just FAI completeness) is wrong.
+
+9. **(NEW per Round 3 C-R3-1 — Fix A serialization spike failure.)** If Fix A serialization spike (S3b sub-spike for FAI #10) fails AND no alternative serialization design surfaces, sprint halts; operator decides whether to escalate to Phase A re-entry retroactively. This abort condition is the binding contract on the C-R3-1 operator-override (per § 1 Operator Override Invocation above) — the in-sprint mitigation Path is conditional on Fix A's empirical falsifiability holding. If S3b's N=20 concurrent-caller spike returns the race observable WITH the mitigation enabled (i.e., the lock + coalesce-window pattern fails to serialize), the override is empirically retracted and Phase A re-entry retroactively reactivates. Operator decision required to escalate; default disposition is sprint halt + Phase A re-entry.
 
 ## Closing the Sprint
 

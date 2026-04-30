@@ -504,6 +504,114 @@ The 5 tests:
 
 ---
 
+### 28. (NEW per Round 3 C-R3-1) `Broker.refresh_positions()` Body Wrapped in Single-Flight `asyncio.Lock` + 250ms Coalesce Window
+
+**Test:** `tests/execution/test_ibkr_broker_concurrent_callers.py` (NEW file at S3b) exercises N=20 concurrent coroutines calling `IBKRBroker.refresh_positions()` near-simultaneously (≤10ms separation) with mocked-await injection between A's `reqPositions()` and B's `reqPositions()` and a deterministic broker-state-change between callers; asserts the race IS observable WITHOUT the single-flight serialization mitigation AND is NOT observable WITH the mitigation enabled.
+
+**Verified at:** S3b close-out (sub-spike for FAI #10) AND S5c CL-7 (cross-layer composition).
+
+**Sessions responsible:** S3b (establishes the single-flight wrapper + concurrent-caller regression test); S5c (extends with CL-7 cross-layer composition).
+
+**Specific edges:**
+- The 250ms coalesce window is bounded; coroutine B that arrives more than 250ms after coroutine A's cache-synchronization timestamp performs its own broker round-trip rather than coalescing.
+- Coalesce window applies only to successive callers within the window; concurrent callers at the same instant serialize via the lock.
+- Sprint Abort Condition (NEW per Round 3 C-R3-1) fires if Fix A spike fails AND no alternative serialization design surfaces.
+
+---
+
+### 29. (NEW per Round 3 H-R3-5) Bookkeeping Callsite-Enumeration AST Exhaustiveness
+
+**Test:** `test_bookkeeping_callsite_enumeration_exhaustive` (S4a-ii regression scope, ~40 LOC) — AST scan walks `OrderManager`'s source for `ast.AugAssign` nodes targeting `cumulative_pending_sell_shares` or `cumulative_sold_shares`; finds the enclosing function name for each; asserts the set of enclosing functions is a subset of the FAI #9 protected callsite list (`_reserve_pending_or_fail`, `on_fill`, `on_cancel`, `on_reject`, `_on_order_status`, `_check_sell_ceiling` multi-attribute read, `reconstruct_from_broker` initialization). Falsifies if a mutation site exists outside the expected list.
+
+**Verified at:** S4a-ii close-out.
+
+**Sessions responsible:** S4a-ii.
+
+**Specific edges:**
+- FAI #11 falsification gate: the test must fail when a new mutation site is introduced that isn't added to the FAI #9 protected list.
+- Resolution if falsified: extend the FAI #9 protected scope to include the discovered callsite (preferred) or document the coverage gap with explicit rationale.
+
+---
+
+### 30. (NEW per Round 3 M-R3-4) `refresh_positions`-then-`get_positions` Helper + AST-No-Await Scan Extension
+
+**Test:** AST-no-await scan extended to `_read_positions_post_refresh()` helper body at S4a-ii — asserts no `ast.Await` between `refresh_positions` invocation completion and `get_positions` cache read. Per M-R3-4 fix shape, the helper composes both calls into a single synchronous read-after-refresh sequence, removing yield-gap-between-refresh-and-read class of races.
+
+**Verified at:** S4a-ii close-out.
+
+**Sessions responsible:** S3b (introduces helper at AC2.5 fallback site); S4a-ii (AST-no-await scan extension).
+
+**Specific edges:**
+- The helper is the single entry point for all refresh-then-read sequences in OrderManager; AC2.5 fallback paths use it instead of calling the two-step sequence directly.
+- Performance budget per spec § Performance Benchmarks: ≤5µs per-call overhead.
+
+---
+
+### 31. (NEW per Round 3 H-R3-1) `time.monotonic()` at All Suppression-Timeout Sites
+
+**Test:** `test_locate_suppression_resilient_to_wall_clock_skew` (S3b regression scope) — fixture sets up locate-suppression entry, then advances synthetic wall-clock by injecting a backwards jump (e.g., NTP correction during session), then asserts suppression-timeout calculation correctly reflects monotonic time elapsed rather than wall-clock delta.
+
+**Verified at:** S3b close-out (test fixture); ongoing CI green.
+
+**Sessions responsible:** S3b (introduces `time.monotonic()` at all 4 standalone-SELL exception handlers + AC2.5 timeout-check site).
+
+**Specific edges:**
+- All 4 standalone-SELL exception handlers + the AC2.5 timeout-check site use `time.monotonic()`, not `time.time()`.
+- `OrderManagerConfig.locate_suppression_seconds` validator footnote per § 7.1 Config Changes: bounds (300–86400) are seconds in monotonic time; equivalent to wall-clock under normal operation.
+
+---
+
+### 32. (NEW per Round 3 H-R3-3) RiskManager Check 0 Halt-Entry Extension + Ack Mechanism
+
+**Test:** Two regression tests at S3b:
+- `test_risk_manager_check0_rejects_when_halt_entry_set` — instantiate ManagedPosition with `halt_entry_until_operator_ack=True`; emit entry signal for the SAME `ManagedPosition.id`; assert RiskManager rejects via Check 0 with reason="halt_entry_set"; assert per-position granularity preserved (new positions on same symbol unaffected).
+- `test_clear_halt_endpoint_requires_position_id_and_clears_flag` — call `POST /api/v1/positions/{position_id}/clear_halt` with valid + invalid position IDs; assert valid clears the flag and emits `event="halt_entry_cleared"` log; invalid returns 404.
+
+**Verified at:** S3b close-out.
+
+**Sessions responsible:** S3b (extends RiskManager Check 0); separate sub-session within S3b implements the REST endpoint + CLI tool (`scripts/clear_position_halt.py`).
+
+**Specific edges:**
+- Per AC2.8: halt-entry flag does NOT survive restart; `is_reconstructed=True` posture (AC3.7) subsumes halt-entry by refusing ALL ARGUS-emitted SELLs on reconstructed positions.
+- Per-position granularity: only the SAME `ManagedPosition.id` is affected; new positions on the same symbol bypass the halt.
+
+---
+
+### 33. (NEW per Round 3 H-R3-4) Interactive Ack at Startup + CI-Override Flag Separation
+
+**Test:** Three regression tests at S4b:
+- `test_startup_interactive_ack_required_when_rollback_active_and_tty` — instantiate ARGUS startup with `bracket_oca_type=0` AND `--allow-rollback` AND TTY-detected; mock stdin to provide exact phrase "I ACKNOWLEDGE ROLLBACK ACTIVE"; assert ARGUS proceeds.
+- `test_startup_exits_3_when_rollback_active_and_tty_and_wrong_phrase` — same setup with stdin providing wrong phrase; assert exit code 3.
+- `test_startup_skip_confirm_flag_bypasses_interactive_ack_for_ci` — `--allow-rollback-skip-confirm` flag present + `bracket_oca_type=0` + `--allow-rollback` flag present; assert ARGUS proceeds without prompt; assert canonical-logger CRITICAL emission still fires (CI evidence trail preserved).
+
+**Verified at:** S4b close-out.
+
+**Sessions responsible:** S4b.
+
+**Specific edges:**
+- Per Round 3 H-R3-4: `--allow-rollback-skip-confirm` is separate from `--allow-rollback`; production startup MUST require interactive ack (per SbC §19, NEW).
+- Periodic re-ack every 4 hours: separate test (`test_periodic_reack_emits_every_4h_when_rollback_active`) verified via mock-time advance.
+
+---
+
+### 34. (NEW per Round 3 M-R3-2) Branch 4 Alert Throttling — 1-Hour Per-Position Cooldown
+
+**Test:** `test_branch_4_throttle_one_per_hour_per_position` (S3b regression scope) — fire Branch 4 twice on the same `ManagedPosition.id` within 1-hour window; assert first firing publishes `phantom_short_retry_blocked` alert; second firing is suppressed at alert layer (logged INFO with `branch_4_throttled: true`); assert HALT-ENTRY effect persists across both firings; advance synthetic clock past 1-hour window AND fire third Branch 4; assert third firing publishes alert again.
+
+**Verified at:** S3b close-out.
+
+**Sessions responsible:** S3b (introduces Branch 4 throttle).
+
+**Specific edges:**
+- Throttle resets on `on_position_closed` OR successful refresh observation (whichever fires first).
+- Throttling is at alert layer only — HALT-ENTRY effect persists; the throttle does NOT silently drop the safety property.
+
+---
+
+**Total invariants:** 27 (Round 2 baseline) + 7 (Round 3) = **34**.
+
+---
+
 ## Per-Session Verification Matrix
 
 The matrix below shows which invariants each session's `@reviewer` MUST explicitly verify in the Tier 2 verdict. **13 sessions total** (was 10 pre-Tier-3): S1a + S1b spikes; S2a + S2b Path #1; S3a + S3b Path #2; S4a-i + S4a-ii (split per Tier 3 items A + B); S4b DEF-212 rider; S5a + S5b validation; S5c (NEW per Decision 5 + Tier 3 item E).

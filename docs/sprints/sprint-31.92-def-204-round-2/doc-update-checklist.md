@@ -657,6 +657,105 @@ F.7 are NEW per Phase B re-run + Phase A Tier 3 verdict):**
 
 ---
 
+## Phase C-D — Sprint-Close (D14) Doc-Sync (Round 3 D-class items per `round-3-disposition.md` § 7.7)
+
+The following D-class doc-sync items materialize Round 3 disposition's
+deferred FAI extensions + process-evolution lesson F.8 + sprint-history
++ DEC-390 cross-references. Run at sprint-close after C1–C10 complete.
+
+### D15. falsifiable-assumption-inventory.md — Materialize FAI #10 per S3b close-out
+
+**Trigger:** S3b close-out artifact generated; FAI #10 falsifying spike
+green (concurrent-caller regression test passes WITH single-flight
+serialization mitigation enabled).
+
+**Action:** Promote pending FAI #10 (currently in
+`falsifiable-assumption-inventory.md` § "Pending FAI extensions
+committed in `round-3-disposition.md`") into the inventory's main table
+as entry #10 with status updated from "unverified — falsifying spike
+scheduled in S3b" to "falsified — green S3b spike (commit: <SHA>)".
+Update inventory's preamble to "10 entries" (was 9). Cross-reference
+the Cross-Layer falsification status from CL-7 at S5c (will be
+"unverified — scheduled in S5c" at S3b close, flips to "falsified" at
+S5c close).
+
+**Done when:** FAI #10 appears in the main inventory table; status
+field reflects S3b spike result; CL-7 cross-reference present.
+
+### D16. falsifiable-assumption-inventory.md — Materialize FAI #11 per S4a-ii close-out
+
+**Trigger:** S4a-ii close-out artifact generated; FAI #11 falsifying
+spike green (`test_bookkeeping_callsite_enumeration_exhaustive` passes
+— set of bookkeeping mutation sites is a subset of FAI #9 protected
+callsite list).
+
+**Action:** Promote pending FAI #11 (currently in
+`falsifiable-assumption-inventory.md` § "Pending FAI extensions
+committed in `round-3-disposition.md`") into the inventory's main table
+as entry #11 with status updated from "unverified — falsifying spike
+scheduled in S4a-ii" to "falsified — green S4a-ii spike (commit:
+<SHA>)". Update inventory's preamble to "11 entries" post-D15+D16.
+
+**Done when:** FAI #11 appears in the main inventory table; status
+field reflects S4a-ii spike result; FAI #9 protected-callsite-list
+cross-reference confirmed exhaustive.
+
+### D17. docs/process-evolution.md — Capture lesson F.8
+
+**Trigger:** Sprint 31.92 sprint-close; D15 + D16 complete (FAI #10 +
+#11 materialized in inventory).
+
+**Action:** Append lesson F.8 to `docs/process-evolution.md` per the
+Round 3 disposition § 1.4 + § 10 verbatim text. Lesson F.8 captures
+the operator-override pattern with proportional in-sprint mitigation
+(the Decision 7 (b) routing for borderline-class C-R3-1) — pattern
+recognition criteria + pattern anti-recognition criteria (when override
+is NOT appropriate). Reference sources: `round-3-disposition.md` § 1
+(Operator Override Invocation) + § 10 (Process-Evolution Lesson F.8).
+
+**Done when:** Lesson F.8 appears in `docs/process-evolution.md` with
+both pattern recognition + anti-recognition criteria; cross-reference
+back to disposition document present.
+
+### D18. docs/sprint-history.md — Log Round 3 disposition in Sprint 31.92 row
+
+**Trigger:** Sprint 31.92 sprint-close.
+
+**Action:** Append Round 3 disposition narrative to the Sprint 31.92
+row in `docs/sprint-history.md`. Required content: (a) Round 3
+adversarial review verdict summary (1 Critical + 5 High + 4 Medium +
+2 Low; A14 fired); (b) Decision 7 (b) operator-override invocation
+(C-R3-1 routed to RSK-and-ship with in-sprint Fix A mitigation rather
+than Phase A re-entry); (c) lesson F.8 reference; (d) FAI #10 + FAI
+#11 materialized; (e) RSK-REFRESH-POSITIONS-CONCURRENT-CALLER (CRITICAL)
++ RSK-WATCHDOG-AUTO-FLIP-RESTART-LOSS (MEDIUM) appended to
+risk-register; (f) cross-reference to `round-3-disposition.md`.
+
+**Done when:** Sprint 31.92 row in `docs/sprint-history.md` includes
+the Round 3 narrative; cross-references resolve.
+
+### D19. docs/decision-log.md — Append C-R3-1 + 2 RSKs to DEC-390 Cross-References
+
+**Trigger:** Sprint 31.92 sprint-close; DEC-390 written per C2.
+
+**Action:** Append the following items to DEC-390's "Cross-References"
+section in `docs/decision-log.md`:
+- C-R3-1 (Round 3 Critical finding — `Broker.refresh_positions()`
+  concurrent-caller correlation; closed by Fix A single-flight
+  serialization at S3b)
+- RSK-REFRESH-POSITIONS-CONCURRENT-CALLER (CRITICAL; logged in
+  risk-register at sprint-close; mitigation = Fix A; cessation =
+  M-R2-5 PROCEED + green CL-7)
+- RSK-WATCHDOG-AUTO-FLIP-RESTART-LOSS (MEDIUM; logged in risk-register
+  at sprint-close; bounded by Sprint 31.94 D3)
+- Round 3 disposition document
+  (`docs/sprints/sprint-31.92-def-204-round-2/round-3-disposition.md`)
+
+**Done when:** DEC-390 Cross-References includes all 4 anchors; entries
+resolve to correct artifacts.
+
+---
+
 ## Phase D — Sprint Cessation Tracker
 
 After Sprint 31.92 seals, the following tracker is added to `CLAUDE.md` under

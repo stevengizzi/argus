@@ -555,6 +555,57 @@ If either check fails, kick back to spec amendment cycle for re-scoping.
 
 ---
 
+## § 8.1 Phase B re-run note (2026-04-29 follow-up)
+
+When § 8 verification was actually executed against the Round 3
+amendments, the prediction above proved wrong on two counts:
+
+1. **The "5-of-8 threshold" prose is incorrect** and is hereby
+   **retracted**. The protocol text at
+   `workflow/protocols/adversarial-review.md` v1.1.0 § Substantive vs
+   Structural decision rubric, line 188, reads:
+   > *"If ANY trigger fires, the disposition is structural — Phase B
+   > re-run is mandatory."*
+   The "5-of-8" framing was a drafting error in this disposition's § 8.
+   It does not appear in the protocol; it does not govern. **Protocol
+   fidelity (any-trigger → Phase B re-run) governs.** The author
+   acknowledges the prose was authored in error.
+
+2. **Two triggers actually fire**, not "0–1":
+   - **Trigger 7** (new RSK rated MEDIUM-HIGH or higher): satisfied
+     by RSK-REFRESH-POSITIONS-CONCURRENT-CALLER (CRITICAL) introduced
+     at § 4.1 above.
+   - **Trigger 8** (Hypothesis Prescription halt-or-proceed gate
+     language modification): satisfied by § 7.1 row 12's S1a halt-or-
+     proceed gate language extension (4th adversarial axis per M-R3-1).
+
+Per the protocol's any-trigger rule, a Phase B re-run is mandatory.
+That re-run was executed in compressed form and is documented at
+`phase-b-rerun-note.md` (sibling artifact, sprint folder root).
+
+**Re-run determination (verbatim from the note):**
+
+> *"Phase B re-run produces zero design changes; Phase C re-seals on
+> the artifacts as amended in the prior session's commit-pending
+> state."*
+
+Both fires are mechanical consequences of dispositions this document
+itself authored (Decision 7 (b) operator-override → tracked-RSK-with-
+mitigation; M-R3-1 ACCEPT → S1a 4th-axis gate extension). Neither
+required design exploration; both were settled at disposition time.
+The compressed re-run confirms the design space did not change.
+
+**Compaction-risk re-validation:** all 13 sessions remain ≤13.5
+post-amendment per `session-breakdown.md` (line 1635: "All 12
+implementation/spike sessions score ≤13.5; ZERO sessions at..."). Gate
+PASSED.
+
+**Substantive vs Structural rubric outcome:** 2 of 8 triggers fire;
+Phase B re-run executed (compressed, zero design changes); Phase C
+sealed on the amended artifact set. Phase D unblocked.
+
+---
+
 ## 9. Phase D Readiness
 
 Upon completion of:

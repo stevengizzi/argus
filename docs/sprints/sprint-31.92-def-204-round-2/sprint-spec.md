@@ -69,6 +69,9 @@ proving the failure of any one layer is caught by another.
    three-branch classification (zero / expected-long / unexpected) + Branch 4
    (`verification_stale: true`) on refresh failure + HALT-ENTRY coupling
    under H1 active AND refresh failure (per Tier 3 item C).
+   `IBKRBroker.refresh_positions()` body uses single-flight `asyncio.Lock` +
+   250ms coalesce window per Round 3 C-R3-1 disposition. Concurrent callers
+   serialized; rapid-succession callers benefit from coalesce.
 
 3. **Long-only SELL-volume ceiling with concurrency-safe pending-share
    reservation + reconstructed-position refusal posture (L3 — guarded at
@@ -179,10 +182,12 @@ proving the failure of any one layer is caught by another.
 - **AC2.2:** `_is_locate_suppressed(position, now)` returns True iff
   `now < self._locate_suppressed_until.get(position.id, 0.0)` — keyed by
   `ManagedPosition.id` ULID per Round-1 H-2 (NOT symbol; cross-position
-  safety preserved).
+  safety preserved). `now` is `time.monotonic()` per Round 3 H-R3-1 —
+  suppression-timeout comparisons are wall-clock-skew-resilient.
 - **AC2.3:** Locate-rejection at any of the 4 standalone-SELL paths
   triggers suppression-dict entry: `_locate_suppressed_until[position.id]
-  = time.time() + config.locate_suppression_seconds`.
+  = time.monotonic() + config.locate_suppression_seconds` (per Round 3
+  H-R3-1 — applies at all 4 standalone-SELL exception handlers).
 - **AC2.4:** Subsequent SELL emit attempts at the same `ManagedPosition.id`
   during the suppression window are skipped (no broker call). Other
   `ManagedPosition`s on the same symbol are NOT affected (cross-position
@@ -191,7 +196,10 @@ proving the failure of any one layer is caught by another.
   Branch 4 + HALT-ENTRY coupling per Tier 3 item C):**
   - Suppression-timeout fallback FIRST calls
     `await self._broker.refresh_positions(timeout_seconds=5.0)` (new ABC
-    method per C-R2-1).
+    method per C-R2-1). `refresh_positions()` is single-flight serialized
+    per Round 3 C-R3-1 disposition; the timeout still applies (5s per call);
+    concurrent callers either await the lock (within their own 5s budget)
+    or coalesce on the prior caller's synchronization (250ms window).
   - **Branch 4 (`verification_stale: true`):** if `refresh_positions`
     raises or times out, publish `phantom_short_retry_blocked` alert with
     metadata `{verification_stale: True, verification_failure_reason:
@@ -200,6 +208,12 @@ proving the failure of any one layer is caught by another.
     additionally mark position `halt_entry_until_operator_ack=True`. No
     further SELL attempts on the position; no phantom short. Operator-driven
     resolution.
+  - **Branch 4 throttle per Round 3 M-R3-2:** Branch 4 firings on the same
+    `ManagedPosition.id` within a session are throttled to one per hour at
+    alert layer (first firing publishes; subsequent within 1 hour are
+    suppressed at alert layer with INFO log entry `branch_4_throttled:
+    true`); HALT-ENTRY effect persists; throttle resets on
+    `on_position_closed` or successful refresh observation.
   - On refresh success, query `broker.get_positions()` and apply
     three-branch classification:
     - **Branch 1 (broker shows zero):** held order resolved cleanly. Log
@@ -218,20 +232,50 @@ proving the failure of any one layer is caught by another.
   active-positions dict; the canonical `on_position_closed` close-path).
   Regression test at S3b asserts dict entry cleared on each path.
 - **AC2.7 (`_pending_sell_age_seconds` watchdog — M-R2-1 + Decision 4
-  auto-activation):** Watchdog monitors per-position pending-SELL age;
-  fires when `now - position.last_sell_emit_time > pending_sell_age_seconds`
-  AND no fill observed. Activated via config field
-  `order_management.pending_sell_age_watchdog_enabled` with values
+  auto-activation; per Round 3 H-R3-2 amended for storage / event-definition
+  / atomicity / logged-transition semantics):** Watchdog monitors per-position
+  pending-SELL age; fires when `now - position.last_sell_emit_time >
+  pending_sell_age_seconds` AND no fill observed. Activated via config
+  field `order_management.pending_sell_age_watchdog_enabled` with values
   `auto` (default) / `enabled` / `disabled`. **`auto` mode flips to
   `enabled` on first observed `case_a_in_production` event** in production
   paper trading. NOT manual operator activation per Decision 4. Provides
   the structural fallback for any unmodeled locate-rejection string variant
   (FAI #4 mitigation).
+  - **Storage (per H-R3-2):** in-memory Pydantic field mutation only; no
+    persistence; restart resets to `auto`.
+  - **Event-definition (per H-R3-2):** "first observed `case_a_in_production`"
+    is globally-scoped, single ARGUS process lifetime, defined as: first
+    time `_pending_sell_age_seconds` exceeds threshold AND no fill observed
+    AND `_locate_suppressed_until[position.id]` is set, in any position.
+  - **Atomicity (per H-R3-2):** flip guarded by `asyncio.Lock` in watchdog
+    detection path; re-entrant flips are no-ops (idempotent).
+  - **Logged transition (per H-R3-2):** structured log line
+    `event="watchdog_auto_to_enabled"` on flip with `case_a_evidence:
+    {position_id, symbol, age_seconds_at_flip}`.
+- **AC2.8 (NEW per Round 3 H-R3-3 — `halt_entry_until_operator_ack`
+  consumer + ack mechanism + restart behavior + logged transitions):**
+  - **Consumer:** RiskManager Check 0 (existing DEC-027) is extended to
+    also reject entries when ANY ManagedPosition has
+    `halt_entry_until_operator_ack=True` AND the entry signal is for the
+    SAME `ManagedPosition.id`. Per-position granularity preserved; new
+    positions on the same symbol unaffected.
+  - **Ack mechanism:** new REST endpoint
+    `POST /api/v1/positions/{position_id}/clear_halt` + new CLI tool
+    `scripts/clear_position_halt.py {position_id}`. No Web UI changes
+    (per SbC §13).
+  - **Restart behavior:** halt-entry flag does NOT survive restart; the
+    `is_reconstructed=True` posture (AC3.7) subsumes halt-entry by
+    refusing ALL ARGUS-emitted SELLs on reconstructed positions.
+  - **Logged transitions:** `event="halt_entry_set"` on Branch 4 + H1
+    firing; `event="halt_entry_cleared"` on operator-ack via CLI/REST.
 
 #### Deliverable 3 (Long-only SELL-volume ceiling — synchronous-update invariant extended per Tier 3 items A + B)
 
 - **AC3.1 (5 state transitions + synchronous-update invariant on ALL
-  bookkeeping callback paths per Tier 3 items A + B):** Pending-reservation
+  bookkeeping callback paths per Tier 3 items A + B; the synchronous-update
+  invariant scope is enforced by FAI #11 exhaustiveness regression at
+  S4a-ii per Round 3 H-R3-5):** Pending-reservation
   state machine enumerates 5 transitions:
   1. **Place-time increment** (synchronous, before `await place_order(...)`):
      `position.cumulative_pending_sell_shares += requested_qty` inside
@@ -276,12 +320,18 @@ proving the failure of any one layer is caught by another.
   Cross-position aggregation is the existing Risk Manager
   max-single-stock-exposure check at the entry layer (DEC-027), out of
   scope to modify here.
-- **AC3.5 (canonical C-1 race test + AST guards per Tier 3 items A + B):**
+- **AC3.5 (canonical C-1 race test + AST guards per Tier 3 items A + B;
+  callsite-enumeration exhaustiveness per Round 3 H-R3-5 / FAI #11):**
   Two coroutines on same `ManagedPosition` both attempt SELL emission;
   first passes ceiling and increments pending; second sees pending and
   FAILS ceiling check; refuses SELL. Plus AST-no-await scan + mocked-await
   injection regression on `_reserve_pending_or_fail` (S4a-i) AND on all 5
-  bookkeeping callback paths (S4a-ii per FAI entry #9).
+  bookkeeping callback paths (S4a-ii per FAI entry #9). Plus
+  `test_bookkeeping_callsite_enumeration_exhaustive` at S4a-ii per FAI #11
+  — AST scan walks `OrderManager`'s source for `ast.AugAssign` nodes
+  targeting `cumulative_pending_sell_shares` or `cumulative_sold_shares`,
+  finds the enclosing function name for each, and asserts the set of
+  enclosing functions is a subset of the FAI #9 protected callsite list.
 - **AC3.6 (broker-confirmed initialization with DEC-369 immunity):**
   `reconstruct_from_broker`-derived positions initialize
   `cumulative_pending_sell_shares = 0`, `cumulative_sold_shares = 0`,
@@ -322,7 +372,9 @@ proving the failure of any one layer is caught by another.
 - **AC4.5 (DEC-117 atomic-bracket invariants preserved byte-for-byte):**
   Existing regression test `test_dec386_oca_invariants_preserved_byte_for_byte`
   green throughout S4b.
-- **AC4.6 (dual-channel CRITICAL warning — H-R2-4 combined):** When
+- **AC4.6 (dual-channel CRITICAL warning — H-R2-4 combined; extended
+  per Round 3 H-R3-4 with interactive ack + periodic re-ack +
+  CI-override flag separation):** When
   `bracket_oca_type != 1` AND `--allow-rollback` CLI flag is present,
   ARGUS emits:
   - **ntfy.sh `system_warning` urgent** with topic
@@ -333,6 +385,17 @@ proving the failure of any one layer is caught by another.
     1 and restart unless emergency rollback in progress."
   Both emissions captured at startup; tested via log-capture fixture in
   S4b (`test_startup_critical_warning_emitted_when_bracket_oca_type_zero`).
+  - **Startup-time interactive ack per H-R3-4** (default ON for non-CI
+    environments): when `bracket_oca_type != 1` AND `--allow-rollback`
+    AND interactive TTY detected, ARGUS prompts for the exact phrase
+    "I ACKNOWLEDGE ROLLBACK ACTIVE"; anything else exits with code 3.
+  - **Periodic re-ack per H-R3-4:** every 4 hours during runtime, ntfy.sh
+    `system_warning` urgent + canonical-logger CRITICAL with phrase
+    "DEC-386 ROLLBACK ACTIVE — STILL IN ROLLBACK STATE — N hours since
+    startup".
+  - **CI override flag per H-R3-4:** `--allow-rollback-skip-confirm`
+    (separate from `--allow-rollback`) bypasses the interactive prompt
+    for unattended starts. Both flags required for CI use.
 - **AC4.7 (`--allow-rollback` CLI flag gate per H-R2-4):**
   - `argus/main.py` parses `--allow-rollback` flag.
   - When `bracket_oca_type != 1` AND `--allow-rollback` flag absent:
@@ -389,14 +452,17 @@ proving the failure of any one layer is caught by another.
   (`sprint-31.92-validation-{path1,path2,composite}.json`) committed to
   `main` BEFORE sprint-close (D14 doc-sync). Sprint cannot be sealed
   without these.
-- **AC5.6 (Cross-Layer Composition Tests committed at S5c per Decision 5):**
-  All 5 cross-layer composition tests (CL-1 through CL-5; see § "Defense-in-Depth
+- **AC5.6 (Cross-Layer Composition Tests committed at S5c per Decision 5;
+  extended to 6 tests per Round 3 C-R3-1 — CL-7 added):**
+  All 6 cross-layer composition tests (CL-1 through CL-5 + CL-7; see § "Defense-in-Depth
   Cross-Layer Composition Tests" below) committed in
   `tests/integration/test_def204_round2_validation.py`.
   `tests/integration/conftest_refresh_timeout.py` provides the
   `SimulatedBrokerWithRefreshTimeout` fixture variant (DEF-SIM-BROKER-TIMEOUT-FIXTURE)
   enabling in-process Branch 4 testing for CL-3 + a dedicated Branch 4
-  unit test.
+  unit test. **CL-7 (concurrent-caller correlation; per Round 3 C-R3-1):**
+  N=2 concurrent AC2.5 fallbacks, broker state mutated between callers,
+  assert no stale Branch 2 classification.
 
 #### Deliverable 6 (DEC-390 materialization — structural-closure framing per process-evolution lesson F.5)
 
@@ -427,8 +493,9 @@ DEC-390 claims defense-in-depth across 4 layers. Per
 `templates/sprint-spec.md` v1.2.0, Sprint 31.92's regression checklist MUST
 include cross-layer composition tests — scenarios where the failure of one
 layer is supposed to be caught by another, asserting that the catch happens.
-**Sprint 31.92 commits to 5 cross-layer composition tests** (above the
-template's "at least one" floor; above Tier 3 sub-area D's 3-test floor)
+**Sprint 31.92 commits to 6 cross-layer composition tests post-Round-3
+C-R3-1** (above the template's "at least one" floor; above Tier 3
+sub-area D's 3-test floor; CL-7 added per Round 3 disposition)
 delivered at S5c (NEW SESSION per Decision 5):
 
 - **CL-1 (L1 fails → L3 catches):** Force `_reserve_pending_or_fail` false
@@ -457,6 +524,17 @@ delivered at S5c (NEW SESSION per Decision 5):
   locate-suppression for the position is active. Verify the protective
   stop-replacement path is allowed AND that Branch 4 does not falsely
   fire on it.
+- **CL-7 (concurrent-caller correlation; NEW per Round 3 C-R3-1):** N=2
+  concurrent AC2.5 fallbacks (two coroutines each invoking
+  `Broker.refresh_positions()` near-simultaneously; ≤10ms separation),
+  broker state mutated between callers (e.g., position quantity changes
+  between A's `reqPositions` and B's `reqPositions` via test-fixture
+  injection); assert no stale Branch 2 classification — the single-flight
+  serialization + 250ms coalesce window per Fix A guarantees coroutine B
+  either awaits A's lock or coalesces on A's synchronization rather than
+  reading a partially-converged cache. Falsifies if assertion holds
+  WITHOUT the serialization mitigation (race observable) but holds WITH
+  the mitigation.
 
 **CL-6 (rollback + locate-suppression interaction) is OUT of scope per
 Decision 5** — deferred with rationale documented in
@@ -485,16 +563,18 @@ the requirement.
 | `_locate_suppressed_until` dict lookup overhead | ≤ 5µs | S3b benchmark — single dict.get + float comparison |
 | Broker-side verification at suppression-timeout (AC2.5) | ≤ 5.2s p95 worst-case (refresh round-trip + verification call; slow path by definition; once per position per session worst case) | S3b benchmark — single `refresh_positions()` + `get_positions()` call sequence |
 | Pending reservation increment/decrement overhead | ≤ 1µs | S4a-i benchmark — synchronous integer arithmetic on `ManagedPosition` |
+| `Broker.refresh_positions()` single-flight serialization overhead (per Round 3 C-R3-1) | ≤ 1ms p95 (lock acquisition + coalesce-window check) | S3b benchmark — serialized callers measured against unserialized baseline; N=100 concurrent invocations |
+| Helper `_read_positions_post_refresh()` per-call overhead (per Round 3 M-R3-4) | ≤ 5µs | S3b benchmark — synchronous helper composing `refresh_positions` then `get_positions` |
 | Full-suite test runtime regression | ≤ +50s vs baseline 5,269 pytest (recalibrated per Tier 3 cumulative diff bound) | DEC-328 final-review full-suite measurement |
 
 ### Config Changes
 
 | YAML Path | Pydantic Model | Field Name | Default | Validator |
 |-----------|---------------|------------|---------|-----------|
-| `order_manager.locate_suppression_seconds` | `OrderManagerConfig` | `locate_suppression_seconds` | **TBD-from-S1b spike (target p99+20%, likely 18000s = 5hr)** | `Field(default=<spike_value>, ge=300, le=86400)` |
+| `order_manager.locate_suppression_seconds` | `OrderManagerConfig` | `locate_suppression_seconds` | **TBD-from-S1b spike (target p99+20%, likely 18000s = 5hr)** | `Field(default=<spike_value>, ge=300, le=86400)`. **Footnote per Round 3 H-R3-1:** Validator bounds (300–86400) are seconds in monotonic time per H-R3-1; equivalent to wall-clock under normal operation. |
 | `order_manager.long_only_sell_ceiling_enabled` | `OrderManagerConfig` | `long_only_sell_ceiling_enabled` | `True` (fail-closed) | `Field(default=True)` |
 | `order_manager.long_only_sell_ceiling_alert_on_violation` | `OrderManagerConfig` | `long_only_sell_ceiling_alert_on_violation` | `True` | `Field(default=True)` |
-| `order_management.pending_sell_age_watchdog_enabled` | `OrderManagerConfig` | `pending_sell_age_watchdog_enabled` | `"auto"` | `Field(default="auto")` with `Literal["auto", "enabled", "disabled"]` validator. **NEW per Decision 4** — `auto` mode flips to `enabled` on first observed `case_a_in_production` event. |
+| `order_management.pending_sell_age_watchdog_enabled` | `OrderManagerConfig` | `pending_sell_age_watchdog_enabled` | `"auto"` | `Field(default="auto")` with `Literal["auto", "enabled", "disabled"]` validator. **NEW per Decision 4** — `auto` mode flips to `enabled` on first observed `case_a_in_production` event. **Storage per Round 3 H-R3-2:** in-memory only; auto→enabled flip is `asyncio.Lock`-guarded; restart resets to `auto`. |
 | `(existing) ibkr.bracket_oca_type` | `IBKRConfig` | `bracket_oca_type` | `1` | `Field(default=1, ge=0, le=1)` — **EXISTING (no schema change); S4b consumes**. Runtime-flippability preserved per DEC-386 design intent. |
 
 **CLI flag (NEW per H-R2-4):** `--allow-rollback` on `argus/main.py`.
@@ -769,8 +849,11 @@ Prescription"):**
 
 > Compute Wilson UB from observed rejection rate AS WELL AS the
 > cancel-then-immediate-SELL stress sub-spike outcomes. **Decision rule
-> (per Decision 2 — N=100 hard gate):** pick H2 if **worst-axis Wilson
-> UB** (per Decision 1 — adversarial axes (i)/(ii)/(iii)) **< 5%** AND
+> (per Decision 2 — N=100 hard gate; per Round 3 M-R3-1 — worst-axis
+> across 4 adversarial axes):** pick H2 if **worst-axis Wilson UB**
+> (per Decision 1 + Round 3 M-R3-1 — adversarial axes (i)/(ii)/(iii) +
+> NEW axis (iv) joint reconnect+concurrent: concurrent amends across
+> N≥3 positions DURING reconnect window) **< 5%** AND
 > `h1_propagation_zero_conflict_in_100 == true`. Pick H4 if 5% ≤
 > worst-axis Wilson UB < 20% AND `h1_propagation_zero_conflict_in_100 ==
 > true`. Pick H1 ONLY IF `h1_propagation_zero_conflict_in_100 == true`
@@ -808,19 +891,45 @@ Phase A step 5: every session post-mitigation scores ≤13.5 (Medium). Zero
 sessions at compaction score 14+. Detailed scoring tables for all 13
 sessions are in `session-breakdown.md`.
 
-**Net pytest target:** 88–114 new logical tests (was 75–95 pre-Phase-B-re-run);
-~108–134 effective with parametrize multipliers. Final test-count target:
-**5,357–5,403 pytest** (5,269 baseline + 88–134 new), 913 Vitest unchanged
-(zero UI changes per frontend immutability invariant).
+**Net pytest target:** 95–121 new logical tests (was 88–114 pre-Round-3;
+recalibrated per Round 3 disposition aggregate row — ~7–11 net new tests
+for C-R3-1 + 4 High findings); ~115–145 effective with parametrize
+multipliers. Final test-count target: **5,364–5,414 pytest** (5,269
+baseline + 95–145 new), 913 Vitest unchanged (zero UI changes per
+frontend immutability invariant).
 
 **Cumulative diff bound on `argus/execution/order_manager.py`:**
-recalibrated to **~1150–1300 LOC** (was ~1100–1200 LOC pre-Tier-3) per
-Tier 3 guidance, accommodating callback-path AST guards (S4a-ii) + Branch
-4 coupling (S3b per Tier 3 item C) + AC2.7 auto-activation (Decision 4)
-+ `halt_entry_until_operator_ack` field threading.
+recalibrated to **~1200–1350 LOC** (was ~1150–1300 LOC pre-Round-3; per
+Round 3 disposition aggregate row), accommodating callback-path AST
+guards (S4a-ii) + Branch 4 coupling (S3b per Tier 3 item C) + AC2.7
+auto-activation (Decision 4) + `halt_entry_until_operator_ack` field
+threading + `_read_positions_post_refresh()` helper (per Round 3 M-R3-4)
++ Branch 4 throttle (per Round 3 M-R3-2) + AC2.8 ack-clear logged
+transitions (per Round 3 H-R3-3).
+
+**NEW cumulative diff bounds per Round 3 disposition (additional files):**
+- `argus/execution/ibkr_broker.py`: ~30–50 LOC for the single-flight
+  serialization wrapper (`asyncio.Lock` + 250ms coalesce window) per
+  Round 3 C-R3-1.
+- `argus/risk/risk_manager.py`: ~20 LOC for the halt-entry Check 0
+  extension per Round 3 H-R3-3.
+- `argus/api/v1/positions.py` (NEW file): ~30 LOC for the halt-clear
+  REST endpoint per Round 3 H-R3-3.
+- `scripts/clear_position_halt.py` (NEW file): ~20 LOC for the operator
+  CLI tool per Round 3 H-R3-3.
+- `argus/main.py`: ~30 LOC for the interactive ack at startup +
+  periodic re-ack loop + `--allow-rollback-skip-confirm` CI override
+  flag parsing per Round 3 H-R3-4.
 
 No frontend visual review (zero UI changes) — no contingency budget for
 visual-review fixes.
+
+**Sprint Abort Condition (NEW per Round 3 C-R3-1):** If Fix A
+serialization spike (S3b sub-spike for FAI #10) fails AND no alternative
+serialization design surfaces, sprint halts; operator decides whether to
+escalate to Phase A re-entry retroactively. (Materialized as a new entry
+in `escalation-criteria.md` § Sprint Abort Conditions at Phase D prompt
+generation.)
 
 **Round 3 verdict pending.** Round 3 is full scope per Outcome C; verdict
 routes per Decision 7 binding pre-commitment (verbatim in
