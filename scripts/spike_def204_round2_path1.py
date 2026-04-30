@@ -97,6 +97,57 @@ DEFAULT_SYMBOLS = ["SPY", "QQQ", "IWM", "XLF"]
 
 
 # ---------------------------------------------------------------------------
+# Pre-flight guards — fail-fast on wrong-window invocations
+# ---------------------------------------------------------------------------
+
+
+def _is_market_hours_et() -> tuple[bool, str]:
+    """Return (open, reason). NYSE regular-hours window 09:30 - 16:00 ET, Mon - Fri.
+
+    Holidays not enumerated — IBKR's "queued for next session" 399 message
+    detected by `_MarketClosedDetector` is the secondary catch for holidays
+    and early-close days. The wall-clock check is the cheap first line.
+    """
+    from zoneinfo import ZoneInfo
+    now_et = datetime.now(ZoneInfo("America/New_York"))
+    if now_et.weekday() >= 5:
+        return False, f"weekend ({now_et.strftime('%a %H:%M ET')})"
+    open_t = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+    close_t = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+    if now_et < open_t:
+        return False, f"pre-market ({now_et.strftime('%H:%M ET')}; opens 09:30 ET)"
+    if now_et >= close_t:
+        return False, f"after-hours ({now_et.strftime('%H:%M ET')}; closed 16:00 ET)"
+    return True, f"market open ({now_et.strftime('%H:%M ET')})"
+
+
+class _MarketClosedDetector:
+    """Listens to IBKR errorEvent for 'will not be placed at the exchange
+    until <next session>' messages. IBKR emits this as error code 399 on
+    overnight-queued orders; firing once is enough to abort the spike."""
+
+    QUEUED_FRAGMENT = "will not be placed at the exchange until"
+
+    def __init__(self) -> None:
+        self.queued_for_next_session = False
+        self.last_message: str | None = None
+
+    def __call__(
+        self,
+        req_id: int,
+        error_code: int,
+        error_string: str,
+        contract: Any = None,
+    ) -> None:
+        if (
+            error_code == 399
+            and self.QUEUED_FRAGMENT in (error_string or "").lower()
+        ):
+            self.queued_for_next_session = True
+            self.last_message = error_string
+
+
+# ---------------------------------------------------------------------------
 # Result dataclasses — JSON output schema mirrors these
 # ---------------------------------------------------------------------------
 
@@ -216,9 +267,12 @@ async def _get_market_price(broker: IBKRBroker, symbol: str) -> float | None:
     Tries last/midpoint/close (with delayed fallbacks). Returns None on
     failure — the calling code should treat that as a per-symbol skip.
     Spike-only — uses broker._ib intentionally; production code MUST NOT.
+
+    Assumes contracts have already been qualified via the resolver's
+    qualify_contracts() pass at startup (populates `conId`, required for
+    `reqMktData`'s ticker hashing).
     """
     contract = broker._contracts.get_stock_contract(symbol)
-    broker._ib.reqMarketDataType(3)  # delayed market data ok for spike sizing
     ticker = broker._ib.reqMktData(contract, "", False, False)
     await asyncio.sleep(3.0)
     candidates = [
@@ -241,14 +295,18 @@ async def _get_market_price(broker: IBKRBroker, symbol: str) -> float | None:
 async def _wait_for_entry_fill(
     broker: IBKRBroker, symbol: str, timeout_s: float = 15.0
 ) -> int:
-    """Poll broker positions until `symbol` shows non-zero shares. Returns shares."""
+    """Poll broker positions until `symbol` shows non-zero shares. Returns shares.
+
+    Polls at 1s cadence to keep the IBKRBroker.get_positions INFO log volume
+    sane. Increase frequency only if you also silence that logger.
+    """
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
         positions = await broker.get_positions()
         for p in positions:
             if p.symbol == symbol and p.shares > 0:
                 return p.shares
-        await asyncio.sleep(0.2)
+        await asyncio.sleep(1.0)
     return 0
 
 
@@ -842,6 +900,40 @@ def _build_results(
 # ---------------------------------------------------------------------------
 
 
+async def _abort_with_inconclusive(
+    broker: IBKRBroker, out_path: str, reason: str
+) -> None:
+    """Write an INCONCLUSIVE stub JSON + disconnect cleanly. Used by the
+    pre-flight guards so an aborted run still leaves a parseable artifact
+    on disk for the operator and the close-out skill."""
+    results = {
+        "status": "INCONCLUSIVE",
+        "selected_mechanism": None,
+        "inconclusive_reason": reason,
+        "h2_modify_order_p50_ms": 0.0,
+        "h2_modify_order_p95_ms": 0.0,
+        "h2_rejection_rate_pct": 0.0,
+        "h2_deterministic_propagation": False,
+        "adversarial_axes_results": {},
+        "worst_axis_wilson_ub": 100.0,
+        "h1_cancel_all_orders_p50_ms": 0.0,
+        "h1_cancel_all_orders_p95_ms": 0.0,
+        "h1_propagation_n_trials": 0,
+        "h1_propagation_zero_conflict_in_100": False,
+        "trial_count": 0,
+        "spike_run_date": _now_utc_iso(),
+    }
+    try:
+        with open(out_path, "w") as f:
+            json.dump(results, f, indent=2, default=str)
+    except Exception as e:
+        log.warning("Could not write INCONCLUSIVE JSON to %s: %s", out_path, e)
+    try:
+        await broker.disconnect()
+    except Exception:
+        pass
+
+
 async def main_async(args: argparse.Namespace) -> int:
     log.info(
         "Sprint 31.92 S1a Path #1 spike — account=%s clientId=%d symbols=%s",
@@ -854,6 +946,26 @@ async def main_async(args: argparse.Namespace) -> int:
     if args.dry_run:
         log.warning("DRY RUN — script structure validated, no IBKR connection made")
         return 0
+
+    # Guard 1: market-hours pre-flight (wall-clock + weekday). The spike
+    # measures live `modify_order` semantics against working brackets;
+    # outside the NYSE regular-hours window IBKR queues orders for the
+    # next session and no fills occur. Refuse to proceed with a clear
+    # error before paying any connection cost.
+    is_open, reason = _is_market_hours_et()
+    if not is_open and not args.skip_market_hours_check:
+        log.error(
+            "Market is closed: %s. The spike requires live fills (09:30 - 16:00 ET, "
+            "Mon - Fri). Re-run during market hours with ARGUS stopped. "
+            "Override with --skip-market-hours-check if you have an out-of-band "
+            "reason to proceed (e.g., NYSE holiday rolling testing window).",
+            reason,
+        )
+        return 2
+    if not is_open:
+        log.warning("Market-hours check OVERRIDDEN: %s. Proceeding anyway.", reason)
+    else:
+        log.info("Market-hours check OK: %s.", reason)
 
     config = IBKRConfig(
         host="127.0.0.1",
@@ -871,10 +983,91 @@ async def main_async(args: argparse.Namespace) -> int:
         log.error("Failed to connect to paper IBKR Gateway at 127.0.0.1:4002: %s", e)
         return 2
 
+    # Qualify contracts once at startup. ib_async's `reqMktData()` hashes
+    # the Contract for ticker-cache lookup, which requires `conId` to be
+    # populated. `IBKRContractResolver.get_stock_contract()` returns a bare
+    # Stock(); `qualify_contracts()` populates `conId` and overwrites the
+    # cache with the qualified Contract. Also set delayed market-data type
+    # once (paper accounts don't have real-time subscriptions by default).
+    broker._ib.reqMarketDataType(3)
+    try:
+        await broker._contracts.qualify_contracts(broker._ib, symbols)
+    except Exception as e:
+        log.error("Contract qualification failed: %s", e)
+        try:
+            await broker.disconnect()
+        except Exception:
+            pass
+        return 2
+
+    # Guard 2 + 3: attach IBKR error 399 detector so the smoke test can
+    # distinguish "couldn't fill in 15s" from "queued for next session"
+    # (NYSE holiday or wall-clock-passed-edge-cases the Guard 1 check
+    # missed).
+    detector = _MarketClosedDetector()
+    broker._ib.errorEvent += detector
+
     out_path = args.output_json
     os.makedirs(os.path.dirname(out_path) or ".", exist_ok=True)
+
+    # Guard 3: pre-measurement smoke test. One bracket on the first
+    # symbol; if entry doesn't fill OR the queued-for-next-session
+    # detector fires, abort before grinding through 50 Mode A trials of
+    # the same failure.
+    log.info("Smoke test: placing one bracket on %s to verify fills are live...", symbols[0])
+    smoke_price = await _get_market_price(broker, symbols[0])
+    if not smoke_price:
+        log.error("Smoke test: could not fetch market price for %s. "
+                  "Confirm market data subscription / Gateway connectivity.",
+                  symbols[0])
+        await _abort_with_inconclusive(
+            broker, out_path,
+            f"smoke test: market price unavailable for {symbols[0]}",
+        )
+        return 1
+    smoke_opened = await _open_entry_with_bracket(broker, symbols[0], smoke_price)
+    if detector.queued_for_next_session:
+        log.error(
+            "Smoke test: IBKR queued the order for the next session "
+            "(error 399: %s). Market is closed; aborting. Re-run during "
+            "live regular-hours session with ARGUS stopped.",
+            detector.last_message,
+        )
+        if smoke_opened is not None:
+            await _flatten(broker, symbols[0])
+        await _abort_with_inconclusive(
+            broker, out_path,
+            f"market closed: IBKR error 399 queued-for-next-session "
+            f"({detector.last_message})",
+        )
+        return 1
+    if smoke_opened is None:
+        log.error(
+            "Smoke test: bracket placement on %s did not fill within 15s and "
+            "no queued-for-next-session signal. Likely environmental issue "
+            "(illiquid symbol, lost connectivity, or IBKR Gateway stuck). Aborting.",
+            symbols[0],
+        )
+        await _flatten(broker, symbols[0])
+        await _abort_with_inconclusive(
+            broker, out_path,
+            f"smoke test failed: entry on {symbols[0]} did not fill",
+        )
+        return 1
+    log.info("Smoke test PASSED: bracket on %s filled cleanly. Proceeding.", symbols[0])
+    await _flatten(broker, symbols[0])
+
     try:
         mode_a = await _measure_mode_a(broker, symbols, args.num_trials_per_axis)
+        # Guard 4: first-trial sentinel for Mode A. If the first trial
+        # failed entry-fill and Guard 3 didn't catch it, something
+        # changed mid-run (Gateway disconnect, market-hours edge). Halt
+        # rather than grind through 49 more identical failures.
+        if mode_a and mode_a[0].error == "entry_did_not_fill":
+            raise RuntimeError(
+                "Mode A trial 1 entry did not fill despite smoke-test pass; "
+                "likely mid-run Gateway disconnect or market-state change."
+            )
         axes = {
             AXIS_CONCURRENT: await _axis_concurrent(broker, symbols, max(30, args.num_trials_per_axis // 2)),
             AXIS_RECONNECT: await _axis_reconnect(broker, symbols, max(30, args.num_trials_per_axis // 2)),
@@ -976,6 +1169,11 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--dry-run", action="store_true",
                    help="Validate script structure without connecting to IBKR")
+    p.add_argument("--skip-market-hours-check", action="store_true",
+                   help="Override the 09:30 - 16:00 ET wall-clock guard. Use ONLY "
+                        "with an out-of-band justification (e.g., NYSE holiday "
+                        "rolling testing window). The IBKR error-399 detector "
+                        "still runs as a backstop.")
     return p.parse_args()
 
 
