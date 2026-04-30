@@ -303,6 +303,32 @@ calls**, not empirical falsifications, per L-R2-1 rephrasing
     decision; that's a roadmap-level call. Operator daily-flatten
     mitigation continues until cessation criterion #5 satisfied.
 
+27. **Worst-axis Wilson UB across all four adversarial axes as the
+    binding metric for Path #1 mechanism selection.** Per Tier 3 Review
+    #1 verdict 2026-04-30 / DEC-389 amended rule: superseded by axis
+    (i) production-reachable steady-state as the sole binding axis
+    (`axis_i_wilson_ub`); axes (ii) reconnect-window and (iv) joint
+    reconnect+concurrent are RETAINED in the spike harness as
+    informational characterization of H2 fail-loud behavior during
+    Gateway disconnect (input to Sprint 31.94 reconnect-recovery
+    design per DEF-241 / RSK-DEC389-31.94-COUPLING); axis (iii)
+    stale-ID is DELETED entirely (state unreachable in production per
+    DEC-117 + DEC-386 invariants; broker-correct rejection of
+    modifications against cancelled orders is *desired* behavior, not
+    a rejection-rate signal — including a desired-behavior signal in
+    the binding metric is structurally degenerate). The strict reading
+    of FAI #3 ("ALL four axes must remain ≤5% UB") would have
+    structurally disqualified H2, H4, AND H1 simultaneously by design
+    (axis (iii) at 100% UB), which is not a useful selection criterion.
+    The loose reading recovers the engineering question: "does H2 work
+    in steady-state production load, and does it fail loud — not silent
+    — during the separately-addressed reconnect failure mode?"
+    Cross-references: DEC-389 (Pattern B sprint-close materialization);
+    sprint-spec.md §Hypothesis Prescription amended halt-or-proceed
+    gate language; FAI #3 (this file's §Edge Case 2 + companion
+    `falsifiable-assumption-inventory.md` entry #3);
+    RSK-VERDICT-VS-FAI-3-COMPATIBILITY (`docs/risk-register.md`).
+
 ---
 
 ## Edge Cases to Reject
@@ -345,9 +371,11 @@ The implementation should NOT handle these cases in this sprint:
    are caught by AC1.2's regression test (mock `IBKRBroker.modify_order`
    to raise; assert fall-through to H4 hybrid OR halt with operator
    escalation). Production-side robustness for unusual amend rejections
-   is post-revenue concern; if rejection rate exceeds 5% on **worst-axis
-   Wilson UB per Decision 1**, mechanism shifts to H4 hybrid per
-   Hypothesis Prescription.
+   is post-revenue concern; if rejection rate exceeds 5% on
+   **`axis_i_wilson_ub` per DEC-389 amended rule** (Tier 3 #1 verdict
+   2026-04-30 — axis (i) production-reachable steady-state binds; axes
+   (ii)/(iv) demoted to informational; axis (iii) deleted), mechanism
+   shifts to H4 hybrid per Hypothesis Prescription.
 
 3. **`cumulative_pending_sell_shares` or `cumulative_sold_shares`
    integer overflow.** A `ManagedPosition` that pending-or-sold > 2³¹
