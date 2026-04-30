@@ -33,7 +33,7 @@ timeout, long-only SELL-volume ceiling with concurrency-safe pending-share
 reservation pattern (synchronous-update invariant extended to ALL bookkeeping
 callback paths per Tier 3 entry #9), reconstructed-position refusal posture,
 DEF-212 `_OCA_TYPE_BRACKET` constant drift fix with operator-visible rollback
-warning + `--allow-rollback` CLI gate. Materialize as DEC-390 with
+warning + `--allow-rollback` CLI gate. Materialize as DEC-391 with
 structural-closure framing (NOT aggregate percentage claims per
 process-evolution lesson F.5), backed by ≥5 cross-layer composition tests
 proving the failure of any one layer is caught by another.
@@ -121,7 +121,7 @@ proving the failure of any one layer is caught by another.
    production. Cessation criterion #5 (5 paper sessions clean post-seal)
    is the production-validation gate.
 
-6. **DEC-390 materialization (sprint-close).** Four-layer structural-closure
+6. **DEC-391 materialization (sprint-close).** Four-layer structural-closure
    framing (NOT aggregate percentage claims per process-evolution lesson
    F.5). 6 DEFs filed by Tier 3 (DEF-FAI-CALLBACK-ATOMICITY,
    DEF-CROSS-LAYER-EXPANSION, DEF-FAI-N-INCREASE, DEF-FAI-2-SCOPE,
@@ -161,7 +161,7 @@ proving the failure of any one layer is caught by another.
 - **AC1.5 (mechanism-conditional AMD-2 framing):** AMD-2 invariant is
   PRESERVED under H2 (default), MIXED under H4 (preserved on amend-success;
   superseded on cancel-fallback), and SUPERSEDED by AMD-2-prime under H1
-  (last-resort). DEC-390 entry must explicitly call out the framing for
+  (last-resort). DEC-391 entry must explicitly call out the framing for
   the chosen mechanism.
 - **AC1.6 (operator-audit logging — conditional on H1 OR H4-with-fallback-active):**
   Structured log line emitted on every cancel-and-await dispatch
@@ -464,9 +464,9 @@ proving the failure of any one layer is caught by another.
   N=2 concurrent AC2.5 fallbacks, broker state mutated between callers,
   assert no stale Branch 2 classification.
 
-#### Deliverable 6 (DEC-390 materialization — structural-closure framing per process-evolution lesson F.5)
+#### Deliverable 6 (DEC-391 materialization — structural-closure framing per process-evolution lesson F.5)
 
-- **AC6.1:** DEC-390 written below in `docs/decision-log.md` at sprint-close.
+- **AC6.1:** DEC-391 written below in `docs/decision-log.md` at sprint-close.
   Four-layer structure: L1 Path #1 mechanism / L2 Path #2 fingerprint +
   position-keyed suppression + broker-verified timeout / L3 SELL-volume
   ceiling with pending reservation + reconstructed-position refusal + AC2.7
@@ -477,8 +477,8 @@ proving the failure of any one layer is caught by another.
 - **AC6.2:** `docs/dec-index.md` updated.
 - **AC6.3 (structural-closure framing — NOT aggregate percentage claims per
   process-evolution lesson F.5):** Sprint 31.91's empirically-falsified
-  `~98%` claim is acknowledged in DEC-390 Context section; DEC-386
-  preserved unchanged (per Phase A leave-as-historical decision). DEC-390
+  `~98%` claim is acknowledged in DEC-391 Context section; DEC-386
+  preserved unchanged (per Phase A leave-as-historical decision). DEC-391
   uses STRUCTURAL closure framing ("L1 closes Path #1 mechanism / L2
   closes Path #2 detection + position-keyed suppression + broker-verified
   timeout / L3 closes long-only ceiling with extended synchronous-update
@@ -489,7 +489,7 @@ proving the failure of any one layer is caught by another.
 
 ### Defense-in-Depth Cross-Layer Composition Tests (mandatory per `templates/sprint-spec.md` v1.2.0; 5 tests committed per Decision 5)
 
-DEC-390 claims defense-in-depth across 4 layers. Per
+DEC-391 claims defense-in-depth across 4 layers. Per
 `templates/sprint-spec.md` v1.2.0, Sprint 31.92's regression checklist MUST
 include cross-layer composition tests — scenarios where the failure of one
 layer is supposed to be caught by another, asserting that the catch happens.
@@ -635,7 +635,7 @@ unrecognized keys under `order_manager.*` (test added at S3a)."
   Threading + Broker-Only Safety. Closes DEF-204 OCA-cancellation race at
   IBKR layer. **Empirically falsified 2026-04-28** (60 NEW phantom shorts,
   debrief at `docs/debriefs/2026-04-28-paper-session-debrief.md`). DEC-386
-  preserved unchanged; DEC-390 closes the residual paths structurally with
+  preserved unchanged; DEC-391 closes the residual paths structurally with
   concurrency-safe defense-in-depth. Constrains Sprint 31.92: S0/S1a/S1b/S1c
   surfaces preserved byte-for-byte; existing `# OCA-EXEMPT:` exemption
   mechanism re-used; existing `_is_oca_already_filled_error` re-used (NOT
@@ -705,8 +705,8 @@ without explicit reviewer sign-off.
   31.94. Sprint 31.92 does NOT modify this surface (Sprint 31.94's
   responsibility per Phase 0 renumbering).
 
-- **NEW RSK-DEC-390-AMEND (PRIMARY — proposed, conditional on H2 selection
-  by S1a):** DEC-390 L1 selected H2 per S1a spike. The amend-stop-price
+- **NEW RSK-DEC-391-AMEND (PRIMARY — proposed, conditional on H2 selection
+  by S1a):** DEC-391 L1 selected H2 per S1a spike. The amend-stop-price
   path depends on IBKR's `modifyOrder` semantics being deterministic at
   sub-50ms latency. If a future IBKR API change introduces non-determinism,
   the mechanism degrades silently. Severity: **MEDIUM** (operational
@@ -714,20 +714,20 @@ without explicit reviewer sign-off.
   re-validation; cessation criterion #5; spike artifact 30-day freshness
   check via A-class halt A13.
 
-- **NEW RSK-DEC-390-CANCEL-AWAIT-LATENCY (FALLBACK — proposed, conditional
+- **NEW RSK-DEC-391-CANCEL-AWAIT-LATENCY (FALLBACK — proposed, conditional
   on H1 or H4 selection by S1a):** AMD-2 invariant superseded by
   AMD-2-prime on cancel-and-await branch. Unprotected window bounded by
   `cancel_propagation_timeout ≤ 2s` per DEC-386 S1c. Severity: **MEDIUM**
   (operational hygiene; conditional on mechanism). Mitigation: AC1.6
   operator-audit logging; documented trade-off; cessation criterion #5.
 
-- **NEW RSK-DEC-390-FINGERPRINT (proposed, unconditional):**
+- **NEW RSK-DEC-391-FINGERPRINT (proposed, unconditional):**
   `_is_locate_rejection()` substring fingerprint depends on IBKR's exact
   rejection error string. Severity: **MEDIUM** (operational hygiene).
   Mitigation: S5b validation against synthetic locate-rejection fixture;
   quarterly operational re-validation; CI freshness check (90 days).
 
-- **NEW RSK-CEILING-FALSE-POSITIVE (proposed, unconditional):** DEC-390
+- **NEW RSK-CEILING-FALSE-POSITIVE (proposed, unconditional):** DEC-391
   L3 ceiling uses two-counter reservation pattern. Edge cases: (a) broker
   fill callback arrives out-of-order; (b) partial-fill granularity differs
   between SimulatedBroker and IBKR; (c) `cumulative_pending_sell_shares`
@@ -801,7 +801,7 @@ full-scope cross-check is the next defense layer.
 |---|--------------------------------|--------------------------|--------|
 | 1 | asyncio guarantees that synchronous Python statements between two `await` points (or in a coroutine body without any `await`) execute atomically with respect to other coroutines on the same event loop. The C-1 reservation pattern's correctness depends on `_reserve_pending_or_fail`'s body remaining synchronous post-refactor (no `await` between ceiling-check and reserve increment). **NOTE:** entry #9 extends this assumption to all callback paths that mutate the bookkeeping counters; entry #1 covers the place-time emit path specifically. | (a) AST-level scan asserts no `ast.Await` node within `_reserve_pending_or_fail`'s body. (b) Mocked-await injection test: monkey-patch implementation to insert `await asyncio.sleep(0)` between check and reserve, assert the race IS observable under injection. | **unverified — falsifying spike scheduled in S4a-i.** |
 | 2 | `ib_async`'s position cache catches up to broker state within `Broker.refresh_positions(timeout_seconds=5.0)` under all observed reconnect-window conditions. AC2.5's refresh-then-verify mechanism's correctness depends on this. **High-volume steady-state behavior is OUT of Sprint 31.92 scope per Tier 3 item D / Decision 5 / DEF-FAI-2-SCOPE — deferred to Sprint 31.94.** | S3b sub-spike measures `cache_staleness_p95_ms`, `cache_staleness_max_ms`, `refresh_success_rate`, `refresh_p95_ms` across N≥10 reconnect cycles. Halt gate: `cache_staleness_max_ms > refresh_timeout_seconds × 1000` halts. Branch 4 (`verification_stale: true`) is the structural defense if non-convergent. **`SimulatedBrokerWithRefreshTimeout` fixture (S5c) enables in-process Branch 4 unit testing per Tier 3 item E / DEF-SIM-BROKER-TIMEOUT-FIXTURE.** | **unverified — falsifying spike scheduled in S3b; Branch 4 + S5c fixture are load-bearing defenses.** |
-| 3 | IBKR's `modifyOrder` rejection rate is stable at ≤5% **on the production-reachable steady-state axis** (axis (i) concurrent amends across N≥3 positions). The H2 mechanism selection binds on this axis only. **Per Tier 3 Review #1 (2026-04-30) DEC-389 amended rule (loose reading of FAI #3):** axis (i) is binding; axes (ii) reconnect-window and (iv) joint reconnect+concurrent are RETAINED in the spike harness as **informational** characterization of H2 fail-loud behavior during Gateway disconnect (input to Sprint 31.94 reconnect-recovery design); axis (iii) stale-ID is DELETED entirely (state unreachable in production per DEC-117 + DEC-386 invariants; broker-correct rejection is desired behavior — not a rejection-rate signal). | S1a adversarial sub-spike per DEC-389 amended rule: axis (i) concurrent amends across N≥3 positions binds the H2/H4/H1 selection; axes (ii) and (iv) reported in JSON `informational_axes_results` for Sprint 31.94 grounding (NOT in the binding metric); axis (iii) stale-ID DELETED from spike. Halt gate uses **`axis_i_wilson_ub`** (renamed from `worst_axis_wilson_ub`). | **unverified — falsifying spike scheduled in S1a (v2 re-run post-DEC-389).** |
+| 3 | IBKR's `modifyOrder` rejection rate is stable at ≤5% **on the production-reachable steady-state axis** (axis (i) concurrent amends across N≥3 positions). The H2 mechanism selection binds on this axis only. **Per Tier 3 Review #2 (2026-04-30) DEC-390 amended rule (loose reading of FAI #3):** axis (i) is binding; axes (ii) reconnect-window and (iv) joint reconnect+concurrent are RETAINED in the spike harness as **informational** characterization of H2 fail-loud behavior during Gateway disconnect (input to Sprint 31.94 reconnect-recovery design); axis (iii) stale-ID is DELETED entirely (state unreachable in production per DEC-117 + DEC-386 invariants; broker-correct rejection is desired behavior — not a rejection-rate signal). | S1a adversarial sub-spike per DEC-390 amended rule: axis (i) concurrent amends across N≥3 positions binds the H2/H4/H1 selection; axes (ii) and (iv) reported in JSON `informational_axes_results` for Sprint 31.94 grounding (NOT in the binding metric); axis (iii) stale-ID DELETED from spike. Halt gate uses **`axis_i_wilson_ub`** (renamed from `worst_axis_wilson_ub`). | **unverified — falsifying spike scheduled in S1a (v2 re-run post-DEC-390).** |
 | 4 | The S1b substring fingerprint catches every variant of the locate-rejection error string IBKR can produce. AC2.1's case-B detection's correctness depends on this. | S1b substring-fingerprint validation across ≥5 symbols × ≥10 trials. Sampling bounded to single account/version/configuration. | **measured-only — acceptable because Decision 4 auto-activates AC2.7 watchdog on first observed `case_a_in_production` event.** |
 | 5 | `cancel_all_orders(symbol, await_propagation=True)` synchronously confirms all bracket-child cancellations broker-side before returning. The H1 fallback path's correctness depends on this. | S1a strengthened cancel-then-immediate-SELL stress per Decision 2: N=100 trials, ≤10ms gap. **HARD GATE: any 1 conflict in 100 → H1 NOT eligible regardless of `modifyOrder` Wilson UB.** JSON gains `h1_propagation_n_trials=100`, `h1_propagation_zero_conflict_in_100: bool`. | **unverified — falsifying spike scheduled in S1a.** |
 | 6 | IBKR raises a locate-rejection exception (case B) on hard-to-borrow symbols rather than silently holding the order pending borrow (case A). | S1b explicit case-A vs case-B differentiation per M-R2-1. JSON: `case_a_observed: bool`, `case_a_count: int`, `case_b_count: int`, `case_a_max_age_seconds: int`. Decision 4 auto-activation on first `case_a_in_production`. | **unverified — falsifying spike scheduled in S1b.** |
@@ -836,10 +836,10 @@ calibration on hard-to-borrow microcaps) are the empirical questions.
 
 | ID | Hypothesis | Confirms-if | Rules-out-if | Spec-prescribed fix shape |
 |----|-----------|-------------|--------------|---------------------------|
-| H2 (Path #1, **PRIMARY DEFAULT**) | Amend-stop-price via `modifyOrder` is the correct mechanism: trail stop / emergency flatten amend the bracket stop's `auxPrice` rather than placing a new market SELL, eliminating the second-SELL race entirely. AMD-2 invariant preserved; DEC-117 atomic-bracket invariant preserved; zero unprotected window. | S1a measures `modifyOrder` round-trip latency ≤ 50ms p95 AND **`axis_i_wilson_ub` on rejection rate < 5%** (per DEC-389 amended rule, Tier 3 #1 2026-04-30 — axis (i) production-reachable steady-state, concurrent amends across N≥3 positions; axes (ii) reconnect-window and (iv) joint demoted to informational; axis (iii) stale-ID deleted) AND deterministic propagation across ≥50 trials AND **`h1_propagation_zero_conflict_in_100 == true`** (per Decision 2 hard gate). | S1a observes `axis_i_wilson_ub ≥ 5%` on rejection rate OR non-deterministic acknowledgment OR amend doesn't actually update the IBKR-side bracket stop in some trials. | Amend bracket stop's `auxPrice` to trail-stop price; remove the trail-flatten market SELL emission. AMD-2 invariant PRESERVED. AC1.5 framing: "AMD-2 preserved." |
-| H4 (Path #1, **FALLBACK if H2 is unreliable**) | Hybrid: try amend first, fall back to cancel-and-await on amend rejection. | S1a observes `5% ≤ axis_i_wilson_ub < 20%` (per DEC-389 amended rule) AND `h1_propagation_zero_conflict_in_100 == true` (per Decision 2 hard gate). | S1a observes `axis_i_wilson_ub < 5%` (use H2 alone) OR `axis_i_wilson_ub ≥ 20%` (consider H1 alone). | Two-path implementation: amend first, fall back to cancel-and-await on amend rejection. Operator-audit logging on every fallback occurrence per AC1.6. AC1.5 framing: "AMD-2 preserved on amend-success path; superseded on cancel-fallback path." |
-| H1 (Path #1, **LAST-RESORT FALLBACK only**) | Cancel-and-await before SELL. AMD-2 invariant superseded by AMD-2-prime (unprotected window bounded by `cancel_propagation_timeout` ≤ 2s). | (Activated only if H2 AND H4 both empirically infeasible — i.e., `axis_i_wilson_ub ≥ 20%` per DEC-389 amended rule — AND `h1_propagation_zero_conflict_in_100 == true` per Decision 2 hard gate AND operator written confirmation.) | (Implicit — H2 or H4 selected first.) **HARD GATE: if `h1_propagation_zero_conflict_in_100 == false` (any 1 conflict in 100 trials), H1 is NOT eligible regardless of `axis_i_wilson_ub`.** | Cancel-and-await before SELL in `_trail_flatten`, `_resubmit_stop_with_retry` emergency path, and conditionally `_escalation_update_stop`. AMD-2 superseded; AC1.6 operator-audit logging mandatory; DEC-390 must explicitly call out H1 as last-resort with rationale. **C-R2-1↔H-R2-2 coupling per Tier 3 item C:** if H1 is the active mechanism AND `Broker.refresh_positions()` raises or times out, position marked `halt_entry_until_operator_ack=True`. |
-| H3 (Path #1) | Recon-trusts-marker — accept the over-flatten as inevitable but mark `redundant_exit_observed = True` so reconciliation classifies as SAFE. | (Not validated in S1a — REJECTED at Phase A: requires `ManagedPosition.redundant_exit_observed` SQLite persistence which DEC-386 deferred to Sprint 35+ Learning Loop V2.) | (Implicit — already ruled out at Phase A.) | N/A — REJECTED. Listed for completeness in DEC-390 Context section. |
+| H2 (Path #1, **PRIMARY DEFAULT**) | Amend-stop-price via `modifyOrder` is the correct mechanism: trail stop / emergency flatten amend the bracket stop's `auxPrice` rather than placing a new market SELL, eliminating the second-SELL race entirely. AMD-2 invariant preserved; DEC-117 atomic-bracket invariant preserved; zero unprotected window. | S1a measures `modifyOrder` round-trip latency ≤ 50ms p95 AND **`axis_i_wilson_ub` on rejection rate < 5%** (per DEC-390 amended rule, Tier 3 #2 2026-04-30 — axis (i) production-reachable steady-state, concurrent amends across N≥3 positions; axes (ii) reconnect-window and (iv) joint demoted to informational; axis (iii) stale-ID deleted) AND deterministic propagation across ≥50 trials AND **`h1_propagation_zero_conflict_in_100 == true`** (per Decision 2 hard gate). | S1a observes `axis_i_wilson_ub ≥ 5%` on rejection rate OR non-deterministic acknowledgment OR amend doesn't actually update the IBKR-side bracket stop in some trials. | Amend bracket stop's `auxPrice` to trail-stop price; remove the trail-flatten market SELL emission. AMD-2 invariant PRESERVED. AC1.5 framing: "AMD-2 preserved." |
+| H4 (Path #1, **FALLBACK if H2 is unreliable**) | Hybrid: try amend first, fall back to cancel-and-await on amend rejection. | S1a observes `5% ≤ axis_i_wilson_ub < 20%` (per DEC-390 amended rule) AND `h1_propagation_zero_conflict_in_100 == true` (per Decision 2 hard gate). | S1a observes `axis_i_wilson_ub < 5%` (use H2 alone) OR `axis_i_wilson_ub ≥ 20%` (consider H1 alone). | Two-path implementation: amend first, fall back to cancel-and-await on amend rejection. Operator-audit logging on every fallback occurrence per AC1.6. AC1.5 framing: "AMD-2 preserved on amend-success path; superseded on cancel-fallback path." |
+| H1 (Path #1, **LAST-RESORT FALLBACK only**) | Cancel-and-await before SELL. AMD-2 invariant superseded by AMD-2-prime (unprotected window bounded by `cancel_propagation_timeout` ≤ 2s). | (Activated only if H2 AND H4 both empirically infeasible — i.e., `axis_i_wilson_ub ≥ 20%` per DEC-390 amended rule — AND `h1_propagation_zero_conflict_in_100 == true` per Decision 2 hard gate AND operator written confirmation.) | (Implicit — H2 or H4 selected first.) **HARD GATE: if `h1_propagation_zero_conflict_in_100 == false` (any 1 conflict in 100 trials), H1 is NOT eligible regardless of `axis_i_wilson_ub`.** | Cancel-and-await before SELL in `_trail_flatten`, `_resubmit_stop_with_retry` emergency path, and conditionally `_escalation_update_stop`. AMD-2 superseded; AC1.6 operator-audit logging mandatory; DEC-391 must explicitly call out H1 as last-resort with rationale. **C-R2-1↔H-R2-2 coupling per Tier 3 item C:** if H1 is the active mechanism AND `Broker.refresh_positions()` raises or times out, position marked `halt_entry_until_operator_ack=True`. |
+| H3 (Path #1) | Recon-trusts-marker — accept the over-flatten as inevitable but mark `redundant_exit_observed = True` so reconciliation classifies as SAFE. | (Not validated in S1a — REJECTED at Phase A: requires `ManagedPosition.redundant_exit_observed` SQLite persistence which DEC-386 deferred to Sprint 35+ Learning Loop V2.) | (Implicit — already ruled out at Phase A.) | N/A — REJECTED. Listed for completeness in DEC-391 Context section. |
 | H5 (Path #2) | The locate-rejection error string `"contract is not available for short sale"` is stable in current `ib_async` API and matches the substring exactly. | S1b's manual reproduction (force a SELL on each of ≥5 known hard-to-borrow microcap symbols during paper hours, ≥10 trials per symbol) captures the exact string in ALL trials. | S1b captures variant strings OR captures inconsistent strings depending on conditions. | Substring fingerprint helper as specified. If RULES-OUT, fingerprint becomes a regex or substring-list at S3a; impl prompt updated. |
 | H6 (Path #2) | Suppression window calibrated to S1b spike's measured p99 hold-pending-borrow release window plus 20% margin is sufficient. | S1b observes ≥1 actual release event across the ≥5-symbol × ≥10-trial spike AND captures p95/p99 release timing per symbol class. Default `locate_suppression_seconds = max(p99 measurements across all symbols) × 1.2`, with hard floor at 18000s (5hr) and hard ceiling at 86400s (24hr). | S1b observes ZERO release events across all trials — held orders all timeout/cancel without filling. In this case, the suppression-timeout fallback (AC2.5 broker-verification) is the dominant code path and AC2.5's behavior is what matters most; default falls back to 18000s with documented rationale. | Default value baked into Pydantic field at code-generation time per AC2.5 + Config Changes table. If H6 RULED OUT (no releases observed), default = 18000s; AC2.5 broker-verification path receives extra emphasis in S5b validation. |
 
@@ -849,7 +849,7 @@ Prescription"):**
 
 > Compute Wilson UB from observed rejection rate AS WELL AS the
 > cancel-then-immediate-SELL stress sub-spike outcomes. **Decision rule
-> (per Decision 2 — N=100 hard gate; per Tier 3 Review #1 DEC-389
+> (per Decision 2 — N=100 hard gate; per Tier 3 Review #2 DEC-390
 > amended rule, 2026-04-30 — axis (i) production-reachable steady-state
 > binds; axes (ii)/(iv) demoted to informational; axis (iii) deleted):**
 > pick H2 if **`axis_i_wilson_ub` (concurrent amends across N≥3
@@ -869,7 +869,7 @@ Prescription"):**
 > and (iv) joint reconnect+concurrent are RETAINED in the spike
 > harness** as informational characterization of H2 fail-loud behavior
 > during Gateway disconnect (input to Sprint 31.94 reconnect-recovery
-> design per DEF-241 / RSK-DEC389-31.94-COUPLING). Their UBs are
+> design per DEF-241 / RSK-DEC390-31.94-COUPLING). Their UBs are
 > reported under `informational_axes_results` in the JSON artifact but
 > do NOT contribute to `axis_i_wilson_ub`. **Axis (iii) stale-ID is
 > DELETED entirely** from the spike — the state is unreachable in

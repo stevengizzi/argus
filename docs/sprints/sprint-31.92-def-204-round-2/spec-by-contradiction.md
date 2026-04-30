@@ -305,13 +305,13 @@ calls**, not empirical falsifications, per L-R2-1 rephrasing
 
 27. **Worst-axis Wilson UB across all four adversarial axes as the
     binding metric for Path #1 mechanism selection.** Per Tier 3 Review
-    #1 verdict 2026-04-30 / DEC-389 amended rule: superseded by axis
+    #2 verdict 2026-04-30 / DEC-390 amended rule: superseded by axis
     (i) production-reachable steady-state as the sole binding axis
     (`axis_i_wilson_ub`); axes (ii) reconnect-window and (iv) joint
     reconnect+concurrent are RETAINED in the spike harness as
     informational characterization of H2 fail-loud behavior during
     Gateway disconnect (input to Sprint 31.94 reconnect-recovery
-    design per DEF-241 / RSK-DEC389-31.94-COUPLING); axis (iii)
+    design per DEF-241 / RSK-DEC390-31.94-COUPLING); axis (iii)
     stale-ID is DELETED entirely (state unreachable in production per
     DEC-117 + DEC-386 invariants; broker-correct rejection of
     modifications against cancelled orders is *desired* behavior, not
@@ -323,7 +323,7 @@ calls**, not empirical falsifications, per L-R2-1 rephrasing
     The loose reading recovers the engineering question: "does H2 work
     in steady-state production load, and does it fail loud — not silent
     — during the separately-addressed reconnect failure mode?"
-    Cross-references: DEC-389 (Pattern B sprint-close materialization);
+    Cross-references: DEC-390 (Pattern B sprint-close materialization);
     sprint-spec.md §Hypothesis Prescription amended halt-or-proceed
     gate language; FAI #3 (this file's §Edge Case 2 + companion
     `falsifiable-assumption-inventory.md` entry #3);
@@ -372,7 +372,7 @@ The implementation should NOT handle these cases in this sprint:
    to raise; assert fall-through to H4 hybrid OR halt with operator
    escalation). Production-side robustness for unusual amend rejections
    is post-revenue concern; if rejection rate exceeds 5% on
-   **`axis_i_wilson_ub` per DEC-389 amended rule** (Tier 3 #1 verdict
+   **`axis_i_wilson_ub` per DEC-390 amended rule** (Tier 3 #2 verdict
    2026-04-30 — axis (i) production-reachable steady-state binds; axes
    (ii)/(iv) demoted to informational; axis (iii) deleted), mechanism
    shifts to H4 hybrid per Hypothesis Prescription.
@@ -530,14 +530,14 @@ The implementation should NOT handle these cases in this sprint:
     finer-grained per-position restart-recovery that reads historical
     state. NOT this sprint's work.
 
-17. **Aggregate percentage closure claims in DEC-390.** Per
+17. **Aggregate percentage closure claims in DEC-391.** Per
     process-evolution lesson F.5 (captured at sprint-close per
     `doc-update-checklist.md` C10): DEC entries claiming closure should
     use "structural closure of mechanism X with falsifiable test fixture
     Y" rather than "closes ~Z% of blast radius." DEC-386's `~98%` claim
-    was empirically falsified 24 hours later; DEC-390 must NOT repeat
+    was empirically falsified 24 hours later; DEC-391 must NOT repeat
     the pattern. AC6.3 mandates structural framing. **Edge case to
-    reject:** any draft DEC-390 text using "comprehensive," "complete,"
+    reject:** any draft DEC-391 text using "comprehensive," "complete,"
     "fully closed," or "covers ~N%" language. Reviewer halts on these
     tokens.
 
@@ -681,7 +681,7 @@ The implementation should NOT handle these cases in this sprint:
   `cumulative_sold_shares`, `halt_entry_until_operator_ack` are
   in-memory `ManagedPosition` fields ONLY, NOT persisted to SQLite.
 - DEC-385 / DEC-386 / DEC-388 entries in `docs/decision-log.md` —
-  preserve (per Phase A leave-as-historical decision). DEC-390 is a new
+  preserve (per Phase A leave-as-historical decision). DEC-391 is a new
   entry with cross-references; predecessors are NOT amended in-place.
 - `IBKRConfig.bracket_oca_type` Pydantic validator — runtime-flippability
   preserved per DEC-386 design intent (per §"Out of Scope" #22).
@@ -887,9 +887,9 @@ The implementation should NOT handle these cases in this sprint:
 | `ManagedPosition.cumulative_pending_sell_shares` + `cumulative_sold_shares` + `is_reconstructed` + `halt_entry_until_operator_ack` SQLite persistence | Sprint 35+ Learning Loop V2 (DEF-209 extended scope) | DEF-209 |
 | Standalone `sell_volume_ceiling_status` REST endpoint | Unscheduled (out of scope here) | (no DEF) |
 | Locate-suppression dict reconnect-event awareness (couples with `IBKRReconnectedEvent` consumer) | Sprint 31.94 | (filed at S3a as deferred sub-item, no DEF; mitigated by AC2.5 broker-verification + Branch 4 + HALT-ENTRY coupling per Tier 3 item C) |
-| Locate-rejection error-string drift quarterly re-validation | Operational hygiene, post-Sprint-31.92-merge | RSK-DEC-390-FINGERPRINT (proposed at sprint-close) |
-| Path #1 H2 amend-stop-price IBKR-API-version assumption documentation | `docs/live-operations.md` paragraph at sprint-close | RSK-DEC-390-AMEND (proposed at sprint-close) |
-| Path #1 H1 cancel-and-await unprotected-window documentation | `docs/live-operations.md` paragraph at sprint-close (only if H1 selected) | RSK-DEC-390-CANCEL-AWAIT-LATENCY (proposed at sprint-close, conditional on H1 selection) |
+| Locate-rejection error-string drift quarterly re-validation | Operational hygiene, post-Sprint-31.92-merge | RSK-DEC-391-FINGERPRINT (proposed at sprint-close) |
+| Path #1 H2 amend-stop-price IBKR-API-version assumption documentation | `docs/live-operations.md` paragraph at sprint-close | RSK-DEC-391-AMEND (proposed at sprint-close) |
+| Path #1 H1 cancel-and-await unprotected-window documentation | `docs/live-operations.md` paragraph at sprint-close (only if H1 selected) | RSK-DEC-391-CANCEL-AWAIT-LATENCY (proposed at sprint-close, conditional on H1 selection) |
 | **Sprint 31.94 D3 prioritization re-evaluation (Decision 6 — separate Discovery activity)** | **Discovery (separate activity, NOT a sprint deliverable)** | **(roadmap-level question per Decision 6)** |
 
 ---
