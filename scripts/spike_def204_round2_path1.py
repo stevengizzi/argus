@@ -97,6 +97,33 @@ DEFAULT_SYMBOLS = ["SPY", "QQQ", "IWM", "XLF"]
 
 
 # ---------------------------------------------------------------------------
+# Exceptions
+# ---------------------------------------------------------------------------
+
+
+class SpikeShortPositionDetected(Exception):
+    """Raised when the spike harness encounters a short position.
+
+    Sprint 31.92 Tier 3 Review #2 verdict §Cat A.2 (DEF-237): the spike is a
+    long-only diagnostic. Encountering a short during cleanup means a prior
+    session left contamination OR upstream code emitted an unexpected SELL.
+    Either way, the spike refuses to "cover" the short — that path is the
+    DEF-204 cascade that the Sprint 31.91 IMPROMPTU-04 production fix already
+    addresses for trading code. Aborting the spike is strictly safer than
+    issuing a BUY-to-cover from a diagnostic harness.
+    """
+
+    def __init__(self, symbol: str, side: Any, shares: int) -> None:
+        self.symbol = symbol
+        self.side = side
+        self.shares = shares
+        super().__init__(
+            f"SHORT position detected on {symbol}: side={side} shares={shares}. "
+            "Long-only spike policy: spike does NOT cover shorts. Aborting."
+        )
+
+
+# ---------------------------------------------------------------------------
 # Pre-flight guards — fail-fast on wrong-window invocations
 # ---------------------------------------------------------------------------
 
@@ -360,7 +387,28 @@ def _stop_is_working(broker: IBKRBroker, stop_ulid: str) -> bool:
 
 
 async def _flatten(broker: IBKRBroker, symbol: str) -> None:
-    """Cancel any open orders for `symbol` and close any net long position."""
+    """Cancel any open orders for `symbol` and close any net long position.
+
+    Cat A.2 (DEF-237): three-branch side-aware logic mirroring the Sprint
+    31.91 IMPROMPTU-04 production precedent. ARGUS's `Position` model
+    exposes the signed-quantity information via `(side, shares)` —
+    `IBKRBroker.get_positions()` derives `side = BUY if ib_pos.position > 0
+    else SELL` and `shares = abs(int(ib_pos.position))` per
+    `argus/execution/ibkr_broker.py:1109-1111`. Reading `(p.side, p.shares)`
+    reconstructs the signed quantity unambiguously; reading `p.shares`
+    alone (the prior side-blind pattern) is the absolute-value trap that
+    DEF-199 / DEF-204 are filed against.
+
+    The verdict's Cat A.2 spec block referenced `p._raw_ib_pos.position`
+    which does not exist on `argus.models.trading.Position` (Pydantic
+    BaseModel; grep-verified zero matches in `argus/` and `scripts/`).
+    Operator disposition received via the Sprint 31.92 Work Journal
+    Option-B selection: apply the verdict's spirit via `(side, shares)`
+    reading (mirrors IMPROMPTU-04 production fix at
+    `argus/main.py::check_startup_position_invariant` +
+    `argus/execution/order_manager.py:1684/1707`). See Unit 3 close-out
+    Judgment-Call note for the full audit trail.
+    """
     try:
         await broker.cancel_all_orders(symbol=symbol, await_propagation=True)
     except CancelPropagationTimeout as e:
@@ -370,12 +418,36 @@ async def _flatten(broker: IBKRBroker, symbol: str) -> None:
     await asyncio.sleep(0.3)
     positions = await broker.get_positions()
     for p in positions:
-        if p.symbol == symbol and p.shares > 0:
+        if p.symbol != symbol:
+            continue
+        # Defensive zero-shares branch — IBKRBroker.get_positions filters
+        # zero-quantity positions at ibkr_broker.py:1106 so this should never
+        # fire in practice; defense-in-depth is cheap.
+        if p.shares == 0:
+            log.info("Cleanup: %s already flat (shares=0)", symbol)
+            break
+        if p.side == OrderSide.BUY and p.shares > 0:
+            # Genuine long — flatten via SELL (the original supported case).
             try:
                 await broker.place_order(_build_sell(symbol, p.shares))
             except Exception as e:
                 log.warning("Cleanup close raised on %s: %s", symbol, e)
             break
+        if p.side == OrderSide.SELL and p.shares > 0:
+            # Short detected — long-only spike policy refuses to cover.
+            log.warning(
+                "Cleanup: SHORT position detected on %s (side=%s shares=%d). "
+                "Long-only spike policy: NOT covering. Aborting spike.",
+                symbol, p.side, p.shares,
+            )
+            raise SpikeShortPositionDetected(symbol, p.side, p.shares)
+        # UNKNOWN side — defends against future OrderSide enum extension
+        # (current enum has only BUY/SELL; this branch is unreachable today).
+        log.error(
+            "Cleanup: UNKNOWN side for %s (side=%r shares=%d) — skipping cleanup",
+            symbol, p.side, p.shares,
+        )
+        break
     await asyncio.sleep(0.5)
 
 
@@ -412,16 +484,36 @@ async def _open_entry_with_bracket(
 def _verify_aux_price(
     broker: IBKRBroker, stop_ulid: str, expected_aux: float
 ) -> bool:
-    """Query open trades and verify the stop child's auxPrice matches."""
+    """Query open trades and verify the stop child's auxPrice matches.
+
+    Logs the observed auxPrice at INFO unconditionally so that on a False
+    return the operator can distinguish "broker cache lag (actual ~ expected
+    but tolerance miss)" from "actually didn't propagate (actual stale or
+    zero)". This is the Cat A.1 (DEF-236) instrumentation arm — the wait /
+    reqOpenOrders arms live at the call site in _measure_mode_a.
+    """
     ib_order_id = broker._ulid_to_ibkr.get(stop_ulid)
     if ib_order_id is None:
+        log.info(
+            "verify_aux_price: stop_ulid=%s not in _ulid_to_ibkr (expected=%.2f)",
+            stop_ulid, round(expected_aux, 2),
+        )
         return False
     trades = broker._ib.openTrades()
     for t in trades:
         t = cast(Trade, t)
         if t.order.orderId == ib_order_id:
             actual = float(getattr(t.order, "auxPrice", 0.0) or 0.0)
-            return abs(actual - round(expected_aux, 2)) < 0.005
+            matched = abs(actual - round(expected_aux, 2)) < 0.005
+            log.info(
+                "verify_aux_price: stop_ulid=%s ib_order_id=%d actual_auxPrice=%.4f expected=%.2f matched=%s",
+                stop_ulid, ib_order_id, actual, round(expected_aux, 2), matched,
+            )
+            return matched
+    log.info(
+        "verify_aux_price: stop_ulid=%s ib_order_id=%d not found in openTrades (expected=%.2f)",
+        stop_ulid, ib_order_id, round(expected_aux, 2),
+    )
     return False
 
 
@@ -457,8 +549,17 @@ async def _measure_mode_a(
             res = await broker.modify_order(stop_ulid, {"price": new_aux})
             rtt_ms = (time.monotonic() - t0) * 1000.0
             rejected = res.status == OrderStatus.REJECTED
-            # Allow IBKR up to 500ms to propagate the auxPrice update
-            await asyncio.sleep(0.5)
+            # Cat A.1 (DEF-236): the prior 500ms wait sampled the client-side
+            # ib_async cache before the broker's orderStatus callback
+            # propagated the new auxPrice — producing 0/50 propagation_ok in
+            # S1a v1 despite 50/50 modify_order successes. Sprint 31.92 Tier 3
+            # Review #2 verdict §Cat A.1 fix: extend wait to 2.5s AND force a
+            # broker-side state pull via reqOpenOrders() before sampling. The
+            # observed auxPrice is logged inside _verify_aux_price so a False
+            # return is diagnostic ("actual stale" vs "actual ~ expected,
+            # tolerance miss").
+            await asyncio.sleep(2.5)
+            await broker._ib.reqOpenOrders()
             propagated = _verify_aux_price(broker, stop_ulid, new_aux)
             trials.append(ModeATrial(
                 symbol=symbol,
@@ -1043,6 +1144,48 @@ async def main_async(args: argparse.Namespace) -> int:
     except Exception as e:
         log.error("Failed to connect to paper IBKR Gateway at 127.0.0.1:4002: %s", e)
         return 2
+
+    # Cat A.2 (DEF-237): pre-spike position-sweep refusal-to-start gate per
+    # Sprint 31.92 Tier 3 Review #2 verdict §Cat A.2. Mode D's 16/18 QQQ
+    # contamination cluster in S1a v1 was caused by residual positions
+    # carried over from a prior aborted spike run; the side-blind _flatten()
+    # then doubled the short across the next trial. With Cat A.2's
+    # three-branch _flatten() in place, the residual would now raise
+    # SpikeShortPositionDetected mid-trial — but refusing to start at all
+    # is strictly safer than discovering the problem on trial #N.
+    #
+    # Operator must clear residuals BEFORE re-running. The verified-safe
+    # tooling is `scripts/ibkr_close_all_positions.py` (DEF-239 audited
+    # 2026-04-30: imports `ib_async.Position` directly, signed-quantity
+    # branching at L54-57, structurally inaccessible to DEF-204 bug class).
+    try:
+        pre_positions = await broker.get_positions()
+    except Exception as e:
+        log.error("Pre-spike position sweep failed: %s. Aborting.", e)
+        try:
+            await broker.disconnect()
+        except Exception:
+            pass
+        return 2
+    nonzero = [p for p in pre_positions if p.shares > 0]
+    if nonzero:
+        log.error(
+            "Pre-spike position sweep found %d nonzero position(s). Spike refuses "
+            "to start. Operator must flatten manually (WITH SIDE-AWARE TOOLING — "
+            "scripts/ibkr_close_all_positions.py is verified safe per DEF-239) "
+            "before re-running.",
+            len(nonzero),
+        )
+        for p in nonzero:
+            log.error(
+                "  pre-spike position: symbol=%s side=%s shares=%d",
+                p.symbol, p.side, p.shares,
+            )
+        try:
+            await broker.disconnect()
+        except Exception:
+            pass
+        sys.exit(2)
 
     # Qualify contracts once at startup. ib_async's `reqMktData()` hashes
     # the Contract for ticker-cache lookup, which requires `conId` to be
