@@ -364,7 +364,7 @@ Provide the @reviewer with:
    - `argus/execution/ibkr_broker.py`
    - `argus/main.py`
    - `argus/core/config.py`
-   - `argus/core/health.py`, `argus/api/v1/alerts.py`, `argus/ws/v1/alerts.py`
+   - `argus/core/health.py`, `argus/api/routes/alerts.py`, `argus/api/websocket/alerts_ws.py`
    - `.github/workflows/` (sprint-close operator task per `doc-update-checklist.md` C9)
    - Frontend
    - DB schemas

@@ -56,7 +56,7 @@ If the close-out file does not exist, flag this as CONCERNS — the close-out re
   - `argus/main.py`
   - `argus/execution/ibkr_broker.py`
   - `argus/core/config.py`
-  - `argus/core/health.py`, `argus/api/v1/alerts.py`, `argus/ws/v1/alerts.py`
+  - `argus/core/health.py`, `argus/api/routes/alerts.py`, `argus/api/websocket/alerts_ws.py`
   - `argus/models/trading.py`
   - `argus/execution/alpaca_broker.py`
   - `argus/data/alpaca_data_service.py`

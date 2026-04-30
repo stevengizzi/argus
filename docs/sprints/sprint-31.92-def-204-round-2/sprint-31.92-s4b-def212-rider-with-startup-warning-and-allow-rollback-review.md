@@ -59,7 +59,7 @@ If the close-out file does not exist, flag this as CONCERNS — the close-out re
   - `argus/main.py::check_startup_position_invariant` (Sprint 31.94 D2)
   - `argus/main.py::_startup_flatten_disabled` (Sprint 31.94 D2)
   - `argus/core/config.py::IBKRConfig.bracket_oca_type` Pydantic validator (runtime-flippability preserved per DEC-386 design intent)
-  - `argus/core/health.py`, `argus/api/v1/alerts.py`, `argus/ws/v1/alerts.py`
+  - `argus/core/health.py`, `argus/api/routes/alerts.py`, `argus/api/websocket/alerts_ws.py`
   - `argus/frontend/...`, `argus/ui/` (frontend immutability — invariant 12)
   - DB schemas (`data/operations.db`, `data/argus.db`)
   - DEC-385 / DEC-386 / DEC-388 entries in `docs/decision-log.md`

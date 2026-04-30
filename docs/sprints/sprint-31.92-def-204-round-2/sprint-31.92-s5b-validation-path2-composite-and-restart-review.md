@@ -56,7 +56,7 @@ If the close-out file does not exist, flag this as CONCERNS — the close-out re
   - `argus/execution/ibkr_broker.py` (post-S3a state; `_is_locate_rejection` helper preserved)
   - `argus/main.py`
   - `argus/core/config.py`
-  - `argus/core/health.py`, `argus/api/v1/alerts.py`, `argus/ws/v1/alerts.py`
+  - `argus/core/health.py`, `argus/api/routes/alerts.py`, `argus/api/websocket/alerts_ws.py`
   - `.github/workflows/` (sprint-close operator-manual task per `doc-update-checklist.md` C9 — NOT an S5b modification)
   - `frontend/`, `argus/ui/` (regression invariant 12 / B-class halt B8)
   - DB schemas

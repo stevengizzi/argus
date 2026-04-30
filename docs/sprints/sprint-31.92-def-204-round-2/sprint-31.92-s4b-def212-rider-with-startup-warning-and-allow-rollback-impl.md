@@ -307,7 +307,7 @@ Line numbers MAY appear as directional cross-references but are NEVER the sole a
   - `argus/main.py::_startup_flatten_disabled` (Sprint 31.94 D2).
   - `argus/core/config.py::IBKRConfig.bracket_oca_type` Pydantic validator — runtime-flippability preserved per DEC-386 design intent.
   - `argus/core/health.py` consumer + `POLICY_TABLE`.
-  - `argus/api/v1/alerts.py`, `argus/ws/v1/alerts.py`.
+  - `argus/api/routes/alerts.py`, `argus/api/websocket/alerts_ws.py`.
   - `argus/frontend/...` (entire frontend; Vitest stays at 913).
   - `data/operations.db` schema, `data/argus.db` schemas.
   - DEC-385 / DEC-386 / DEC-388 entries in `docs/decision-log.md` (preserve per Phase A leave-as-historical decision).
@@ -486,7 +486,7 @@ Provide the @reviewer with:
    - `argus/main.py::check_startup_position_invariant`
    - `argus/main.py::_startup_flatten_disabled`
    - `argus/core/config.py::IBKRConfig.bracket_oca_type` Pydantic validator
-   - `argus/core/health.py`, `argus/api/v1/alerts.py`, `argus/ws/v1/alerts.py`
+   - `argus/core/health.py`, `argus/api/routes/alerts.py`, `argus/api/websocket/alerts_ws.py`
    - Frontend
    - DB schemas
    - DEC-385 / DEC-386 / DEC-388 entries in decision-log
