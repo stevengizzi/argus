@@ -292,22 +292,71 @@ async def _get_market_price(broker: IBKRBroker, symbol: str) -> float | None:
     return None
 
 
-async def _wait_for_entry_fill(
-    broker: IBKRBroker, symbol: str, timeout_s: float = 15.0
-) -> int:
-    """Poll broker positions until `symbol` shows non-zero shares. Returns shares.
+def _safe_initial_stop_offset(price: float) -> float:
+    """1% below current price (or $0.50 floor for low-priced symbols).
 
-    Polls at 1s cadence to keep the IBKRBroker.get_positions INFO log volume
-    sane. Increase frequency only if you also silence that logger.
+    Wide enough that 15-minute delayed-data drift on a paper account
+    doesn't accidentally trigger the stop before we can exercise it. The
+    smoke-test attempt on c1b4bf2 / 9cedaba used a flat 50 cents; the
+    actual realtime price moved away from the delayed quote and the stop
+    fired 700ms after entry. 1% is plenty of room on SPY (~$7) and still
+    safe on cheaper symbols where 1% > $0.50.
     """
+    return max(0.50, price * 0.01)
+
+
+def _safe_modified_stop_offset(price: float) -> float:
+    """0.5% below current price (or $0.50 floor). Distinct from the
+    initial offset so the deterministic-propagation check has a real
+    auxPrice delta to verify after `modify_order`."""
+    return max(0.50, price * 0.005)
+
+
+async def _wait_for_entry_fill_by_ulid(
+    broker: IBKRBroker, entry_ulid: str, timeout_s: float = 15.0
+) -> int:
+    """Wait for `entry_ulid`'s underlying ib_async trade to reach Filled.
+
+    Returns filled quantity (0 = timed out / cancelled / rejected). More
+    reliable than polling `broker.get_positions()` because (a) the IBKR
+    position cache has a small lag behind fill events, and (b) if the
+    bracket's stop child fires immediately after the entry, the position
+    cache shows 0 even though the entry executed — which the prior
+    positions-based wait misread as "entry_did_not_fill".
+
+    Spike-only — uses broker._ulid_to_ibkr + broker._ib.trades()
+    directly; production code MUST NOT.
+    """
+    ib_order_id = broker._ulid_to_ibkr.get(entry_ulid)
+    if ib_order_id is None:
+        return 0
     deadline = time.monotonic() + timeout_s
     while time.monotonic() < deadline:
-        positions = await broker.get_positions()
-        for p in positions:
-            if p.symbol == symbol and p.shares > 0:
-                return p.shares
-        await asyncio.sleep(1.0)
+        for trade in broker._ib.trades():
+            if trade.order.orderId == ib_order_id:
+                status = trade.orderStatus.status
+                if status == "Filled":
+                    return int(trade.orderStatus.filled or 0)
+                if status in ("Cancelled", "Inactive"):
+                    return 0
+                break
+        await asyncio.sleep(0.5)
     return 0
+
+
+def _stop_is_working(broker: IBKRBroker, stop_ulid: str) -> bool:
+    """True iff the stop child is in a working state (Submitted /
+    PreSubmitted). False if it's terminal (Filled / Cancelled / Inactive)
+    or if the broker doesn't recognize the ULID. Used after entry fill
+    to skip a trial cleanly when a fast market move tripped the stop
+    pre-amendment."""
+    ib_order_id = broker._ulid_to_ibkr.get(stop_ulid)
+    if ib_order_id is None:
+        return False
+    for trade in broker._ib.trades():
+        if trade.order.orderId == ib_order_id:
+            return trade.orderStatus.status in ("Submitted", "PreSubmitted")
+    return False
 
 
 async def _flatten(broker: IBKRBroker, symbol: str) -> None:
@@ -333,16 +382,31 @@ async def _flatten(broker: IBKRBroker, symbol: str) -> None:
 async def _open_entry_with_bracket(
     broker: IBKRBroker, symbol: str, current_price: float
 ) -> tuple[str, str] | None:
-    """Place a 1-share BUY entry + STP child. Returns (entry_ulid, stop_ulid)."""
+    """Place a 1-share BUY entry + STP child. Returns (entry_ulid, stop_ulid).
+
+    Uses the 1%-or-$0.50-floor initial stop offset to avoid pre-firing
+    the stop on delayed-data drift. After entry fills (detected via the
+    trade-status path, not the positions cache), verifies the stop child
+    is still in a working state — if a fast market move tripped it
+    anyway, returns None and the caller skips the trial.
+    """
     entry = _build_entry(symbol)
-    stop = _build_stop(symbol, current_price - 0.50)
+    stop_offset = _safe_initial_stop_offset(current_price)
+    stop = _build_stop(symbol, current_price - stop_offset)
     result = await broker.place_bracket_order(entry, stop, [])
     if result.entry.status not in (OrderStatus.SUBMITTED, OrderStatus.FILLED):
         return None
-    shares = await _wait_for_entry_fill(broker, symbol, timeout_s=15.0)
-    if shares == 0:
+    entry_ulid = result.entry.order_id
+    stop_ulid = result.stop.order_id
+    filled_qty = await _wait_for_entry_fill_by_ulid(broker, entry_ulid, timeout_s=15.0)
+    if filled_qty == 0:
         return None
-    return result.entry.order_id, result.stop.order_id
+    # Brief beat for the stop child to settle into Submitted state
+    # post-entry-fill before we verify it's still working.
+    await asyncio.sleep(0.3)
+    if not _stop_is_working(broker, stop_ulid):
+        return None
+    return entry_ulid, stop_ulid
 
 
 def _verify_aux_price(
@@ -387,7 +451,7 @@ async def _measure_mode_a(
             await _flatten(broker, symbol)
             continue
         _, stop_ulid = opened
-        new_aux = round(price - 0.75, 2)
+        new_aux = round(price - _safe_modified_stop_offset(price), 2)
         t0 = time.monotonic()
         try:
             res = await broker.modify_order(stop_ulid, {"price": new_aux})
@@ -463,7 +527,7 @@ async def _axis_concurrent(
             continue
         # Fire all amends inside <=10ms by constructing the coroutines first
         # then handing the batch to asyncio.gather (which schedules eagerly).
-        coros = [_amend_one(broker, ulid, round(price - 0.75, 2))
+        coros = [_amend_one(broker, ulid, round(price - _safe_modified_stop_offset(price), 2))
                  for _, ulid, price in opens]
         outcomes = await asyncio.gather(*coros, return_exceptions=False)
         for rejected, _err in outcomes:
@@ -531,7 +595,7 @@ async def _axis_reconnect(
         for _ in range(num_trials):
             if reconnected.is_set():
                 break
-            new_aux = round(price - 0.75, 2)
+            new_aux = round(price - _safe_modified_stop_offset(price), 2)
             rejected, _err = await _amend_one(broker, stop_ulid, new_aux)
             result.n_trials += 1
             if rejected:
@@ -574,7 +638,7 @@ async def _axis_stale_id(
         _, stop_ulid = opened
         await _flatten(broker, symbol)  # invalidates the stop ULID
         await asyncio.sleep(0.2)
-        rejected, _err = await _amend_one(broker, stop_ulid, round(price - 0.75, 2))
+        rejected, _err = await _amend_one(broker, stop_ulid, round(price - _safe_modified_stop_offset(price), 2))
         result.n_trials += 1
         if rejected:
             result.n_rejections += 1
@@ -644,7 +708,7 @@ async def _axis_joint(
         for _ in range(num_trials):
             if reconnected.is_set():
                 break
-            coros = [_amend_one(broker, ulid, round(price - 0.75, 2))
+            coros = [_amend_one(broker, ulid, round(price - _safe_modified_stop_offset(price), 2))
                      for _, ulid, price in opens]
             outcomes = await asyncio.gather(*coros, return_exceptions=False)
             for rejected, _err in outcomes:
@@ -765,12 +829,9 @@ async def _measure_mode_d(
                                      conflict_signature="entry_did_not_fill"))
             await _flatten(broker, symbol)
             continue
-        shares = await _wait_for_entry_fill(broker, symbol, timeout_s=5.0)
-        if shares == 0:
-            trials.append(ModeDTrial(symbol, True, 0.0,
-                                     conflict_signature="position_not_visible_post_fill"))
-            await _flatten(broker, symbol)
-            continue
+        # _open_entry_with_bracket already waited for the entry trade to
+        # reach Filled status; the spike always opens 1 share.
+        shares = 1
         sell_result: Any
         try:
             await broker.cancel_all_orders(symbol=symbol, await_propagation=True)

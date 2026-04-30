@@ -1,0 +1,1454 @@
+{
+  "status": "INCONCLUSIVE",
+  "selected_mechanism": null,
+  "h2_modify_order_p50_ms": 0.98,
+  "h2_modify_order_p95_ms": 1.33,
+  "h2_rejection_rate_pct": 0.0,
+  "h2_deterministic_propagation": false,
+  "adversarial_axes_results": {
+    "concurrent_amends": {
+      "n_trials": 120,
+      "n_rejections": 0,
+      "rejection_rate_pct": 0.0,
+      "wilson_upper_bound_pct": 3.1,
+      "notes": []
+    },
+    "reconnect_window_amends": {
+      "n_trials": 30,
+      "n_rejections": 29,
+      "rejection_rate_pct": 96.67,
+      "wilson_upper_bound_pct": 99.41,
+      "notes": []
+    },
+    "stale_id_amends": {
+      "n_trials": 30,
+      "n_rejections": 30,
+      "rejection_rate_pct": 100.0,
+      "wilson_upper_bound_pct": 100.0,
+      "notes": []
+    },
+    "joint_reconnect_concurrent_amends": {
+      "n_trials": 120,
+      "n_rejections": 116,
+      "rejection_rate_pct": 96.67,
+      "wilson_upper_bound_pct": 98.7,
+      "notes": []
+    }
+  },
+  "worst_axis_wilson_ub": 100.0,
+  "h1_cancel_all_orders_p50_ms": 103.99,
+  "h1_cancel_all_orders_p95_ms": 104.87,
+  "h1_propagation_n_trials": 100,
+  "h1_propagation_zero_conflict_in_100": false,
+  "trial_count": 500,
+  "spike_run_date": "2026-04-30T14:13:49.718462+00:00",
+  "inconclusive_reason": "modify_order auxPrice did not propagate deterministically; Mode A propagation check failed at >0% rate",
+  "_raw": {
+    "mode_a_trials": [
+      {
+        "symbol": "SPY",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.28,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.25,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.28,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.08,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.0,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.17,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.28,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.21,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.08,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.86,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.81,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.33,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.24,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.38,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.02,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.79,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.74,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.07,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.28,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.57,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.35,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.31,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.47,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.52,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.29,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.29,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.28,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.31,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.13,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.2,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.52,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.86,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.61,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.96,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.04,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.93,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.18,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.39,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.43,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.99,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.59,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.72,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.98,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.89,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.75,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.46,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.4,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 1.13,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.52,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "rejected": false,
+        "propagation_ok": false,
+        "round_trip_ms": 0.92,
+        "error": null
+      }
+    ],
+    "mode_c_trials": [
+      {
+        "symbol": "SPY",
+        "success": true,
+        "round_trip_ms": 104.08,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "round_trip_ms": 104.11,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "round_trip_ms": 102.25,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "round_trip_ms": 104.2,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "round_trip_ms": 103.21,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "round_trip_ms": 103.84,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "round_trip_ms": 103.54,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "round_trip_ms": 104.87,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "round_trip_ms": 104.4,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "round_trip_ms": 103.35,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "round_trip_ms": 104.27,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "round_trip_ms": 102.95,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "round_trip_ms": 104.21,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "round_trip_ms": 102.91,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "round_trip_ms": 104.18,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "round_trip_ms": 103.5,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "round_trip_ms": 103.15,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "round_trip_ms": 103.76,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "round_trip_ms": 104.32,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "round_trip_ms": 104.15,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "round_trip_ms": 104.68,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "round_trip_ms": 104.59,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "round_trip_ms": 103.96,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "round_trip_ms": 104.62,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "round_trip_ms": 103.56,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "round_trip_ms": 103.66,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "round_trip_ms": 103.46,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "round_trip_ms": 103.21,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "round_trip_ms": 104.49,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "round_trip_ms": 104.88,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "round_trip_ms": 103.95,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "round_trip_ms": 103.79,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "round_trip_ms": 103.99,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "round_trip_ms": 104.32,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "round_trip_ms": 103.88,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "round_trip_ms": 104.24,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "round_trip_ms": 104.44,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "round_trip_ms": 104.49,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "round_trip_ms": 104.18,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "round_trip_ms": 103.64,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "round_trip_ms": 104.99,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "round_trip_ms": 103.79,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "round_trip_ms": 104.48,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "round_trip_ms": 103.61,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "round_trip_ms": 104.05,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "round_trip_ms": 104.41,
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "success": true,
+        "round_trip_ms": 101.81,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "success": true,
+        "round_trip_ms": 104.32,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "success": true,
+        "round_trip_ms": 103.02,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "success": true,
+        "round_trip_ms": 102.64,
+        "error": null
+      }
+    ],
+    "mode_d_trials": [
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.42,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.15,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.2,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.24,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.13,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.32,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.56,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.11,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.18,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.13,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.28,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.04,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.23,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.07,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.31,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.93,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.19,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.21,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.21,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.33,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.33,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.28,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.36,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.21,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.57,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.26,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.1,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.69,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.31,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 0.77,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.18,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.37,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.17,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.05,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 2.0,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.9,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.2,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.14,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.72,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.98,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.99,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 0.92,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.52,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.47,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 2.49,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 0.98,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.51,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.69,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.31,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 0.64,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.56,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.53,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.4,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.28,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.19,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.98,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.72,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.28,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.86,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.21,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.09,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 0.28,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.44,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.26,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.24,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 0.66,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.26,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 0.65,
+        "conflict_signature": "position_state_inconsistency: shares=1",
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.3,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.32,
+        "conflict_signature": "position_state_inconsistency: shares=2039",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.21,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.14,
+        "conflict_signature": "position_state_inconsistency: shares=1",
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.33,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.13,
+        "conflict_signature": "position_state_inconsistency: shares=2040",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.31,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.25,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.23,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.06,
+        "conflict_signature": "position_state_inconsistency: shares=2040",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.03,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.05,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.24,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.16,
+        "conflict_signature": "position_state_inconsistency: shares=2040",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.12,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.19,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.49,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.37,
+        "conflict_signature": "position_state_inconsistency: shares=2040",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.89,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.32,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.3,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 0.56,
+        "conflict_signature": "position_state_inconsistency: shares=2040",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.95,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.15,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.31,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 0.54,
+        "conflict_signature": "position_state_inconsistency: shares=2040",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.27,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.93,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "SPY",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 0.97,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "QQQ",
+        "conflict": true,
+        "cancel_to_sell_gap_ms": 1.38,
+        "conflict_signature": "position_state_inconsistency: shares=2040",
+        "error": null
+      },
+      {
+        "symbol": "IWM",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.39,
+        "conflict_signature": null,
+        "error": null
+      },
+      {
+        "symbol": "XLF",
+        "conflict": false,
+        "cancel_to_sell_gap_ms": 1.01,
+        "conflict_signature": null,
+        "error": null
+      }
+    ]
+  }
+}
