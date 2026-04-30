@@ -169,9 +169,12 @@ This Phase B re-run produces:
   compaction-risk budget.
 - **No compaction-risk re-balancing.** § 8 verification's
   compaction-risk re-validation already executed: S3b 12 → 12.5–13;
-  S5c 11 → 11.5; all 13 sessions remain ≤13.5 per
-  `session-breakdown.md` line 1635 ("All 12 implementation/spike
-  sessions score ≤13.5; ZERO sessions at...").
+  S5c reconciled to 13.5 (baseline reconciliation per
+  `session-breakdown.md` line ~1588-1598; the disposition's "S5c 11 →
+  11.5" projection was based on a stale Phase B/C-1 baseline; actual
+  current scoring is 13 + 0.5 for CL-7 = 13.5). All 13 sessions
+  remain ≤13.5 per `session-breakdown.md` line 1635 ("All 12
+  implementation/spike sessions score ≤13.5; ZERO sessions at...").
 - **No new spec-text amendments beyond § 7.** The Round 3 amendment
   manifest at § 7 is comprehensive; this Phase B re-run adds nothing
   to it.
