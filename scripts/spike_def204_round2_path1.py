@@ -3,34 +3,43 @@
 Phase A diagnostic spike against paper IBKR Gateway. NON-SAFE-DURING-TRADING.
 Run pre-market or after-hours.
 
-Resolves the H2/H4/H1 mechanism question for Path #1 fix by measuring four
-axes against the live broker:
+Resolves the H2/H4/H1 mechanism question for Path #1 fix by measuring three
+axes against the live broker (axis (iii) deleted at Cat B.1 per DEC-390):
 
   Mode A:  H2 baseline modify_order round-trip latency + rejection rate +
            deterministic broker-side auxPrice propagation.
-  Mode B:  Four adversarial axes for the H2 mechanism:
-             (i)   concurrent amends across N>=3 positions
-             (ii)  amends during a Gateway reconnect window
-             (iii) amends with stale order IDs
-             (iv)  joint reconnect + concurrent (worst-case combination)
+  Mode B:  Three axes for the H2 mechanism — partitioned per DEC-390:
+             (i)  BINDING:       concurrent amends across N>=3 positions
+                                 (binds H2/H4/H1 selection rule)
+             (ii) INFORMATIONAL: amends during a Gateway reconnect window
+                                 (consumed by Sprint 31.94 design per DEF-241)
+             (iv) INFORMATIONAL: joint reconnect + concurrent
+                                 (consumed by Sprint 31.94 design per DEF-241)
   Mode C:  H1 cancel-and-await latency baseline.
   Mode D:  N=100 cancel-then-immediate-SELL HARD GATE per Decision 2 — any
            single conflict in 100 trials disqualifies H1.
 
-Emits scripts/spike-results/spike-def204-round2-path1-results.json with the
-14 required keys per the implementation prompt. Decision rule (verbatim from
-sprint-spec.md § Hypothesis Prescription, H-R2-2-tightened):
+Emits scripts/spike-results/spike-def204-round2-path1-results.json. Decision
+rule per Sprint 31.92 Tier 3 Review #2 verdict §"The Architectural Question's
+Answer" (DEC-390 amendment to the original sprint-spec.md § Hypothesis
+Prescription H-R2-2-tightened rule; binding axis (i) only):
 
-  worst-axis Wilson UB < 5%  AND zero-conflict-100  -> h2_amend  (PROCEED)
-  5% <= worst < 20%          AND zero-conflict-100  -> h4_hybrid (PROCEED)
-  worst >= 20%               AND zero-conflict-100  -> h1_cancel_and_await
+  axis_i_wilson_ub < 5%        AND zero-conflict-100  -> h2_amend  (PROCEED)
+  5% <= axis_i_wilson_ub < 20% AND zero-conflict-100  -> h4_hybrid (PROCEED)
+  axis_i_wilson_ub >= 20%      AND zero-conflict-100  -> h1_cancel_and_await
                                                         (PROCEED, operator
                                                         confirmation required
                                                         before S2a/S2b)
-  zero-conflict-100 == False                        -> H1 unsafe; if worst
-                                                        < 20% fall back to
-                                                        H2/H4 per bracket;
-                                                        else INCONCLUSIVE.
+  zero-conflict-100 == False                          -> H1 INELIGIBLE (HARD
+                                                        GATE per Decision 2);
+                                                        if axis_i < 20% fall
+                                                        back to H2/H4 per
+                                                        bracket; else
+                                                        INCONCLUSIVE.
+
+Informational axes (ii) + (iv) are reported in the JSON artifact under
+`informational_axes_results` for Sprint 31.94 reconnect-recovery design
+grounding but do NOT contribute to the binding rule.
 
 Exit codes:
   0  PROCEED
