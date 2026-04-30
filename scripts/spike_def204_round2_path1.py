@@ -87,10 +87,16 @@ log = logging.getLogger("def204-spike")
 logging.getLogger("ib_async").setLevel(logging.WARNING)
 
 
-# Mode B axis keys per Implementation Prompt Requirement 2
+# Mode B axis keys per Sprint 31.92 Tier 3 Review #2 verdict §Cat B (DEC-390
+# rule encoding). Cat B.1: AXIS_STALE_ID deleted entirely — broker correctly
+# rejecting modifications against cancelled stops is *desired* behavior, and
+# DEC-117 + DEC-386 invariants prevent re-amendment of cancelled stops in
+# production. Cat B.2: AXIS_CONCURRENT is the binding axis; AXIS_RECONNECT
+# and AXIS_JOINT are informational characterization of H2 fail-loud during
+# Gateway disconnect (consumed by Sprint 31.94 reconnect-recovery design
+# per DEF-241).
 AXIS_CONCURRENT = "concurrent_amends"
 AXIS_RECONNECT = "reconnect_window_amends"
-AXIS_STALE_ID = "stale_id_amends"
 AXIS_JOINT = "joint_reconnect_concurrent_amends"
 
 DEFAULT_SYMBOLS = ["SPY", "QQQ", "IWM", "XLF"]
@@ -186,6 +192,11 @@ class AxisResult:
     rejection_rate_pct: float = 0.0
     wilson_upper_bound_pct: float = 0.0
     notes: list[str] = field(default_factory=list)
+    # Cat B.3 (DEF-238): set on informational axes (ii)/(iv) when the
+    # operator skipped the manual Gateway disconnect step. None on the
+    # binding axis (i) (no disconnect prompt) and on informational axes
+    # whose disconnect was actually observed.
+    instrumentation_warning: str | None = None
 
 
 @dataclass
@@ -655,7 +666,17 @@ async def _axis_reconnect(
     """Axis (ii): amends during Gateway reconnect window. Operator-orchestrated:
     pause for operator to disconnect Gateway, fire amends rapidly during the
     window, operator types RECONNECTED when Gateway is back. Trial cadence is
-    one amend per ~500ms during the window, capped at num_trials."""
+    one amend per ~500ms during the window, capped at num_trials.
+
+    Cat B.3 (DEF-238): samples `broker._ib.isConnected()` immediately before
+    each amend. If `isConnected()` returns True throughout the run (operator
+    skipped the disconnect prompt), the result is tagged with
+    `instrumentation_warning = "Gateway remained connected throughout —
+    characterization invalid"` and a WARNING is logged. If a disconnect IS
+    observed, an INFO line records that. Sprint 31.94 reconnect-recovery
+    design depends on this characterization (DEF-241), so silent failure
+    of the operator-orchestrated step would corrupt downstream design.
+    """
     log.info("=== Mode B axis (ii) reconnect — up to %d trials ===", num_trials)
     result = AxisResult()
     # Open one position so we have a live stop_ulid to amend
@@ -691,11 +712,22 @@ async def _axis_reconnect(
                 reconnected.set()
                 return
 
+    # Cat B.3 instrumentation: track whether the Gateway ever reported
+    # disconnected during the amend loop. Default True (always-connected =
+    # invalid run); flip to False the first time isConnected() returns False.
+    gateway_remained_connected = True
     watcher = asyncio.create_task(_watch_stdin())
     try:
         for _ in range(num_trials):
             if reconnected.is_set():
                 break
+            connected_before_amend = bool(broker._ib.isConnected())
+            if not connected_before_amend and gateway_remained_connected:
+                gateway_remained_connected = False
+                log.info(
+                    "axis_ii_disconnect_observed: true "
+                    "(broker._ib.isConnected() returned False mid-loop)"
+                )
             new_aux = round(price - _safe_modified_stop_offset(price), 2)
             rejected, _err = await _amend_one(broker, stop_ulid, new_aux)
             result.n_trials += 1
@@ -708,6 +740,16 @@ async def _axis_reconnect(
         await asyncio.sleep(2.0)  # Give Gateway breathing room post-reconnect
         await _flatten(broker, sym)
 
+    if gateway_remained_connected and result.n_trials > 0:
+        log.warning(
+            "axis_ii_gateway_remained_connected: true — operator skipped the "
+            "manual Gateway disconnect step; informational characterization "
+            "invalid for Sprint 31.94 design (DEF-238/DEF-241)."
+        )
+        result.instrumentation_warning = (
+            "Gateway remained connected throughout — characterization invalid"
+        )
+
     if result.n_trials > 0:
         result.rejection_rate_pct = round(
             100.0 * result.n_rejections / result.n_trials, 2
@@ -718,48 +760,24 @@ async def _axis_reconnect(
     return result
 
 
-async def _axis_stale_id(
-    broker: IBKRBroker, symbols: list[str], num_trials: int
-) -> AxisResult:
-    """Axis (iii): amends with stale order IDs. Open a bracket, capture the
-    stop ULID, cancel it, then fire modify_order against the cancelled ULID."""
-    log.info("=== Mode B axis (iii) stale-ID — %d trials ===", num_trials)
-    result = AxisResult()
-    sym_idx = 0
-    for trial_num in range(1, num_trials + 1):
-        symbol = symbols[sym_idx % len(symbols)]
-        sym_idx += 1
-        price = await _get_market_price(broker, symbol)
-        if not price:
-            continue
-        opened = await _open_entry_with_bracket(broker, symbol, price)
-        if opened is None:
-            await _flatten(broker, symbol)
-            continue
-        _, stop_ulid = opened
-        await _flatten(broker, symbol)  # invalidates the stop ULID
-        await asyncio.sleep(0.2)
-        rejected, _err = await _amend_one(broker, stop_ulid, round(price - _safe_modified_stop_offset(price), 2))
-        result.n_trials += 1
-        if rejected:
-            result.n_rejections += 1
-        if trial_num % 10 == 0:
-            log.info("  axis (iii) progress: %d/%d", trial_num, num_trials)
-    if result.n_trials > 0:
-        result.rejection_rate_pct = round(
-            100.0 * result.n_rejections / result.n_trials, 2
-        )
-    result.wilson_upper_bound_pct = _wilson_upper_bound(
-        result.n_rejections, result.n_trials
-    )
-    return result
+# Cat B.1 (DEC-390 rule encoding): `_axis_stale_id` (axis iii) deleted.
+# Rationale: testing modifications against cancelled stops measures broker
+# correctness against an unreachable production state — DEC-117 + DEC-386
+# invariants prevent re-amendment of cancelled stops. Including a
+# desired-behavior signal in any binding metric is structurally degenerate.
+# See `docs/sprints/sprint-31.92-def-204-round-2/tier-3-review-2-verdict.md`
+# §Cat B.1 + §The Architectural Question's Answer.
 
 
 async def _axis_joint(
     broker: IBKRBroker, symbols: list[str], num_trials: int
 ) -> AxisResult:
     """Axis (iv): joint reconnect + concurrent — N>=3 concurrent amends
-    DURING a Gateway reconnect window. Worst-case for H2."""
+    DURING a Gateway reconnect window. Worst-case for H2.
+
+    Cat B.3 (DEF-238): samples `broker._ib.isConnected()` immediately before
+    each concurrent-amend round. Same fail-loud contract as `_axis_reconnect`.
+    """
     log.info("=== Mode B axis (iv) joint — up to %d trials ===", num_trials)
     result = AxisResult()
     n_pos = max(3, min(len(symbols), 4))
@@ -804,11 +822,21 @@ async def _axis_joint(
                 reconnected.set()
                 return
 
+    # Cat B.3 instrumentation: track whether Gateway ever reported disconnected
+    # during the concurrent-amend loop. Same contract as _axis_reconnect.
+    gateway_remained_connected = True
     watcher = asyncio.create_task(_watch_stdin())
     try:
         for _ in range(num_trials):
             if reconnected.is_set():
                 break
+            connected_before_amend = bool(broker._ib.isConnected())
+            if not connected_before_amend and gateway_remained_connected:
+                gateway_remained_connected = False
+                log.info(
+                    "axis_iv_disconnect_observed: true "
+                    "(broker._ib.isConnected() returned False mid-loop)"
+                )
             coros = [_amend_one(broker, ulid, round(price - _safe_modified_stop_offset(price), 2))
                      for _, ulid, price in opens]
             outcomes = await asyncio.gather(*coros, return_exceptions=False)
@@ -823,6 +851,16 @@ async def _axis_joint(
         await asyncio.sleep(2.0)
         for s, _, _ in opens:
             await _flatten(broker, s)
+
+    if gateway_remained_connected and result.n_trials > 0:
+        log.warning(
+            "axis_iv_gateway_remained_connected: true — operator skipped the "
+            "manual Gateway disconnect step; informational characterization "
+            "invalid for Sprint 31.94 design (DEF-238/DEF-241)."
+        )
+        result.instrumentation_warning = (
+            "Gateway remained connected throughout — characterization invalid"
+        )
 
     if result.n_trials > 0:
         result.rejection_rate_pct = round(
@@ -966,29 +1004,57 @@ async def _measure_mode_d(
 
 
 def _apply_decision_rule(
-    worst_axis_ub: float,
+    axis_i_wilson_ub: float,
     zero_conflict_in_100: bool,
     propagation_ok: bool,
 ) -> tuple[str, str | None, str | None]:
-    """Returns (status, selected_mechanism, inconclusive_reason)."""
+    """Returns (status, selected_mechanism, inconclusive_reason).
+
+    Cat B.2 (DEC-390 rule encoding) — binds H2/H4/H1 selection to the
+    BINDING axis (i) Wilson UB only. Axes (ii) reconnect-window and (iv)
+    joint reconnect+concurrent are informational characterization of H2
+    fail-loud during Gateway disconnect (consumed by Sprint 31.94 design
+    per DEF-241); they do NOT contribute to the decision rule. Axis (iii)
+    deleted entirely at Cat B.1 — broker correctly rejecting modifications
+    against cancelled stops is desired behavior, structurally degenerate
+    inside any binding metric.
+
+    Thresholds per `tier-3-review-2-verdict.md` §The Architectural
+    Question's Answer:
+      axis_i_wilson_ub < 5%        AND zero_conflict_in_100  -> h2_amend
+      5% <= axis_i_wilson_ub < 20% AND zero_conflict_in_100  -> h4_hybrid
+      axis_i_wilson_ub >= 20%      AND zero_conflict_in_100  -> h1_cancel_and_await
+                                                               (operator written
+                                                               confirmation
+                                                               REQUIRED)
+      zero_conflict_in_100 == False                          -> H1 ineligible
+                                                                (HARD GATE);
+                                                                fall back to
+                                                                H2/H4 by axis(i)
+                                                                bracket; else
+                                                                INCONCLUSIVE.
+
+    Mode A propagation_ok and modify_order p95 ≤ 50ms gating per the
+    verdict are the caller's responsibility (`_build_results` enforces).
+    """
     if not propagation_ok:
         return ("INCONCLUSIVE", None,
                 "modify_order auxPrice did not propagate deterministically; "
                 "Mode A propagation check failed at >0% rate")
     if not zero_conflict_in_100:
-        # H1 NOT eligible regardless of UB.
-        if worst_axis_ub < 5.0:
+        # H1 NOT eligible regardless of UB (HARD GATE per Decision 2).
+        if axis_i_wilson_ub < 5.0:
             return ("PROCEED", "h2_amend", None)
-        if worst_axis_ub < 20.0:
+        if axis_i_wilson_ub < 20.0:
             return ("PROCEED", "h4_hybrid", None)
         return ("INCONCLUSIVE", None,
-                f"H1 unsafe ({{conflicts in 100 trials}}) AND worst-axis "
-                f"Wilson UB {worst_axis_ub:.1f}% >= 20%; alternative "
+                f"H1 unsafe (conflicts in 100 trials) AND axis (i) "
+                f"Wilson UB {axis_i_wilson_ub:.1f}% >= 20%; alternative "
                 "architectural fix required (likely Sprint 31.94 D3 or earlier)")
     # zero_conflict_in_100 == True
-    if worst_axis_ub < 5.0:
+    if axis_i_wilson_ub < 5.0:
         return ("PROCEED", "h2_amend", None)
-    if worst_axis_ub < 20.0:
+    if axis_i_wilson_ub < 20.0:
         return ("PROCEED", "h4_hybrid", None)
     return ("PROCEED", "h1_cancel_and_await", None)
 
@@ -1000,10 +1066,21 @@ def _apply_decision_rule(
 
 def _build_results(
     mode_a: list[ModeATrial],
-    axes: dict[str, AxisResult],
+    binding_axis: AxisResult,
+    informational_axes: dict[str, AxisResult],
     mode_c: list[ModeCTrial],
     mode_d: list[ModeDTrial],
 ) -> dict[str, Any]:
+    """Aggregate the four measurement modes into the spike v2 JSON schema.
+
+    Cat B.2 (DEC-390 rule encoding) partitions adversarial-axis results into
+    `binding_axis_result` (axis i — concurrent_amends; binds the H2/H4/H1
+    selection rule) and `informational_axes_results` (axes ii + iv —
+    reconnect_window_amends + joint_reconnect_concurrent_amends; consumed
+    by Sprint 31.94 reconnect-recovery design per DEF-241; do NOT bind the
+    rule). The legacy `worst_axis_wilson_ub` field is renamed
+    `axis_i_wilson_ub` and reflects only the binding axis.
+    """
     rtt_a = [t.round_trip_ms for t in mode_a if t.success]
     h2_p50 = _percentile(rtt_a, 50.0)
     h2_p95 = _percentile(rtt_a, 95.0)
@@ -1019,15 +1096,14 @@ def _build_results(
     n_d = len(mode_d)
     n_d_conflict = sum(1 for t in mode_d if t.conflict)
     zero_conflict_in_100 = (n_d == 100 and n_d_conflict == 0)
-    worst_axis_ub = max(
-        (axes[k].wilson_upper_bound_pct for k in axes), default=100.0
-    )
+    axis_i_wilson_ub = binding_axis.wilson_upper_bound_pct
     status, mechanism, reason = _apply_decision_rule(
-        worst_axis_ub, zero_conflict_in_100, h2_propagation
+        axis_i_wilson_ub, zero_conflict_in_100, h2_propagation
     )
     trial_count = (
         n_a
-        + sum(a.n_trials for a in axes.values())
+        + binding_axis.n_trials
+        + sum(a.n_trials for a in informational_axes.values())
         + len(mode_c)
         + n_d
     )
@@ -1038,8 +1114,13 @@ def _build_results(
         "h2_modify_order_p95_ms": h2_p95,
         "h2_rejection_rate_pct": h2_rejection_rate,
         "h2_deterministic_propagation": h2_propagation,
-        "adversarial_axes_results": {k: asdict(v) for k, v in axes.items()},
-        "worst_axis_wilson_ub": worst_axis_ub,
+        "binding_axis_result": {
+            AXIS_CONCURRENT: asdict(binding_axis),
+        },
+        "informational_axes_results": {
+            k: asdict(v) for k, v in informational_axes.items()
+        },
+        "axis_i_wilson_ub": axis_i_wilson_ub,
         "h1_cancel_all_orders_p50_ms": h1_p50,
         "h1_cancel_all_orders_p95_ms": h1_p95,
         "h1_propagation_n_trials": n_d,
@@ -1067,7 +1148,12 @@ async def _abort_with_inconclusive(
 ) -> None:
     """Write an INCONCLUSIVE stub JSON + disconnect cleanly. Used by the
     pre-flight guards so an aborted run still leaves a parseable artifact
-    on disk for the operator and the close-out skill."""
+    on disk for the operator and the close-out skill.
+
+    Schema mirrors `_build_results()` per Cat B.2 (DEC-390 rule encoding):
+    `binding_axis_result` + `informational_axes_results` partition,
+    `axis_i_wilson_ub` field name.
+    """
     results = {
         "status": "INCONCLUSIVE",
         "selected_mechanism": None,
@@ -1076,8 +1162,9 @@ async def _abort_with_inconclusive(
         "h2_modify_order_p95_ms": 0.0,
         "h2_rejection_rate_pct": 0.0,
         "h2_deterministic_propagation": False,
-        "adversarial_axes_results": {},
-        "worst_axis_wilson_ub": 100.0,
+        "binding_axis_result": {},
+        "informational_axes_results": {},
+        "axis_i_wilson_ub": 100.0,
         "h1_cancel_all_orders_p50_ms": 0.0,
         "h1_cancel_all_orders_p95_ms": 0.0,
         "h1_propagation_n_trials": 0,
@@ -1272,16 +1359,24 @@ async def main_async(args: argparse.Namespace) -> int:
                 "Mode A trial 1 entry did not fill despite smoke-test pass; "
                 "likely mid-run Gateway disconnect or market-state change."
             )
-        axes = {
-            AXIS_CONCURRENT: await _axis_concurrent(broker, symbols, max(30, args.num_trials_per_axis // 2)),
-            AXIS_RECONNECT: await _axis_reconnect(broker, symbols, max(30, args.num_trials_per_axis // 2)),
-            AXIS_STALE_ID: await _axis_stale_id(broker, symbols, max(30, args.num_trials_per_axis // 2)),
-            AXIS_JOINT: await _axis_joint(broker, symbols, max(30, args.num_trials_per_axis // 2)),
+        # Cat B.2 (DEC-390): binding axis (i) measured first; informational
+        # axes (ii)+(iv) measured after. Axis (iii) deleted at Cat B.1.
+        binding_axis = await _axis_concurrent(
+            broker, symbols, max(30, args.num_trials_per_axis // 2)
+        )
+        informational_axes = {
+            AXIS_RECONNECT: await _axis_reconnect(
+                broker, symbols, max(30, args.num_trials_per_axis // 2)
+            ),
+            AXIS_JOINT: await _axis_joint(
+                broker, symbols, max(30, args.num_trials_per_axis // 2)
+            ),
         }
         mode_c = await _measure_mode_c(broker, symbols, args.num_trials_per_axis)
         mode_d = await _measure_mode_d(broker, symbols, args.n_stress_trials)
     except Exception as e:
         log.exception("Spike crashed mid-run: %s", e)
+        # Schema mirrors `_build_results()` per Cat B.2 (DEC-390 rule encoding).
         results = {
             "status": "INCONCLUSIVE",
             "selected_mechanism": None,
@@ -1290,8 +1385,9 @@ async def main_async(args: argparse.Namespace) -> int:
             "h2_modify_order_p95_ms": 0.0,
             "h2_rejection_rate_pct": 0.0,
             "h2_deterministic_propagation": False,
-            "adversarial_axes_results": {},
-            "worst_axis_wilson_ub": 100.0,
+            "binding_axis_result": {},
+            "informational_axes_results": {},
+            "axis_i_wilson_ub": 100.0,
             "h1_cancel_all_orders_p50_ms": 0.0,
             "h1_cancel_all_orders_p95_ms": 0.0,
             "h1_propagation_n_trials": 0,
@@ -1307,7 +1403,9 @@ async def main_async(args: argparse.Namespace) -> int:
             pass
         return 1
 
-    results = _build_results(mode_a, axes, mode_c, mode_d)
+    results = _build_results(
+        mode_a, binding_axis, informational_axes, mode_c, mode_d
+    )
     with open(out_path, "w") as f:
         json.dump(results, f, indent=2, default=str)
     log.info("Results written to %s", out_path)
@@ -1322,10 +1420,18 @@ async def main_async(args: argparse.Namespace) -> int:
           f"{results['h2_modify_order_p95_ms']:.1f}ms")
     print(f"  h2 rejection rate:   {results['h2_rejection_rate_pct']:.2f}%")
     print(f"  h2 deterministic:    {results['h2_deterministic_propagation']}")
-    print(f"  worst-axis Wilson UB:{results['worst_axis_wilson_ub']:.2f}%")
-    for k, v in results["adversarial_axes_results"].items():
+    print(f"  axis (i) Wilson UB:  {results['axis_i_wilson_ub']:.2f}%  "
+          f"[BINDING — DEC-390 amended rule]")
+    for k, v in results["binding_axis_result"].items():
         print(f"    {k:>40}: {v['n_rejections']}/{v['n_trials']} rej "
               f"(UB {v['wilson_upper_bound_pct']:.2f}%)")
+    if results["informational_axes_results"]:
+        print(f"  informational axes (do NOT bind selection rule):")
+        for k, v in results["informational_axes_results"].items():
+            iw = v.get("instrumentation_warning")
+            tag = f" [WARNING: {iw}]" if iw else ""
+            print(f"    {k:>40}: {v['n_rejections']}/{v['n_trials']} rej "
+                  f"(UB {v['wilson_upper_bound_pct']:.2f}%){tag}")
     print(f"  h1 cancel p50/p95:   {results['h1_cancel_all_orders_p50_ms']:.1f}ms / "
           f"{results['h1_cancel_all_orders_p95_ms']:.1f}ms")
     print(f"  zero-conflict-in-100:{results['h1_propagation_zero_conflict_in_100']} "
