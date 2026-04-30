@@ -1,0 +1,18 @@
+{
+  "status": "INCONCLUSIVE",
+  "selected_mechanism": null,
+  "inconclusive_reason": "spike crashed: Not connected",
+  "h2_modify_order_p50_ms": 0.0,
+  "h2_modify_order_p95_ms": 0.0,
+  "h2_rejection_rate_pct": 0.0,
+  "h2_deterministic_propagation": false,
+  "binding_axis_result": {},
+  "informational_axes_results": {},
+  "axis_i_wilson_ub": 100.0,
+  "h1_cancel_all_orders_p50_ms": 0.0,
+  "h1_cancel_all_orders_p95_ms": 0.0,
+  "h1_propagation_n_trials": 0,
+  "h1_propagation_zero_conflict_in_100": false,
+  "trial_count": 0,
+  "spike_run_date": "2026-04-30T18:05:42.632831+00:00"
+}
